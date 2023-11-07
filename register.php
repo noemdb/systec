@@ -1,16 +1,6 @@
 <?php
 // Establecer la conexión con la base de datos
-$host = 'localhost';
-$dbname = 'gabosys';
-$username = 'admin';
-$password = 'admin';
-
-try {
-    $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Error al conectar con la base de datos: " . $e->getMessage());
-}
+include('conn.php');
 
 // Procesar el formulario de registro
 if (isset($_POST['register'])) {
@@ -40,7 +30,16 @@ if (isset($_POST['register'])) {
         $stmt = $conn->prepare($sql);
         $stmt->execute([$firstname, $lastname, $username, $email, $age, $country,$profile, $rol, $hashed_password]);
 
-        echo "Registro exitoso. Ahora puedes <a href='login.html'>iniciar sesión</a>.";
+        // session_start();
+        // $_SESSION['user_id'] = $user['id'];
+        // $_SESSION['firstname'] = $firstname;
+        // $_SESSION['lastname'] = $lastname;
+        // $_SESSION['username'] = $username;
+        // $_SESSION['email'] = $email;
+
+        header("Location: dashboard.php");
+        exit();
+
     } catch (PDOException $e) {
         echo "Error al registrar el usuario: " . $e->getMessage();
     }

@@ -1,9 +1,9 @@
 <?php
 // Establecer la conexión con la base de datos
-$host = 'nombre_del_servidor';
-$dbname = 'nombre_de_la_base_de_datos';
-$username = 'nombre_de_usuario';
-$password = 'contraseña';
+$host = 'localhost';
+$dbname = 'gabosys';
+$username = 'admin';
+$password = 'admin';
 
 try {
     $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
@@ -13,7 +13,7 @@ try {
 }
 
 // Procesar el formulario de inicio de sesión
-if (isset($_POST['login'])) {
+if (isset($_POST['username_or_email'])) {
     $username_or_email = $_POST['username_or_email'];
     $password = $_POST['password'];
 
@@ -23,14 +23,18 @@ if (isset($_POST['login'])) {
     try {
         $stmt = $conn->prepare($sql);
         $stmt->execute([$username_or_email, $username_or_email]);
-        $user = $stmt->fetch();
+        $user = $stmt->fetch();       
 
         if ($user && password_verify($password, $user['password'])) {
             // Inicio de sesión exitoso
             session_start();
             $_SESSION['user_id'] = $user['id'];
+            $_SESSION['firstname'] = $user['firstname'];
+            $_SESSION['lastname'] = $user['lastname'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['email'] = $user['email'];
+
+            // var_dump($user['firstname']); exit();
 
             header("Location: dashboard.php");
             exit();
