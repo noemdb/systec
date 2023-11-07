@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SysLogin - Iniciar Sesión</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Iniciar Sesión</h2>
+        <form action="login.php" method="POST">
+            <div class="form-group">
+                <label>Nombre de usuario o correo electrónico:</label>
+                <input type="text" name="username_or_email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <input type="submit" name="login" value="Iniciar Sesión" class="btn btn-primary">
+            </div>
+        </form>
+    </div>
+</body>
+</html>
