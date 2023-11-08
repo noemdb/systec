@@ -13,11 +13,27 @@ if (isset($_POST['register'])) {
     $profile = $_POST['profile'];
     $rol = $_POST['rol'];
     $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
+    $confirm_password = $_POST['confirm_password'];    
 
-    // Validar que las contraseñas coincidan
+    // Validación de los datos del formulario
+    $errors = [];
+    if (empty($firstname)) {
+        die("Error: El nombre es obligatorio. ir atrás para corregir.");
+    }
+    if (empty($firstname)) {
+        die("Error: El apellido es obligatorio. ir atrás para corregir.");
+    }
+    if (empty($email)) {
+        die("Error: El correo electrónico es obligatorio. ir atrás para corregir.");
+    }
+    if (empty($password)) {
+        die("Error: La contraseña es obligatoria. ir atrás para corregir.");
+    }
+    if (strlen($password) < 6) {
+        die("Error: La contraseña debe tener al menos 6 caracteres. ir atrás para corregir.");
+    }
     if ($password !== $confirm_password) {
-        die("Error: Las contraseñas no coinciden.");
+        die("Error: Las contraseñas no coinciden. ir atrás para corregir.");
     }
 
     // Encriptar la contraseña
