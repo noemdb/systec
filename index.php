@@ -1,13 +1,15 @@
 <html lang="en" class="h-100" data-bs-theme="dark">
 
+<?php session_start(); ?>
+
 <head>
 
-    <script src="vendor/bootstrap/5.3.2/js/color-modes.js"></script>
+    <!-- <script src="vendor/bootstrap/5.3.2/js/color-modes.js"></script> -->
 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
-    <title>GaboSys</title>
+    <title>GaboSys - Inicio</title>
 
     <link rel="stylesheet" href="vendor/bootstrap/5.3.2/css/style.css">
     <link rel="stylesheet" href="vendor/bootstrap/5.3.2/css/bootstrap.min.css">
@@ -26,7 +28,12 @@
                 <nav class="nav nav-masthead justify-content-center float-md-end" >
                     <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="#" style="color: black !important;">Inicio</a>
                     <a class="nav-link fw-bold py-1 px-0" href="register.html" style="color: black !important;">Registro</a>
-                    <a class="nav-link fw-bold py-1 px-0" href="login.html" style="color: black !important;">Login</a>
+                    <?php if (isset($_SESSION['username'])) { ?>
+                        <a class="nav-link fw-bold py-1 px-0" href="dashboard.php" style="color: black !important;">Dashboar</a>
+                        <a class="nav-link fw-bold py-1 px-0" href="logout.php" style="color: black !important;">Cerrar sesión</a>
+                    <?php } else { ?>
+                        <a class="nav-link fw-bold py-1 px-0" href="login.html" style="color: black !important;">Login</a>
+                    <?php } ?>
                 </nav>
             </div>
         </header>

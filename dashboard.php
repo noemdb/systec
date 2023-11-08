@@ -6,7 +6,7 @@ session_start();
 
 // Verifica si el usuario ha iniciado sesión
 if (!isset($_SESSION['username'])) {
-    header("Location: index.html");
+    header("Location: index.php");
     exit();
 }
 
@@ -48,49 +48,62 @@ try {
             <div>
                 <h3 class="float-md-start mb-0">GaboSys</h3>
                 <nav class="nav nav-masthead justify-content-center float-md-end" >
-                    <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="#" style="color: black !important;">Inicio</a>
+                    <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="index.php" style="color: black !important;">Inicio</a>
                     <a class="nav-link fw-bold py-1 px-0" href="register.html" style="color: black !important;">Registro</a>
-                    <a class="nav-link fw-bold py-1 px-0" href="login.html" style="color: black !important;">Login</a>
+
+                    <?php if (isset($_SESSION['username'])) { ?>
+                        <a class="nav-link fw-bold py-1 px-0" href="logout.php" style="color: black !important;">Cerrar sesión</a>
+                    <?php } else { ?>
+                        <a class="nav-link fw-bold py-1 px-0" href="login.html" style="color: black !important;">Login</a>
+                    <?php } ?>
+                    
                 </nav>
             </div>
         </header>
 
-        <div class="container mt-4">
-            <h2>Dashboard</h2>
-            <p>Bienvenido, <?php echo $_SESSION['firstname'] .' '. $_SESSION['lastname']; ?>!</p>
-            <h3>Lista de Usuarios Registrados</h3>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Apellido</th>
-                        <th>Nombre de usuario</th>
-                        <th>Correo electrónico</th>
-                        <th>Edad</th>
-                        <th>País</th>
-                        <th>Perfil</th>
-                        <th>Rol</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($users as $user): ?>
-                        <tr>
-                            <td><?php echo $user['firstname']; ?></td>
-                            <td><?php echo $user['lastname']; ?></td>
-                            <td><?php echo $user['username']; ?></td>
-                            <td><?php echo $user['email']; ?></td>
-                            <td><?php echo $user['age']; ?></td>
-                            <td><?php echo $user['country']; ?></td>
-                            <td><?php echo $user['profile']; ?></td>
-                            <td><?php echo $user['rol']; ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <p class="d-flex justify-content-center">
-                <a class="nav-link fw-bold py-1 px-0 border rounded w-25" href="logout.php" style="color: black !important;">Cerrar sesión</a>
-                <!-- <a href="logout.php">Cerrar sesión</a> -->
-            </p>
+        <div class="container mt-4" data-bs-theme="light">
+
+            <h2 class="mt-4">Dashboard</h2>
+            <p class="">Bienvenido, <?php echo $_SESSION['firstname'] .' '. $_SESSION['lastname']; ?>!</p>
+
+            <div class="card">
+                <div class="card-body">                   
+                    
+                    
+
+                    <h3>Lista de Usuarios Registrados</h3>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Apellido</th>
+                                <th>Nombre de usuario</th>
+                                <th>Correo electrónico</th>
+                                <th>Edad</th>
+                                <th>País</th>
+                                <th>Perfil</th>
+                                <th>Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($users as $user): ?>
+                                <tr>
+                                    <td><?php echo $user['firstname']; ?></td>
+                                    <td><?php echo $user['lastname']; ?></td>
+                                    <td><?php echo $user['username']; ?></td>
+                                    <td><?php echo $user['email']; ?></td>
+                                    <td><?php echo $user['age']; ?></td>
+                                    <td><?php echo $user['country']; ?></td>
+                                    <td><?php echo $user['profile']; ?></td>
+                                    <td><?php echo $user['rol']; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+                        
         </div>
 
         
