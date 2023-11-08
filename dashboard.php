@@ -14,7 +14,7 @@ if (!isset($_SESSION['username'])) {
 include('conn.php');
 
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+    $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $sql = "SELECT * FROM users";
     $stmt = $conn->query($sql);
