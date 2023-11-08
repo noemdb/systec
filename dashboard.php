@@ -39,7 +39,7 @@ try {
             <?php include('header.php'); ?> 
         </header>              
 
-        <main class="px-3 w-100">
+        <main class="px-3 w-75">
             <div class="container">
 
                 <h2 class="">Dashboard</h2>
