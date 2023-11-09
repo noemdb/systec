@@ -3,16 +3,8 @@
 <?php
 
 include('conn.php');
-
-try {
-    $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $sql = "SELECT * FROM users";
-    $stmt = $conn->query($sql);
-    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    die("Error en la conexión a la base de datos: " . $e->getMessage());
-}
+$db = new DB();
+$result = $db->select("SELECT * FROM users");
 
 ?>
 
@@ -55,7 +47,7 @@ try {
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($users as $user): ?>
+                                <?php foreach ($result as $user) : ?>
                                     <tr>
                                         <td><?php echo $user['firstname']; ?></td>
                                         <td><?php echo $user['lastname']; ?></td>
