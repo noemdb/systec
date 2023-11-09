@@ -18,7 +18,7 @@
         <div class="mb-3">
             <label for="frecuencia_uso" class="form-label">Frecuencia de uso:</label>
             <select class="form-select" id="frecuencia_uso" name="frecuencia_uso" required>
-                <option value="">Seleccionar frecuencia de uso</option>
+                <option value="">Seleccionar frecuencia de uso en un típico día de trabajo</option>
                 <option value="todo_dia">Todo el día</option>
                 <option value="medio_dia">Medio día</option>
                 <option value="pocas_horas">Sólo unas pocas horas</option>
