@@ -1,7 +1,5 @@
 <html lang="en" class="h-100" data-bs-theme="light">
 
-<?php session_start(); ?>
-
 <head>
 
 <?php include('head.php'); ?>

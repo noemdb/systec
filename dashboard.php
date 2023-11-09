@@ -2,15 +2,6 @@
 
 <?php
 
-// Inicia la sesión
-session_start();
-
-// Verifica si el usuario ha iniciado sesión
-if (!isset($_SESSION['username'])) {
-    header("Location: index.php");
-    exit();
-}
-
 include('conn.php');
 
 try {
@@ -43,7 +34,7 @@ try {
             <div class="container">
 
                 <h2 class="">Dashboard</h2>
-                <p class="">Bienvenido, <?php echo $_SESSION['firstname'] .' '. $_SESSION['lastname']; ?>!</p>
+                <p class="">Bienvenido!</p>
 
                 <div class="card">
                     <div class="card-body">
