@@ -4,30 +4,26 @@
 
 <head>
 
-<?php include('head.php'); ?>
+<?php include('polls/include/head.php'); ?>
     
 </head>
 
-<body class="d-flex h-100 text-center">
+<body class="d-flex h-100 text-center shadow-none">
 
     <div class="cover-container d-flex w-100 h-100 p-3 mx-auto flex-column">
 
         <header class="mb-auto" >
-            <?php include('header.php'); ?> 
-        </header>              
+            <?php include('polls/include/header.php'); ?> 
+        </header>
+
+        <div class="h4">Instrumento de colección de datos</div>              
 
         <main class="px-3">
-            <h1>Sistema de Registro y <br>Panel de Control.</h1>
-            <p class="lead">Aplicación web desarrollada utilizando tecnologías como PHP, MySQL y el framework Bootstrap.
-                Diseñado como un ejemplo básico, este sistema demuestra cómo implementar funcionalidades de registro de
-                usuarios, inicio de sesión y un panel de control para administrar usuarios registrados.</p>
-            <p class="lead">
-                <a href="#" class="btn btn-lg btn-light fw-bold border-white bg-white">Leer mas</a>
-            </p>
+            <?php include('polls/main.php'); ?>
         </main>
 
         <footer class="mt-auto">
-            <?php include('footer.php'); ?>
+            <?php include('polls/include/footer.php'); ?>
         </footer>
 
     </div>    
