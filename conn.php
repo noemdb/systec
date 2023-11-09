@@ -6,7 +6,7 @@ class DB
     function __construct()
     {
         $this->db = new SQLite3('./db/systec.db');
-        $this->db->exec('CREATE TABLE IF NOT EXISTS users (id INT unsigned auto_increment, firstname STRING, lastname STRING, CONSTRAINT `PRIMARY` PRIMARY KEY (id))');
+        $this->db->exec('CREATE TABLE IF NOT EXISTS goods (id INT unsigned auto_increment, code STRING, description STRING, state STRING, CONSTRAINT `PRIMARY` PRIMARY KEY (id))');
     }
 
     function select(string $query)

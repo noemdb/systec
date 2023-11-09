@@ -4,23 +4,23 @@
 
 include('conn.php');
 $db = new DB();
-$result = $db->select("SELECT * FROM users");
+$result = $db->select("SELECT * FROM goods");
 
 ?>
 
 <head>
 
-<?php include('head.php'); ?>
-    
+    <?php include('head.php'); ?>
+
 </head>
 
 <body class="d-flex h-100 text-center">
 
     <div class="d-flex w-100 h-100 p-3 mx-auto flex-column">
 
-        <header class="mb-auto" >
-            <?php include('header.php'); ?> 
-        </header>              
+        <header class="mb-auto">
+            <?php include('header.php'); ?>
+        </header>
 
         <main class="px-3 w-100">
             <div class="container">
@@ -31,39 +31,31 @@ $result = $db->select("SELECT * FROM users");
                 <div class="card">
                     <div class="card-body">
 
-                        <h3>Lista de Usuarios Registrados</h3>
+                        <h3>Lista de Bienes Registrados</h3>
 
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Nombre</th>
-                                    <th>Apellido</th>
-                                    <th>Nombre de usuario</th>
-                                    <th>Correo electrónico</th>
-                                    <th>Edad</th>
-                                    <th>País</th>
-                                    <th>Perfil</th>
-                                    <th>Rol</th>
+                                    <th></th>
+                                    <th>Codigo</th>
+                                    <th>Estado</th>
+                                    <th>Descripcion</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($result as $user) : ?>
+                                <?php foreach ($result as $good) : ?>
                                     <tr>
-                                        <td><?php echo $user['firstname']; ?></td>
-                                        <td><?php echo $user['lastname']; ?></td>
-                                        <td><?php echo $user['username']; ?></td>
-                                        <td><?php echo $user['email']; ?></td>
-                                        <td><?php echo $user['age']; ?></td>
-                                        <td><?php echo $user['country']; ?></td>
-                                        <td><?php echo $user['profile']; ?></td>
-                                        <td><?php echo $user['rol']; ?></td>
+                                        <td><?php echo $good['id']; ?></td>
+                                        <td><?php echo $good['code']; ?></td>
+                                        <td><?php echo $good['state']; ?></td>
+                                        <td><?php echo $good['description']; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                            
+
             </div>
         </main>
 
@@ -71,7 +63,7 @@ $result = $db->select("SELECT * FROM users");
             <?php include('footer.php'); ?>
         </footer>
 
-    </div>    
+    </div>
 
     <?php include('script.php'); ?>
 
