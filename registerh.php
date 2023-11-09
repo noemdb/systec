@@ -2,17 +2,17 @@
 
 <head>
 
-<?php include('head.php'); ?>
-    
+    <?php include('head.php'); ?>
+
 </head>
 
 <body class="d-flex h-100 text-center">
 
     <div class="cover-container d-flex w-100 h-100 p-3 mx-auto flex-column">
 
-        <header class="mb-auto" >
-            <?php include('header.php'); ?> 
-        </header>              
+        <header class="mb-auto">
+            <?php include('header.php'); ?>
+        </header>
 
         <main class="px-3">
             <div class="container">
@@ -24,78 +24,27 @@
                             <div class="container-fluid">
 
                                 <div class="row">
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Nombre:</label>
-                                            <input type="text" name="firstname" class="form-control" required>
-                                        </div>
+                                    <div class="form-group pb-2">
+                                        <label for="code">Código:</label>
+                                        <input type="text" name="code" id="code" class="form-control" required>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Apellido:</label>
-                                            <input type="text" name="lastname" class="form-control" required>
-                                        </div>
-                                    </div>                                
                                 </div>
 
                                 <div class="row">
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Nombre de usuario:</label>
-                                            <input type="text" name="username" class="form-control" required>
-                                        </div>
+                                    <div class="form-group pb-2">
+                                        <label for="description">Descripción:</label>
+                                        <textarea name="description" id="description" rows="5" class="form-control" required></textarea>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Correo electrónico:</label>
-                                            <input type="email" name="email" class="form-control" required>
-                                        </div>
-                                    </div>                                
                                 </div>
-                                
+
                                 <div class="row">
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Edad:</label>
-                                            <input type="number" name="age" class="form-control">
-                                        </div>
+                                    <div class="form-group pb-2">
+                                        <label for="state">Estado:</label>
+                                        <select class="form-control" name="state" id="state">
+                                            <option value="bueno">Bueno</option>
+                                            <option value="malo">Malo</option>
+                                        </select>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>País:</label>
-                                            <input type="text" name="country" class="form-control">
-                                        </div>
-                                    </div>                                
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Perfil:</label>
-                                            <input type="text" name="profile" class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Rol:</label>
-                                            <input type="text" name="rol" class="form-control">
-                                        </div>
-                                    </div>                                
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Contraseña:</label>
-                                            <input type="password" name="password" class="form-control" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <div class="form-group pb-2">
-                                            <label>Confirmar contraseña:</label>
-                                            <input type="password" name="confirm_password" class="form-control" required>
-                                        </div>
-                                    </div>                                
                                 </div>
 
                             </div>
@@ -116,7 +65,7 @@
             <?php include('footer.php'); ?>
         </footer>
 
-    </div>    
+    </div>
 
     <?php include('script.php'); ?>
 

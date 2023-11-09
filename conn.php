@@ -22,4 +22,21 @@ class DB
 
         return $result;
     }
+
+    function create(string $query, $values)
+    {
+        $stmt = $this->db->prepare($query);
+
+        foreach ($values as $index => $value) {
+            $stmt->bindValue($index + 1, $value);
+        }
+
+        $result = $stmt->execute();
+
+        $this->db->close();
+
+        var_dump($result);
+
+        return $result;
+    }
 }
