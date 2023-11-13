@@ -1,4 +1,4 @@
-# gabosys
+# systec
 
 ## Start the dev server
 ```bash

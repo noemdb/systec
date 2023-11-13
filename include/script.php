@@ -1,0 +1,1 @@
+<script src="./vendor/bootstrap/5.3.2/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>

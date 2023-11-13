@@ -3,23 +3,23 @@
 <?php
 
 include('conn.php');
-$db = new DB();
-$result = $db->select("SELECT * FROM goods");
+$db = new DB(); //var_dump($db);exit();
+$result = $db->select("SELECT * FROM properties"); //var_dump($result);exit();
 
 ?>
 
 <head>
 
-    <?php include('head.php'); ?>
+    <?php include('include/head.php'); ?>
 
 </head>
 
-<body class="d-flex h-100 text-center">
+<body class="d-flex h-100 text-center shadow-none">
 
     <div class="d-flex w-100 h-100 p-3 mx-auto flex-column">
 
-        <header class="mb-auto">
-            <?php include('header.php'); ?>
+        <header>
+            <?php include('include/header.php'); ?>
         </header>
 
         <main class="px-3 w-100">
@@ -60,12 +60,12 @@ $result = $db->select("SELECT * FROM goods");
         </main>
 
         <footer class="mt-auto">
-            <?php include('footer.php'); ?>
+            <?php include('include/footer.php'); ?>
         </footer>
 
     </div>
 
-    <?php include('script.php'); ?>
+    <?php include('include/script.php'); ?>
 
 </body>
 

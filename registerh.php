@@ -2,23 +2,23 @@
 
 <head>
 
-    <?php include('head.php'); ?>
+    <?php include('include/head.php'); ?>
 
 </head>
 
-<body class="d-flex h-100 text-center">
+<body class="d-flex h-100 text-center shadow-none">
 
-    <div class="cover-container d-flex w-100 h-100 p-3 mx-auto flex-column">
+    <div class=" d-flex w-100 h-100 p-3 mx-auto flex-column">
 
         <header class="mb-auto">
-            <?php include('header.php'); ?>
+            <?php include('include/header.php'); ?>
         </header>
 
         <main class="px-3">
-            <div class="container">
+            <div class="container cover-container">
                 <div class="card p-4 m-4">
                     <div class="card-body text-start">
-                        <h2 class="card-title text-center">Registro de Usuario</h2>
+                        <h2 class="card-title text-center">Registro de Mantenimiento</h2>
                         <form action="register.php" method="POST">
 
                             <div class="container-fluid">
@@ -62,12 +62,12 @@
         </main>
 
         <footer class="mt-auto text-white-50">
-            <?php include('footer.php'); ?>
+            <?php include('include/footer.php'); ?>
         </footer>
 
     </div>
 
-    <?php include('script.php'); ?>
+    <?php include('include/script.php'); ?>
 
 </body>
 
