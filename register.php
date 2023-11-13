@@ -40,8 +40,8 @@ if (isset($_POST['register'])) {
 
     try {
         $db->create(
-            "INSERT INTO maintenances (property_id, type, description, date, technician, next_maintenance_date, failure_reason, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [$code, $type, $description, $date, $technician, $nextMaintenance, $reason, $notes]
+            "INSERT INTO maintenances (property_id, type, description, date, technician, next_maintenance_date, failure_reason, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [$code, $type, $description, $date, $technician, $nextMaintenance, $reason, $notes, 'pendiente']
         );
 
         header("Location: dashboard.php");
