@@ -38,7 +38,12 @@ $result = $db->select("SELECT * FROM properties"); //var_dump($result);exit();
                                 <tr>
                                     <th></th>
                                     <th>Codigo</th>
+                                    <th>Identificador</th>
                                     <th>Estado</th>
+                                    <th>Grupo</th>
+                                    <th>Subgrupo</th>
+                                    <th>Seccion</th>
+                                    <th>Adscripcion</th>
                                     <th>Descripcion</th>
                                 </tr>
                             </thead>
@@ -46,8 +51,13 @@ $result = $db->select("SELECT * FROM properties"); //var_dump($result);exit();
                                 <?php foreach ($result as $good) : ?>
                                     <tr>
                                         <td><?php echo $good['id']; ?></td>
-                                        <td><?php echo $good['code']; ?></td>
-                                        <td><?php echo $good['state']; ?></td>
+                                        <td><?php echo $good['serial']; ?></td>
+                                        <td><?php echo $good['ident']; ?></td>
+                                        <td><?php echo $good['status']; ?></td>
+                                        <td><?php echo $good['grupo']; ?></td>
+                                        <td><?php echo $good['subgrupo']; ?></td>
+                                        <td><?php echo $good['seccion']; ?></td>
+                                        <td><?php echo $good['adscription']; ?></td>
                                         <td><?php echo $good['description']; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
