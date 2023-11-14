@@ -3,10 +3,10 @@ class DB
 {
     private SQLite3 $db;
 
-    function __construct()
+    function __construct($fileDB='db.db')
     {
-        $this->db = new SQLite3('./db.db');
-        $this->db->exec('CREATE TABLE IF NOT EXISTS properties (id INTEGER PRIMARY KEY AUTOINCREMENT, grupo STRING, subgrupo STRING, seccion STRING, ident STRING, description STRING, adscription STRING, serial STRING, status STRING)');
+        $this->db = new SQLite3($fileDB);
+        $this->db->exec('CREATE TABLE IF NOT EXISTS properties (id INTEGER PRIMARY KEY AUTOINCREMENT, grupo STRING, subgrupo STRING, seccion STRING, ident STRING, adscription STRING, description STRING, model STRING, color STRING, serial STRING, status STRING)');
         $this->db->exec('CREATE TABLE IF NOT EXISTS maintenances (id INTEGER PRIMARY KEY AUTOINCREMENT, property_id INTEGER, type STRING, description STRING, date DATETIME, time_taken INTEGER, technician VARCHAR(255), next_maintenance_date DATETIME, failure_reason TEXT, notes TEXT, status STRING)');
     }
 
@@ -14,32 +14,67 @@ class DB
     {
         $stmt = $this->db->query($query);
         $result = [];
-
         if ($stmt) {
             while ($row = $stmt->fetchArray()) {
                 array_push($result, $row);
             }
         }
-
         $this->db->close();
-
         return $result;
     }
 
     function create(string $query, $values)
     {
         $stmt = $this->db->prepare($query);
-
         foreach ($values as $index => $value) {
             $stmt->bindValue($index + 1, $value);
         }
+        $result = $stmt->execute();
+        $this->db->close();
+        return $result;
+    }
 
+    ////////////////////////////////////////////////////
+
+    public function update($table, $data, $where) {
+        $setValues = '';
+        foreach ($data as $column => $value) {
+            $setValues .= "$column = '$value', ";
+        }
+        $setValues = rtrim($setValues, ', ');
+        $query = "UPDATE $table SET $setValues WHERE $where"; 
+        
+        $stmt = $this->db->prepare($query);
         $result = $stmt->execute();
 
         $this->db->close();
+        return $result;
+    }
 
-        var_dump($result);
+    function getFirstForId($table,$id)
+    {
+        $query = "SELECT * FROM ".$table." WHERE id = ".$id.""; //die();
+        $stmt = $this->db->query($query);
+        $fetchArray = ($stmt) ? $stmt->fetchArray() : null ;
+        $this->db->close();
+        return $fetchArray ;
+    }
 
+    function getFirstForConditions($table,$conditions)
+    {
+        $query = "SELECT * FROM ".$table. $conditions; //die();
+        $stmt = $this->db->query($query);
+        $fetchArray = ($stmt) ? $stmt->fetchArray() : null ;
+        $this->db->close();
+        return $fetchArray ;
+    }
+
+    public function executeQuery($query) {
+        $result = $this->db->query($query);
+        if (!$result) {
+            echo $this->db->lastErrorMsg();die();
+            throw new Exception("Error al ejecutar la consulta: " . $this->db->lastErrorMsg());
+        }
         return $result;
     }
 
@@ -80,6 +115,8 @@ seccion: Un campo de tipo VARCHAR(255) para almacenar la sección del bien.
 ident: Un campo de tipo VARCHAR(255) para almacenar el identificador del bien.
 adscription: Un campo de tipo VARCHAR(255) para almacenar la dirección del bien.
 description: Un campo de tipo TEXT para almacenar la descripción del bien.
+model: Un campo de tipo TEXT para almacenar el modelo del bien.
+color: Un campo de tipo TEXT para almacenar el color del bien.
 serial: Un campo de tipo TEXT para almacenar el serial del bien.
 status: Un campo de tipo VARCHAR(255) para almacenar el estado del bien.
 
