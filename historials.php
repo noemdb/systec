@@ -12,7 +12,7 @@ $property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : 
 $property = ($property_id) ? $db->getFirstForId("properties",$property_id) : Array();
 
 $condition = " where property_id=".$property_id;
-$maintenances = $db->index("maintenances",$condition);
+$maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
 
 ?>
 

@@ -5,7 +5,7 @@ date_default_timezone_set('America/Caracas');
 class DB extends SQLite3
 {
     function __construct($filename) {
-        $result = $this->open($filename);
+        $this->open($filename);
         $this->exec('CREATE TABLE IF NOT EXISTS properties (id INTEGER PRIMARY KEY AUTOINCREMENT, grupo STRING, subgrupo STRING, seccion STRING, ident STRING, adscription STRING, description STRING, model STRING, color STRING, serial STRING, status STRING)');
         $this->exec('CREATE TABLE IF NOT EXISTS maintenances (id INTEGER PRIMARY KEY AUTOINCREMENT, property_id INTEGER, code STRING, type STRING, description STRING, date DATETIME, time_taken INTEGER, technician VARCHAR(255), next_maintenance_date DATETIME, failure_reason TEXT, notes TEXT, status STRING)');
     }
@@ -67,8 +67,8 @@ class DB extends SQLite3
         
     }
 
-    public function index($table,$conditions=null,$fields="*") {
-        $stmt = $this->query("SELECT ".$fields." FROM ".$table." ".$conditions);
+    public function index($table,$conditions=null,$fields="*",$sort=null) {
+        $stmt = $this->query("SELECT ".$fields." FROM ".$table." ".$conditions." ".$sort);
         $tabla_index = [];
         if ($stmt) {
             while ($row = $stmt->fetchArray()) {
