@@ -8,10 +8,10 @@ $technician = "ndomiguez";
 <div class="card py-0">
     <div class="card-body py-0">
         <div class="card-text text-start">
-            <div>Código: <?php echo $db->getCodeId($property["id"]); ?></div>
-            <div>Descripción: <?php echo $property["description"]; ?></div>
-            <div>Modelo: <?php echo $property["model"]; ?> || Serial: <?php echo $property["serial"]; ?> || Color: <?php echo $property["color"]; ?></div>
-            <div>Estado: <?php echo $property["status"]; ?></div>
+            <div class="my-0 py-0">Código: <?php echo $db->getCodeId($property["id"]); ?></div>
+            <div class="my-0 py-0">Descripción: <?php echo $property["description"]; ?></div>
+            <div class="my-0 py-0">Modelo: <?php echo $property["model"]; ?> || Serial: <?php echo $property["serial"]; ?> || Color: <?php echo $property["color"]; ?></div>
+            <div class="my-0 py-0">Estado: <?php echo $property["status"]; ?></div>
         </div>
     </div>
 </div>
@@ -32,7 +32,7 @@ $technician = "ndomiguez";
             <tr>
                 <td><?php echo date("d-m-Y", strtotime($maintenance["date"])); ?></td>
                 <td><?php echo $maintenance["type"]; ?></td>
-                <td><?php echo $maintenance["description"]; ?></td>
+                <td class="small"><?php echo $maintenance["description"]; ?></td>
                 <td><?php echo $maintenance["technician"]; ?></td>
                 <!-- <td><?php echo $maintenance["time_taken"]; ?></td> -->
                 <td class="<?php echo ($maintenance['status'] == 'finalizado') ? "text-uppercase fw-bold " : null; ?>"><?php echo $maintenance["status"]; ?></td>
@@ -45,14 +45,12 @@ $technician = "ndomiguez";
 
 <?php //print("<pre>".print_r($types)."</pre>"); ?>
 
-<hr>
-
 <div class=" container-fluid text-start">
     <div>Observaciones:</div>
-    <ul class="list-group list-group-numbered">
+    <ul class="list-group list-group-numbered list-group-flush">
         <?php foreach ($maintenances as $maintenance) : ?>
             <?php if (!empty($maintenance["notes"])) { ?>
-                <li class="list-group-item"> <small class="small">[<?php echo date("d-m-Y", strtotime($maintenance["date"])); ?>]</small> <?php echo $maintenance["notes"]; ?></li>
+                <li class="list-group-item my-0 p-0"> <small class="small">[<?php echo date("d-m-Y", strtotime($maintenance["date"])); ?>]</small> <?php echo $maintenance["notes"]; ?></li>
             <?php } ?>
         <?php endforeach; ?>
     </ul>
