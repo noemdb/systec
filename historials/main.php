@@ -26,7 +26,7 @@ $technician = "ndomiguez";
             <th>Tipo</th>
             <th>Descripción</th>
             <th>Técnico</th>
-            <th>Tiempo (Hrs)</th>
+            <!-- <th>Tiempo (Hrs)</th> -->
             <th>Estado</th>
         </tr>
     </thead>
@@ -37,7 +37,7 @@ $technician = "ndomiguez";
                 <td><?php echo $maintenance["type"]; ?></td>
                 <td><?php echo $maintenance["description"]; ?></td>
                 <td><?php echo $maintenance["technician"]; ?></td>
-                <td><?php echo $maintenance["time_taken"]; ?></td>
+                <!-- <td><?php echo $maintenance["time_taken"]; ?></td> -->
                 <td class="<?php echo ($maintenance['status'] == 'finalizado') ? "text-uppercase fw-bold " : null; ?>"><?php echo $maintenance["status"]; ?></td>
             </tr>
             <?php $types[$maintenance["type"]] = (array_key_exists($maintenance["type"],$types)) ? $types[$maintenance["type"]]+1 : 1 ; ?>
@@ -87,6 +87,8 @@ $technician = "ndomiguez";
     </ul>
 </div>
 
+<p>&nbsp;</p>
+<p>&nbsp;</p>
 
 <div class=" container-fluid text-center">
     <div>____________________________________________</div> 
