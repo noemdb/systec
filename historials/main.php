@@ -7,7 +7,7 @@ $technician = "ndomiguez";
 
 <div class="card py-0">
     <div class="card-body py-0">
-        <div class="card-text text-start">
+        <div class="card-text text-start small">
             <div class="my-0 py-0">Código: <?php echo $db->getCodeId($property["id"]); ?></div>
             <div class="my-0 py-0">Descripción: <?php echo $property["description"]; ?></div>
             <div class="my-0 py-0">Modelo: <?php echo $property["model"]; ?> || Serial: <?php echo $property["serial"]; ?> || Color: <?php echo $property["color"]; ?></div>
@@ -30,12 +30,12 @@ $technician = "ndomiguez";
     <tbody>
         <?php foreach ($maintenances as $maintenance) : ?>
             <tr>
-                <td><?php echo date("d-m-Y", strtotime($maintenance["date"])); ?></td>
-                <td><?php echo $maintenance["type"]; ?></td>
-                <td class="small"><?php echo $maintenance["description"]; ?></td>
-                <td><?php echo $maintenance["technician"]; ?></td>
+                <td class="small"><?php echo date("d-m-Y", strtotime($maintenance["date"])); ?></td>
+                <td class="small"><?php echo $maintenance["type"]; ?></td>
+                <td class="small" class="small"><?php echo $maintenance["description"]; ?></td>
+                <td class="small"><?php echo $maintenance["technician"]; ?></td>
                 <!-- <td><?php echo $maintenance["time_taken"]; ?></td> -->
-                <td class="<?php echo ($maintenance['status'] == 'finalizado') ? "text-uppercase fw-bold " : null; ?>"><?php echo $maintenance["status"]; ?></td>
+                <td class="small <?php echo ($maintenance['status'] == 'finalizado') ? "text-uppercase fw-bold " : null; ?>"><?php echo $maintenance["status"]; ?></td>
             </tr>
             <?php $types[$maintenance["type"]] = (array_key_exists($maintenance["type"],$types)) ? $types[$maintenance["type"]]+1 : 1 ; ?>
             <?php $technician = $maintenance['technician']; ?>
