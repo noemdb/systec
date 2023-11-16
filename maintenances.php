@@ -6,7 +6,7 @@ $title = "Mantenimiento";
 
 //////////////index/////////////////////
 $db = new DB($base.'/db.db');
-$maintenances = $db->index("maintenances",null,"*"," order by date ASC");
+$maintenances = $db->index("maintenances",null,"*"," order by id DESC");
 
 //////////////mode/////////////////////
 $id = (array_key_exists('id',$_GET)) ? $_GET['id'] : null ;
