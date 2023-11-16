@@ -7,6 +7,7 @@ $technician = "ndomiguez";
 
 <div class="card py-0">
     <div class="card-body py-0">
+        <h5 class="text-start mt-2">Datos del Bien</h5>
         <div class="card-text text-start small">
             <div class="my-0 py-0">Código: <?php echo $db->getCodeId($property["id"]); ?></div>
             <div class="my-0 py-0">Descripción: <?php echo $property["description"]; ?></div>
@@ -59,8 +60,4 @@ $technician = "ndomiguez";
 <p>&nbsp;</p>
 <p>&nbsp;</p>
 
-<div class=" container-fluid text-center">
-    <div class="my-0 py-0">____________________________________________</div> 
-    <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
-    <div class="my-0 py-0"><?php echo date("d/m/Y H:i"); ?></div>  
-</div>
+

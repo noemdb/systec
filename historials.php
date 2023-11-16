@@ -34,13 +34,16 @@ $maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
 
         <main class="px-3 w-100 mt-2">
             <div class="container-fluid">
-            <?php include('historials/main.php'); ?>
+                <?php include('historials/main.php'); ?>
+                <?php //include('historials/chart.php'); ?>
+            </div>
+
+            <div class=" container-fluid text-center">
+                <div class="my-0 py-0">____________________________________________</div> 
+                <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
+                <div class="my-0 py-0"><?php echo date("d/m/Y H:i"); ?></div>  
             </div>
         </main>
-
-        <footer class="mt-auto text-black-50 bg-secondary-subtle py-2">
-            <?php include('historials/footer.php'); ?>
-        </footer>
 
     </div>
 
