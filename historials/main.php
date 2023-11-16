@@ -60,8 +60,7 @@ $technician = "ndomiguez";
 <p>&nbsp;</p>
 
 <div class=" container-fluid text-center">
-    <div>____________________________________________</div> 
-    <div>Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
-    <div><?php echo date("d/m/Y H:i"); ?></div>   
-    <div></div> 
+    <div class="my-0 py-0">____________________________________________</div> 
+    <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
+    <div class="my-0 py-0"><?php echo date("d/m/Y H:i"); ?></div>  
 </div>
