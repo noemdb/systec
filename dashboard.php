@@ -1,12 +1,12 @@
 <html lang="en" class="h-100" data-bs-theme="light">
 
 <?php
-
+$title = "Dashboard";
 $base = $_SERVER['DOCUMENT_ROOT']; 
 include_once($base.'/conn.php');
 $db = new DB($base.'/db.db');
 
-$properties = $db->select("SELECT * FROM properties");
+$properties = $db->index("properties");
 
 ?>
 
@@ -35,36 +35,8 @@ $properties = $db->select("SELECT * FROM properties");
 
                         <h3>Lista de Bienes Registrados</h3>
 
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th></th>
-                                    <th>Codigo</th>
-                                    <th>Identificador</th>
-                                    <th>Estado</th>
-                                    <th>Grupo</th>
-                                    <th>Subgrupo</th>
-                                    <th>Seccion</th>
-                                    <th>Adscripcion</th>
-                                    <th>Descripcion</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($properties as $property) : ?>
-                                    <tr>
-                                        <td><?php echo $property['id']; ?></td>
-                                        <td><?php echo $property['serial']; ?></td>
-                                        <td><?php echo $property['ident']; ?></td>
-                                        <td><?php echo $property['status']; ?></td>
-                                        <td><?php echo $property['grupo']; ?></td>
-                                        <td><?php echo $property['subgrupo']; ?></td>
-                                        <td><?php echo $property['seccion']; ?></td>
-                                        <td><?php echo $property['adscription']; ?></td>
-                                        <td><?php echo $property['description']; ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                        <?php include('dashboard/table/index.php'); ?>                        
+
                     </div>
                 </div>
 
@@ -79,6 +51,11 @@ $properties = $db->select("SELECT * FROM properties");
 
     <?php include('include/script.php'); ?>
 
+    <script> let table = new DataTable('#myTable', {});</script>
+
+    <?php $db->close(); ?>
+
 </body>
 
 </html>
+

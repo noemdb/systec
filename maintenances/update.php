@@ -2,6 +2,7 @@
 $base = $_SERVER['DOCUMENT_ROOT'];
 include($base.'/conn.php');
 $db = new DB($base.'/db.db');
+$table = "maintenances";
 
 // Procesar el formulario de registro
 if (isset($_POST['update'])) {
@@ -15,33 +16,12 @@ if (isset($_POST['update'])) {
     $failure_reason = (array_key_exists('failure_reason',$_POST)) ? $_POST['failure_reason'] : null;
     $notes = (array_key_exists('notes',$_POST)) ? $_POST['notes'] : null;
     $status = (array_key_exists('status',$_POST)) ? $_POST['status'] : null;
-
-    // Validación de los datos del formulario
-    $errors = [];
-    if (empty($id)) {
-        die("Error: El identificador es obligatorio. ir atrás para corregir.");
-    }
-    if (empty($property_id)) {
-        die("Error: El código es obligatorio. ir atrás para corregir.");
-    }
-    if (empty($type) || !array_key_exists($type, $db->getListMaintenanceType())) {
-        die("Error: El tipo es obligatorio. ir atrás para corregir.");
-    }
-    if (empty($technician) || !array_key_exists($technician, $db->getListMaintenanceTechnician())) {
-        die("Error: El técnico es obligatorio. ir atrás para corregir.");
-    }
-    if (empty($date)) {
-        die("Error: la fecha es obligatoria. ir atrás para corregir.");
-    }
-    if (empty($failure_reason)) {
-        die("Error: La Razón del mantenimiento es obligatoria. ir atrás para corregir.");
-    }
-    if (empty($description)) {
-        die("Error: La descripción es obligatorio. ir atrás para corregir.");
-    }
+    include_once('./validations/register.php');
 
     try {
+        $code = $db->getCodeId($property_id);
         $data = array(
+            'code' => $code,
             'property_id' => $property_id,
             'type' => $type,
             'description' => $description,
@@ -52,11 +32,10 @@ if (isset($_POST['update'])) {
             'notes' => $notes,
             'status' => $status,
         );
-        $where = "id = ".$id;
-        $result = $db->update('maintenances', $data, $where); //var_dump($result) ;die();
-        header("Location: ../maintenances.php"); 
+        $result = $db->update($table, $id, $data);
+        header("Location: ../maintenances.php?id=".$id); 
         exit();
     } catch (PDOException $e) {
-        echo "Error al registrar el usuario: " . $e->getMessage();
+        echo "Error al registrar los datos: " . $e->getMessage();
     }
 }

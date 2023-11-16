@@ -1,10 +1,27 @@
-<?php //var_dump($itemArrSeleted);die(); ?>
+<?php 
+
+$property_id = null;
+
+if ($itemArrSeleted) {
+    $property_id = $itemArrSeleted['property_id'];
+}
+
+if ($property) {
+    $property_id = $property['id'];
+}
+
+?>
 
 <div class="container-fluid">
     <div class="row">
         <div class="form-group pb-2">
             <label for="property_id">Cod. del Bien:</label>
-            <input type="text" name="property_id" id="property_id" class="form-control" value="<?php echo (array_key_exists('property_id',$itemArrSeleted)) ? $itemArrSeleted['property_id'] : null; ?>" required>
+            <select class="form-control" name="property_id" id="type">
+            <option>Seleccione</option>
+                <?php foreach ($db->getListProperties("properties") as $key => $value) : ?>
+                    <option value=<?php echo $key; ?> <?php echo ($key==$property_id) ? ' selected ' : null; ?>><?php echo $value; ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
     </div>
 
@@ -12,6 +29,7 @@
         <div class="form-group pb-2">
             <label for="type">Tipo de mantenimiento:</label>
             <select class="form-control" name="type" id="type">
+                <option>Seleccione</option>
                 <?php foreach ($db->getListMaintenanceType() as $key => $value) : ?>
                     <option value=<?php echo $key; ?> <?php echo ($key== $itemArrSeleted['type']) ? 'selected' : null; ?>><?php echo $value; ?></option>
                 <?php endforeach; ?>
@@ -23,6 +41,7 @@
         <div class="form-group pb-2">
             <label for="technician">Técnico:</label>
             <select class="form-control" name="technician" id="technician">
+                <option>Seleccione</option>
                 <?php foreach ($db->getListMaintenanceTechnician() as $key => $value) : ?>
                     <option value=<?php echo $key; ?> <?php echo ($key== $itemArrSeleted['technician']) ? 'selected' : null; ?>><?php echo $value; ?></option>
                 <?php endforeach; ?>
@@ -70,12 +89,3 @@
     </div>
 
 </div>
-
-<!-- property_id
-type
-description
-date
-technician
-next_maintenance_date
-failure_reason
-notes -->

@@ -2,18 +2,25 @@
 
 $base = $_SERVER['DOCUMENT_ROOT'];
 include($base.'/conn.php');
-
-$itemArrSeleted = Array();
+$title = "Mantenimiento";
 
 //////////////index/////////////////////
 $db = new DB($base.'/db.db');
-$maintenances = $db->select("SELECT * FROM maintenances");
+$maintenances = $db->index("maintenances");
 
 //////////////mode/////////////////////
 $id = (array_key_exists('id',$_GET)) ? $_GET['id'] : null ;
+$property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : null ;
 $modeCreate = (array_key_exists('modeCreate',$_GET)) ? $_GET['modeCreate'] : null ;
 $modeEdit = (array_key_exists('modeEdit',$_GET)) ? $_GET['modeEdit'] : null ;
+
 $modeIndex = ( empty($modeCreate) && empty($modeEdit) ) ? 'true' : null ;
+
+$property = $db->getFirstForId('properties',$property_id);
+
+$list_property = $db->getListProperties("properties");
+
+$itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
 
 ?>
 
@@ -36,9 +43,13 @@ $modeIndex = ( empty($modeCreate) && empty($modeEdit) ) ? 'true' : null ;
         <main class="px-3 w-100 mt-2">
 
             <div class="container-fluid text-start">
+
+                <div class="float-end">
+                    <a name="register" id="register" class="btn btn-primary" href="./maintenances.php?modeCreate=true" role="button">Registrar</a>
+                </div><br>
                 
                 <div class="text-center">
-                    <h2 class="text-center">Listado de Mantenimientos</h2>            
+                    <h2 class="text-center">Listado de Mantenimientos</h2>      
                     <p class="">Registro, actualización y finalización!</p>                    
                 </div>
 
@@ -47,10 +58,6 @@ $modeIndex = ( empty($modeCreate) && empty($modeEdit) ) ? 'true' : null ;
                         <div class="row">
 
                             <div class="<?php $class = ($modeIndex=="true") ? "col-12" : "col-sm-6" ; echo $class; ?>" >
-                                <!-- <div class="d-flex justify-content-between">
-                                    <h3 class=" text-center">Listado de Mantenimientos</h3>
-                                    <a class="btn btn-primary btn-sm " href="./maintenances.php?modeCreate=true" role="button">Nuevo</a>
-                                </div>                     -->
                                 <?php include('maintenances/table/crud.php'); ?>
                             </div>
 
@@ -111,6 +118,10 @@ $modeIndex = ( empty($modeCreate) && empty($modeEdit) ) ? 'true' : null ;
 
     <?php include('include/script.php'); ?>
 
+    <script> let table = new DataTable('#myTable', {});</script>
+
 </body>
 
 </html>
+
+<?php $db->close(); ?>
