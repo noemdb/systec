@@ -6,9 +6,6 @@ $technician = "ndomiguez";
 <h1 class="mt-2">Historial de mantenimiento</h1>
 
 <div class="card py-0">
-    <div class="card-header">
-        <h2 class="card-title">Datos del Bien</h2>
-    </div>
     <div class="card-body py-0">
         <div class="card-text text-start">
             <div>Código: <?php echo $db->getCodeId($property["id"]); ?></div>
