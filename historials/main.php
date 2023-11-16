@@ -1,5 +1,6 @@
 <?php
 $types = [];
+$technician = "ndomiguez";
 ?>
 
 <h1 class="mt-2">Historial de mantenimiento</h1>
@@ -40,6 +41,7 @@ $types = [];
                 <td class="<?php echo ($maintenance['status'] == 'finalizado') ? "text-uppercase fw-bold " : null; ?>"><?php echo $maintenance["status"]; ?></td>
             </tr>
             <?php $types[$maintenance["type"]] = (array_key_exists($maintenance["type"],$types)) ? $types[$maintenance["type"]]+1 : 1 ; ?>
+            <?php $technician = $maintenance['technician']; ?>
         <?php endforeach; ?>
     </tbody>
 </table>
@@ -67,9 +69,7 @@ $types = [];
                 </div>
             <?php endforeach; ?>
 
-        </div>
-
-        
+        </div>       
         
     </div>
 </div>
@@ -88,4 +88,9 @@ $types = [];
 </div>
 
 
-
+<div class=" container-fluid text-center">
+    <div>____________________________________________</div> 
+    <div>Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
+    <div><?php echo date("d/m/Y H:i"); ?></div>   
+    <div></div> 
+</div>

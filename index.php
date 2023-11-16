@@ -16,10 +16,12 @@
 
         <main class="px-3">
             <div class="continer mx-auto">
-                <h1>Sistema de Registro y <br>Panel de Control.</h1>
-                <p class="lead">Aplicación web desarrollada utilizando tecnologías como PHP, MySQL y el framework Bootstrap.
-                    Diseñado como un ejemplo básico, este sistema demuestra cómo implementar funcionalidades de registro de
-                    usuarios, inicio de sesión y un panel de control para administrar usuarios registrados.</p>
+                <h1>Gestión de los Mantenimiento realizados a los Bienes de la institución</h1>
+                <p class="lead">
+                    El Sistema de Gestión de los Mantenimiento  (GMB) es un sistema informático que permite administrar una base de datos de bienes de una institución,
+                    así como llevar registro de todos los mantenimientos realizados a cada bien. El sistema también genera informes técnicos por cada bien, en los que se muestra 
+                    la información de todos los mantenimientos realizados.
+                </p>
                 <p class="lead">
                     <a href="#" class="btn btn-lg btn-light fw-bold border-white bg-white">Leer mas</a>
                 </p>
