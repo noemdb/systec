@@ -58,6 +58,7 @@ $properties = $db->index("properties");
             search: {
                 search: search ?? ''
             },
+            order: [4, 'asc']
         });
 
         table.on('search', () => {
