@@ -20,7 +20,7 @@ class DB extends SQLite3
         if ($property) {
             $id = $property['id'];
             $data = array(
-                'status' => $dataCsv[8]                
+                'status' => $dataCsv[10]                
             );
             $this->update($table, $id, $data);            
         } else {

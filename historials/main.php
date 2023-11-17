@@ -31,7 +31,7 @@ $technician = "ndomiguez";
     <tbody>
         <?php foreach ($maintenances as $maintenance) : ?>
             <tr>
-                <td class="small"><?php echo date("d-m-Y", strtotime($maintenance["date"])); ?></td>
+                <td class="small text-nowrap"><?php echo date("d-m-Y", strtotime($maintenance["date"])); ?></td>
                 <td class="small"><?php echo $maintenance["type"]; ?></td>
                 <td class="small" class="small"><?php echo $maintenance["description"]; ?></td>
                 <td class="small"><?php echo $maintenance["technician"]; ?></td>
