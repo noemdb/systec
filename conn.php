@@ -17,13 +17,13 @@ class DB extends SQLite3
         $condition = " WHERE ident=".$ident;
         $property = $this->getFirstForConditions($table,$condition);       
 
-        if ($property) {
-            $id = $property['id'];
-            $data = array(
-                'status' => $dataCsv[10]                
-            );
-            $this->update($table, $id, $data);            
-        } else {
+        // if ($property) {
+        //     $id = $property['id'];
+        //     $data = array(
+        //         'status' => $dataCsv[10]                
+        //     );
+        //     $this->update($table, $id, $data);            
+        if (! $property) {
             $data = array(
                 'grupo' => $dataCsv[0],
                 'subgrupo' => str_pad($dataCsv[1], 4, "0", STR_PAD_LEFT),
