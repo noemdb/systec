@@ -118,7 +118,25 @@ $itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
 
     <?php include('include/script.php'); ?>
 
-    <script> let table = new DataTable('#myTable', {});</script>
+    <script>
+        const search = "<?php echo $_GET['search']; ?>";
+
+        const table = new DataTable('#myTable', {
+            search: {
+                search: search ?? ''
+            },
+        });
+
+        table.on('search', () => {
+            const url = new URL(window.location.href);
+            const params = new URLSearchParams(url);
+
+            params.set('search', table.search())
+
+            const newUrl = window.location.pathname + '?' + params.toString();
+            history.replaceState(null, '', newUrl);
+        })
+    </script>
 
 </body>
 
