@@ -59,6 +59,18 @@ $properties = $db->index("properties");
                 search: search ?? ''
             },
         });
+
+        table.on('search', () => {
+            const url = new URL(window.location.href);
+            const params = new URLSearchParams(url);
+
+            params.set('search', table.search())
+
+            const newUrl = window.location.pathname + '?' + params.toString();
+            history.replaceState(null, '', newUrl);
+        })
+    </script>
+
     <?php $db->close(); ?>
 
 </body>
