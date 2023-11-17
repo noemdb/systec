@@ -18,6 +18,12 @@ class DB extends SQLite3
         $property = $this->getFirstForConditions($table,$condition);       
 
         if (!$property) {
+            $id = $property['id'];
+            $data = array(
+                'status' => $dataCsv[10]                
+            );
+            $this->update($table, $id, $data);            
+        } else {
             $data = array(
                 'grupo' => $dataCsv[0],
                 'subgrupo' => str_pad($dataCsv[1], 4, "0", STR_PAD_LEFT),
@@ -29,8 +35,8 @@ class DB extends SQLite3
                 'color' => $dataCsv[7],
                 'status' => $dataCsv[10],                
             );
-            $this->create($table,$data);            
-        } 
+            $this->create($table,$data);
+        }
         $this->close();
     }    
 
