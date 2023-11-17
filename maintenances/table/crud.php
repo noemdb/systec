@@ -1,4 +1,4 @@
-<table class="table table-striped table-sm table-hover" id="myTableXXX">
+<table class="table table-striped table-sm table-hover" id="myTable">
     <thead>
         <tr>
             <th>N</th>

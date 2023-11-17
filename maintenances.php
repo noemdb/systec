@@ -62,7 +62,7 @@ $itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
                             </div>
 
                             <?php if ($modeCreate=="true") {  ?>
-                                <div class="col-sm-6">
+                                <div class="col-sm-6" style="z-index: 1000;">
                                     <div class="bg-white shadow-lg border rounded">                            
                                         <h3 class="alert alert-secondary text-center">
                                             <div class="d-flex justify-content-between">
@@ -82,7 +82,7 @@ $itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
                             <?php }; ?>
 
                             <?php if ($modeEdit=="true") {  ?>
-                                <div class="col-sm-6">
+                                <div class="col-sm-6" style="z-index: 1000;">
                                     <div class="bg-white shadow-lg border rounded">                            
                                         <h3 class="alert alert-secondary text-center">
                                             <div class="d-flex justify-content-between">
