@@ -15,15 +15,9 @@ class DB extends SQLite3
         $table = "properties";
         $ident = $dataCsv[3];
         $condition = " WHERE ident=".$ident;
-        $property = $this->getFirstForConditions($table,$condition);       
+        $property = $this->getFirstForConditions($table,$condition); 
 
-        if ($property) {
-            $id = $property['id'];
-            $data = array(
-                'status' => $dataCsv[8]                
-            );
-            $this->update($table, $id, $data);            
-        } else {
+        if (! $property) {
             $data = array(
                 'grupo' => $dataCsv[0],
                 'subgrupo' => str_pad($dataCsv[1], 4, "0", STR_PAD_LEFT),
@@ -37,6 +31,15 @@ class DB extends SQLite3
             );
             $this->create($table,$data);
         }
+
+        if($property){
+            $id = $property['id'];
+            $data = array(
+                'status' => $dataCsv[10]                
+            );
+            $this->update($table, $id, $data); 
+        }
+        
         $this->close();
     }    
 
@@ -58,8 +61,8 @@ class DB extends SQLite3
         foreach ($data as $key => $value) {
             $prepare[] = $key."=:{$key}";
         } 
-        $query = "UPDATE ".$table." SET " . implode(", ", $prepare) . " WHERE id={$id}"; //var_dump($query)  ; die();
-        $stmt = $this->prepare($query); //var_dump($stmt);die();   
+        $query = "UPDATE ".$table." SET " . implode(", ", $prepare) . " WHERE id={$id}";
+        $stmt = $this->prepare($query);
         foreach ($data as $key => $value) {
             $stmt->bindValue(':'.$key, $value);
         }

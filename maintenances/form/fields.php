@@ -73,7 +73,7 @@ if ($property) {
     <div class="row">
         <div class="form-group pb-2">
             <label for="notes">Notas:</label>
-            <textarea name="notes" id="notes" rows="5" class="form-control no-resize" required><?php echo (array_key_exists('notes',$itemArrSeleted)) ? $itemArrSeleted['notes'] : null; ?></textarea>
+            <textarea name="notes" id="notes" rows="5" class="form-control no-resize"><?php echo (array_key_exists('notes',$itemArrSeleted)) ? $itemArrSeleted['notes'] : null; ?></textarea>
         </div>
     </div>
 

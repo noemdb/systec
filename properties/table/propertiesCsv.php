@@ -3,7 +3,6 @@ $base = $_SERVER['DOCUMENT_ROOT'];
 include_once($base.'/conn.php');
 
 // Obtener el nombre del archivo CSV (grupo;subgrupo;seccion;ident;description;model;serial;color;status)
-$filenameCSV = "properties.csv";
 $handle = fopen($filenameCSV, "r"); //var_dump($handle);die();
 
 ?>

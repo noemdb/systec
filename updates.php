@@ -4,6 +4,7 @@ $base = $_SERVER['DOCUMENT_ROOT'];
 include_once($base.'/conn.php');
 $db = new DB($base.'/db.db');
 $properties = $db->index("properties");
+$filenameCSV = "properties.csv";
 
 ?>
 
