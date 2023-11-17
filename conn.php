@@ -58,8 +58,8 @@ class DB extends SQLite3
         foreach ($data as $key => $value) {
             $prepare[] = $key."=:{$key}";
         } 
-        $query = "UPDATE ".$table." SET " . implode(", ", $prepare) . " WHERE id={$id}"; //var_dump($query)  ; die();
-        $stmt = $this->prepare($query); //var_dump($stmt);die();   
+        $query = "UPDATE ".$table." SET " . implode(", ", $prepare) . " WHERE id={$id}";
+        $stmt = $this->prepare($query);
         foreach ($data as $key => $value) {
             $stmt->bindValue(':'.$key, $value);
         }
