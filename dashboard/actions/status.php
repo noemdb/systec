@@ -7,6 +7,7 @@ $db = new DB($base.'/db.db');
 $table = "properties";
 $property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : null;
 $status = (array_key_exists('status',$_GET)) ? $_GET['status'] : null;
+$ident = $_GET['ident'];
 
 if ($status && $property_id) {
     try {
@@ -20,7 +21,7 @@ if ($status && $property_id) {
             'status' => $status,
         );
         $result = $db->update($table, $property_id, $data);
-        header("Location: ../../dashboard.php?id=".$property_id);
+        header("Location: ../../dashboard.php?search=".str_pad($ident, 4, "0", STR_PAD_LEFT));
         exit();
     } catch (PDOException $e) {
         echo "Error al procesar los datos: " . $e->getMessage();

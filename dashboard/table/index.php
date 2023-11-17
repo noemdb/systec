@@ -34,7 +34,7 @@
                         <div class="btn-group" role="group" aria-label="Button group name">
                             <a class="btn btn-primary btn-sm " href="./maintenances.php?modeCreate=true&property_id=<?php echo $property['id']; ?>" role="button">Mantenimiento</a>
                             <a class="btn btn-dark btn-sm " target="_blank" href="./historials.php?property_id=<?php echo $property['id']; ?>" role="button">Historial</a>
-                            <a class="btn btn-success btn-sm " href="./dashboard/actions/status.php?property_id=<?php echo $property['id']; ?>&status=<?php echo $property['status']; ?>" role="button">Estado</a>
+                            <a class="btn btn-success btn-sm " href="./dashboard/actions/status.php?property_id=<?php echo $property['id']; ?>&status=<?php echo $property['status']; ?>&ident=<?php echo $property['ident']; ?>" role="button">Estado</a>
                         </div>
                     </td>
                 </tr>
