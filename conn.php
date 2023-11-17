@@ -17,7 +17,7 @@ class DB extends SQLite3
         $condition = " WHERE ident=".$ident;
         $property = $this->getFirstForConditions($table,$condition);       
 
-        if (!$property) {
+        if ($property) {
             $id = $property['id'];
             $data = array(
                 'status' => $dataCsv[10]                
