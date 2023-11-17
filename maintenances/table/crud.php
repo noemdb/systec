@@ -34,10 +34,11 @@
                     <div class="d-flex justify-content-evenly">
                         <a class="btn btn-warning btn-sm mx-1" href="./maintenances.php?modeEdit=true&id=<?php echo $maintenance['id']; ?>" role="button">Edit</a>
 
-                        <?php if ($maintenance['status'] == 'finalizado') : ?>
+                        <?php if ($maintenance['status'] == 'iniciado' || $maintenance['status'] == 'finalizado') : ?>
                             <a class="btn btn-info btn-sm mx-1" href="./maintenances/actions/status.php?status=revision&id=<?php echo $maintenance['id']; ?>" role="button">Revisión</a>
+                        <?php endif; ?>
 
-                        <?php elseif ($maintenance['status'] == 'revision') : ?>
+                        <?php if ($maintenance['status'] == 'iniciado' || $maintenance['status'] == 'revision') : ?>
                             <a class="btn btn-success btn-sm mx-1" href="./maintenances/actions/status.php?status=finalizado&id=<?php echo $maintenance['id']; ?>" role="button">Finalizar</a>
 
                         <?php endif; ?>
