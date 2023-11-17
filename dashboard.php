@@ -51,8 +51,14 @@ $properties = $db->index("properties");
 
     <?php include('include/script.php'); ?>
 
-    <script> let table = new DataTable('#myTable', {});</script>
+    <script type="text/javascript">
+        const search = "<?php echo $_GET['search']; ?>";
 
+        const table = new DataTable('#myTable', {
+            search: {
+                search: search ?? ''
+            },
+        });
     <?php $db->close(); ?>
 
 </body>
