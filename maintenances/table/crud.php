@@ -33,8 +33,14 @@
                 <td>
                     <div class="d-flex justify-content-evenly">
                         <a class="btn btn-warning btn-sm mx-1" href="./maintenances.php?modeEdit=true&id=<?php echo $maintenance['id']; ?>" role="button">Edit</a>
-                        <a class="btn btn-info btn-sm mx-1" href="./maintenances/actions/status.php?status=revision&id=<?php echo $maintenance['id']; ?>" role="button">Revisión</a>
-                        <a class="btn btn-success btn-sm mx-1" href="./maintenances/actions/status.php?status=finalizado&id=<?php echo $maintenance['id']; ?>" role="button">Finalizar</a>
+
+                        <?php if ($maintenance['status'] == 'finalizado') : ?>
+                            <a class="btn btn-info btn-sm mx-1" href="./maintenances/actions/status.php?status=revision&id=<?php echo $maintenance['id']; ?>" role="button">Revisión</a>
+
+                        <?php elseif ($maintenance['status'] == 'revision') : ?>
+                            <a class="btn btn-success btn-sm mx-1" href="./maintenances/actions/status.php?status=finalizado&id=<?php echo $maintenance['id']; ?>" role="button">Finalizar</a>
+
+                        <?php endif; ?>
                     </div>
                 </td>
             </tr>
