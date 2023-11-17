@@ -15,14 +15,8 @@ class DB extends SQLite3
         $table = "properties";
         $ident = $dataCsv[3];
         $condition = " WHERE ident=".$ident;
-        $property = $this->getFirstForConditions($table,$condition);       
+        $property = $this->getFirstForConditions($table,$condition); 
 
-        // if ($property) {
-        //     $id = $property['id'];
-        //     $data = array(
-        //         'status' => $dataCsv[10]                
-        //     );
-        //     $this->update($table, $id, $data);            
         if (! $property) {
             $data = array(
                 'grupo' => $dataCsv[0],
@@ -37,6 +31,15 @@ class DB extends SQLite3
             );
             $this->create($table,$data);
         }
+
+        if($property){
+            $id = $property['id'];
+            $data = array(
+                'status' => $dataCsv[10]                
+            );
+            $this->update($table, $id, $data); 
+        }
+        
         $this->close();
     }    
 
