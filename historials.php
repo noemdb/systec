@@ -20,25 +20,37 @@ $maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
 
     <?php include('include/head.php'); ?>
 
+    <style>
+        html { margin: 1rem; text-transform: uppercase}
+        /* body { max-width: 12cm !important;} */
+    </style>
+
+    <style type="text/css" media="print">
+        html { margin: 0.8cm; text-transform: uppercase}
+        body{
+            text-transform: uppercase;
+        }
+    </style>
+
 </head>
 
 <body class="d-flex h-100 text-center shadow-none">
 
 <div class=" d-flex w-100 h-100 mx-auto flex-column">
 
-        <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
-            <div class="container-fluid">
+        <header class="bg-secondary-subtle border-bottom shadow-sm py-1 px-2">
+            
                 <?php include('historials/membrete.php'); ?>
-            </div>
+            
         </header>
 
-        <main class="px-3 w-100 mt-2">
-            <div class="container-fluid">
-                <?php include('historials/main.php'); ?>
+        <main class="px-0 w-100 mt-2">
+            <?php include('historials/main.php'); ?>
+            <!-- <div class="container-fluid"> -->
                 <?php //include('historials/chart.php'); ?>
-            </div>
+            <!-- </div> -->
 
-            <div class=" container-fluid text-center">
+            <div class="text-center" style="font-size:0.8rem">
                 <div class="my-0 py-0">____________________________________________</div> 
                 <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
                 <div class="my-0 py-0"><?php echo date("d/m/Y H:i"); ?></div>  
