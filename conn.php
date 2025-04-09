@@ -70,6 +70,33 @@ class DB extends SQLite3
         
     }
 
+    public function indexWithMaintenances($fields = "*", $sort = null) {
+        $query = "
+            SELECT $fields 
+            FROM properties 
+            INNER JOIN maintenances ON properties.id = maintenances.property_id
+            WHERE TRIM(maintenances.notes) != ''
+            AND maintenances.notes LIKE '%desincorporación%'
+            AND (properties.status = 'MALO' OR properties.status = 'MUY MALO')
+        ";
+        if ($sort) {
+            $query .= " $sort";
+        }
+
+        // $query .= " LIMIT 0,5";
+    
+        $stmt = $this->query($query);
+        $tabla_index = [];
+        if ($stmt) {
+            while ($row = $stmt->fetchArray()) {
+                $tabla_index[] = $row;
+            }
+        }
+        return $tabla_index;
+    }
+    
+    
+
     public function index($table,$conditions=null,$fields="*",$sort=null) {
         $stmt = $this->query("SELECT ".$fields." FROM ".$table." ".$conditions." ".$sort);
         $tabla_index = [];
@@ -165,8 +192,6 @@ class DB extends SQLite3
 }
 
 /*
-
-
 properties
 grupo: Un campo de tipo VARCHAR(255) para almacenar el grupo del bien.
 subgrupo: Un campo de tipo VARCHAR(255) para almacenar el subgrupo del bien.
@@ -192,5 +217,4 @@ status: Un campo de tipo VARCHAR(255) para almacenar el estado del mantenimiento
 next_maintenance_date: Un campo de tipo DATETIME para almacenar la fecha del próximo mantenimiento programado.
 failure_reason: Un campo de tipo TEXT para almacenar la razón del mantenimiento preventivo/correctivo.
 notes: Un campo de tipo TEXT para almacenar cualquier información adicional sobre el mantenimiento.
-
 */

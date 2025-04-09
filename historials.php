@@ -24,7 +24,7 @@ $maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
 
 <body class="d-flex h-100 text-center shadow-none">
 
-<div class=" d-flex w-100 h-100 mx-auto flex-column">
+    <div class=" d-flex w-100 h-100 mx-auto flex-column">
 
         <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
             <div class="container-fluid">
