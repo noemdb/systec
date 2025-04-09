@@ -24,9 +24,9 @@ class DB extends SQLite3
                 'seccion' => str_pad($dataCsv[2], 3, "0", STR_PAD_LEFT),
                 'ident' => str_pad($dataCsv[3], 4, "0", STR_PAD_LEFT),
                 'description' => $dataCsv[4],
-                'model' => $dataCsv[5],
-                'serial' => $dataCsv[6],
-                'color' => $dataCsv[7],
+                'model' => $dataCsv[5].' - '.$dataCsv[6],
+                'serial' => $dataCsv[7],
+                'color' => $dataCsv[9],
                 'status' => $dataCsv[10],                
             );
             $this->create($table,$data);
