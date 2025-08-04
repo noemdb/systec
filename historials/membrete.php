@@ -2,7 +2,8 @@
     <div class="row">
         <div class="col-12">
             <div class="text-start">
-                <h5 class="my-0 py-0">Oficina de Informática, San Felipe, Edo Yaracuy, <?php echo date("d/m/Y H:i"); ?></h5>
+                <!-- <h5 class="my-0 py-0">Oficina de Informática, San Felipe, Edo Yaracuy, <?php /*echo date("d/m/Y H:i");*/ ?></h5> -->
+                <h5 class="my-0 py-0">Oficina de Informática, San Felipe, Edo Yaracuy, 07-04-2025 <?php echo date("H:i"); ?></h5>
             </div>
         </div>
 
