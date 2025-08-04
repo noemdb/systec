@@ -42,7 +42,8 @@ $maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
             <div class=" container-fluid text-center">
                 <div class="my-0 py-0">____________________________________________</div> 
                 <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
-                <div class="my-0 py-0"><?php echo date("d/m/Y H:i"); ?></div>  
+                <!-- <div class="my-0 py-0"><?php /*echo date("d/m/Y H:i");*/ ?></div> -->
+                <div class="my-0 py-0">07-04-2025<?php echo date("H:i"); ?></div>  
             </div>
         </main>
 
