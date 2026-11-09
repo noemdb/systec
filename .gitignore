@@ -1,0 +1,15 @@
+# Datos y secretos locales
+storage/*.db
+storage/*.db-*
+storage/*.csv
+storage/backups/
+storage/logs/
+storage/initial-admin-password.txt
+.env
+
+# Artefactos
+*.log
+.DS_Store
+
+# Documentación de referencia externa
+# (se conserva a propósito)
