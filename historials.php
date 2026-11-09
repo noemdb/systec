@@ -1,58 +1,36 @@
-<html lang="en" class="h-100" data-bs-theme="light">
-
 <?php
 
-$title = "Historial";
+require_once __DIR__ . '/conn.php';
+require_once __DIR__ . '/include/auth.php';
+require_login();
 
-$base = $_SERVER['DOCUMENT_ROOT']; 
-include_once($base.'/conn.php');
-$db = new DB($base.'/db.db');
+$title = 'Historial';
+$db = db();
 
-$property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : null ; //var_dump($property_id);die();
-$property = ($property_id) ? $db->getFirstForId("properties",$property_id) : Array();
+$property_id = isset($_GET['property_id']) ? filter_var($_GET['property_id'], FILTER_VALIDATE_INT) : false;
+$property = ($property_id !== false && $property_id !== null) ? $db->getFirstForId('properties', $property_id) : null;
+$maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
+$technician = '';
 
-$condition = " where property_id=".$property_id;
-$maintenances = $db->index("maintenances",$condition,"*"," order by date ASC ");
+$no_footer = true;
+$header_file = __DIR__ . '/historials/membrete.php';
 
-?>
+ob_start(); ?>
 
-<head>
-
-    <?php include('include/head.php'); ?>
-
-</head>
-
-<body class="d-flex h-100 text-center shadow-none">
-
-    <div class=" d-flex w-100 h-100 mx-auto flex-column">
-
-        <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
-            <div class="container-fluid">
-                <?php include('historials/membrete.php'); ?>
-            </div>
-        </header>
-
-        <main class="px-3 w-100 mt-2">
-            <div class="container-fluid">
-                <h4>Historial de mantenimiento</h4>
-                <?php include('historials/main.php'); ?>
-                <?php //include('historials/chart.php'); ?>
-            </div>
-
-            <div class=" container-fluid text-center">
-                <div class="my-0 py-0">____________________________________________</div> 
-                <div class="my-0 py-0">Realizado por: <span class=" text-uppercase"><?php echo $technician; ?></span></div>
-                <!-- <div class="my-0 py-0"><?php /*echo date("d/m/Y H:i");*/ ?></div> -->
-                <div class="my-0 py-0">07-04-2025<?php echo date("H:i"); ?></div>  
-            </div>
-        </main>
-
+    <div class="container-fluid">
+        <h4>Historial de mantenimiento</h4>
+        <?php if (!$property) : ?>
+            <div class="alert alert-warning">No se encontró el bien solicitado.</div>
+        <?php else : ?>
+            <?php include __DIR__ . '/historials/main.php'; ?>
+        <?php endif; ?>
     </div>
 
-    <?php include('include/script.php'); ?>
+    <div class="container-fluid text-center">
+        <div class="my-0 py-0">____________________________________________</div>
+        <div class="my-0 py-0">Realizado por: <span class="text-uppercase"><?= e($technician) ?></span></div>
+        <div class="my-0 py-0"><?= e(date('d-m-Y H:i')) ?></div>
+    </div>
 
-</body>
-
-</html>
-
-<?php $db->close(); ?>
+<?php $main = ob_get_clean();
+include __DIR__ . '/include/layout.php';

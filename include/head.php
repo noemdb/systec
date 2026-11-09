@@ -1,7 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="">
-<title>SysTec - <?php echo (!empty($title)) ? $title : 'Inicio' ?></title>
+<link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>">
+<title>SysTec - <?= e(!empty($title) ? $title : 'Inicio') ?></title>
 
 <link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/style.css">
 <link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/bootstrap.min.css">
@@ -15,6 +16,17 @@
 
 
 <style>
+    .property-action-btn {
+        width: 2.5rem;
+        height: 2.5rem;
+        padding: 0;
+    }
+
+    .property-action-btn .bi {
+        font-size: 1.15rem;
+        line-height: 1;
+    }
+
     .bar-chart-vertical {
     display: flex;
     justify-content: space-evenly;

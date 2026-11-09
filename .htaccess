@@ -1,0 +1,7 @@
+Options -Indexes
+
+<FilesMatch "\.(db|sqlite|sqlite3|csv|log|md|env)$">
+    Require all denied
+</FilesMatch>
+
+RedirectMatch 403 ^/(storage|bck|docs|grafo|spec|bin|include)(/|$)

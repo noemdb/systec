@@ -1,14 +1,16 @@
 <?php
 
-$base = $_SERVER['DOCUMENT_ROOT'];
-include($base.'/conn.php');
-$title = "Mantenimiento";
+require_once __DIR__ . '/conn.php';
+require_once __DIR__ . '/include/auth.php';
+require_login();
 
-//////////////index/////////////////////
-$db = new DB($base.'/db.db');
-$maintenances = $db->index("maintenances",null,"*"," order by id DESC");
+$title = 'Mantenimiento';
 
-//////////////mode/////////////////////
+///////////////index/////////////////////
+$db = db();
+$maintenances = $db->index('maintenances', array(), '*', 'id DESC');
+
+///////////////mode/////////////////////
 $id = (array_key_exists('id',$_GET)) ? $_GET['id'] : null ;
 $property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : null ;
 $modeCreate = (array_key_exists('modeCreate',$_GET)) ? $_GET['modeCreate'] : null ;
@@ -20,106 +22,79 @@ $property = $db->getFirstForId('properties',$property_id);
 
 $list_property = $db->getListProperties("properties");
 
-$itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
+$itemArrSeleted = ($id) ? ($db->getFirstForId("maintenances",$id) ?: Array()) : Array();
 
-?>
+ob_start(); ?>
 
-<html lang="en" class="h-100" data-bs-theme="light">
+    <div class="container-fluid text-start">
 
-<head>
+        <div class="float-end">
+            <a name="register" id="register" class="btn btn-primary" href="./maintenances.php?modeCreate=true" role="button">Registrar</a>
+        </div><br>
 
-    <?php include('include/head.php'); ?>
+        <div class="text-center">
+            <h2 class="text-center">Listado de Mantenimientos</h2>
+            <p class="">Registro, actualización y finalización!</p>
+        </div>
 
-</head>
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
 
-<body class="d-flex h-100 text-center shadow-none">
-
-    <div class=" d-flex w-100 h-100 mx-auto flex-column">
-
-        <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
-            <?php include('include/header.php'); ?>
-        </header>
-
-        <main class="px-3 w-100 mt-2">
-
-            <div class="container-fluid text-start">
-
-                <div class="float-end">
-                    <a name="register" id="register" class="btn btn-primary" href="./maintenances.php?modeCreate=true" role="button">Registrar</a>
-                </div><br>
-                
-                <div class="text-center">
-                    <h2 class="text-center">Listado de Mantenimientos</h2>      
-                    <p class="">Registro, actualización y finalización!</p>                    
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row">
-
-                            <div class="<?php $class = ($modeIndex=="true") ? "col-12" : "col-sm-6" ; echo $class; ?>" >
-                                <?php include('maintenances/table/crud.php'); ?>
-                            </div>
-
-                            <?php if ($modeCreate=="true") {  ?>
-                                <div class="col-sm-6" style="z-index: 1000;">
-                                    <div class="bg-white shadow-lg border rounded">                            
-                                        <h3 class="alert alert-secondary text-center">
-                                            <div class="d-flex justify-content-between">
-                                            <div class="">Registro de Mantenimiento</div>
-                                            <div>
-                                                <a class="btn-close" href="./maintenances.php" role="button" aria-label="Close"></a>
-                                            </div>
-                                        </h3>
-                                        <form action="./maintenances/register.php" method="POST">
-                                            <?php include('maintenances/form/fields.php'); ?>
-                                            <footer class="mt-auto">
-                                                <input type="submit" name="register" value="Registrar" class="btn btn-primary w-100">
-                                            </footer>
-                                        </form>
-                                    </div>                        
-                                </div>
-                            <?php }; ?>
-
-                            <?php if ($modeEdit=="true") {  ?>
-                                <div class="col-sm-6" style="z-index: 1000;">
-                                    <div class="bg-white shadow-lg border rounded">                            
-                                        <h3 class="alert alert-secondary text-center">
-                                            <div class="d-flex justify-content-between">
-                                            <div class="">Actualizar Mantenimiento</div>
-                                            <div>
-                                                <a class="btn-close" href="./maintenances.php" role="button" aria-label="Close"></a>
-                                            </div>
-                                        </h3>
-                                        <form action="./maintenances/update.php" method="POST">
-                                            
-                                            <?php include('maintenances/form/edit.php'); ?>
-                                            <footer class="mt-auto">
-                                                <input type="submit" name="update" value="Actualizar" class="btn btn-warning w-100">
-                                            </footer>
-                                        </form>
-                                    </div>                        
-                                </div>
-                            <?php }; ?>
-
-                            </div>
+                    <div class="<?php $class = ($modeIndex=="true") ? "col-12" : "col-sm-6" ; echo $class; ?>" >
+                        <?php include __DIR__ . '/maintenances/table/crud.php'; ?>
                     </div>
-                </div>
 
+                    <?php if ($modeCreate=="true") {  ?>
+                        <div class="col-sm-6" style="z-index: 1000;">
+                            <div class="bg-white shadow-lg border rounded">
+                                <h3 class="alert alert-secondary text-center">
+                                    <div class="d-flex justify-content-between">
+                                    <div class="">Registro de Mantenimiento</div>
+                                    <div>
+                                        <a class="btn-close" href="./maintenances.php" role="button" aria-label="Close"></a>
+                                    </div>
+                                </h3>
+                                <form action="<?= e(url('maintenances/register.php')) ?>" method="POST">
+                                    <?= csrf_field() ?>
+                                    <?php include __DIR__ . '/maintenances/form/fields.php'; ?>
+                                    <footer class="mt-auto">
+                                        <input type="submit" name="register" value="Registrar" class="btn btn-primary w-100">
+                                    </footer>
+                                </form>
+                            </div>
+                        </div>
+                    <?php }; ?>
+
+                    <?php if ($modeEdit=="true") {  ?>
+                        <div class="col-sm-6" style="z-index: 1000;">
+                            <div class="bg-white shadow-lg border rounded">
+                                <h3 class="alert alert-secondary text-center">
+                                    <div class="d-flex justify-content-between">
+                                    <div class="">Actualizar Mantenimiento</div>
+                                    <div>
+                                        <a class="btn-close" href="./maintenances.php" role="button" aria-label="Close"></a>
+                                    </div>
+                                </h3>
+                                <form action="<?= e(url('maintenances/update.php')) ?>" method="POST">
+                                    <?= csrf_field() ?>
+                                    <?php include __DIR__ . '/maintenances/form/edit.php'; ?>
+                                    <footer class="mt-auto">
+                                        <input type="submit" name="update" value="Actualizar" class="btn btn-warning w-100">
+                                    </footer>
+                                </form>
+                            </div>
+                        </div>
+                    <?php }; ?>
+
+                    </div>
             </div>
-
-        </main>
-
-        <footer class="mt-auto text-white-50 bg-secondary-subtle py-2">
-            <?php include('include/footer.php'); ?>
-        </footer>
+        </div>
 
     </div>
 
-    <?php include('include/script.php'); ?>
-
     <script>
-        const search = "<?php echo $_GET['search']; ?>";
+        const search = <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>;
 
         const table = new DataTable('#myTable', {
             search: {
@@ -136,10 +111,56 @@ $itemArrSeleted = ($id) ? $db->getFirstForId("maintenances",$id) : Array();
             const newUrl = window.location.pathname + '?' + params.toString();
             history.replaceState(null, '', newUrl);
         })
+
+        // Fase 2.1 — Modal de detalle (Razón y Notas) + tooltips
+        const detalleModal = new bootstrap.Modal('#detalleModal');
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.js-detail');
+            if (!btn) return;
+
+            const d = JSON.parse(btn.dataset.detail);
+            document.getElementById('detalleCode').textContent = d.code;
+            document.getElementById('detalleReason').textContent = d.reason;
+            document.getElementById('detalleNotes').textContent = d.notes;
+            detalleModal.show();
+        });
+
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+
+        // Fase 2.2 — Filtros por columna y "solo vencidos"
+        // Filtro global personalizado: solo filas marcadas como vencidas por el servidor
+        $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
+            if (!table.filterVencidos) return true;
+            const node = table.row(dataIndex).node();
+            return !node || node.classList.contains('js-vencido');
+        });
+
+        document.getElementById('soloVencidos').addEventListener('change', (e) => {
+            table.filterVencidos = e.target.checked;
+            table.draw();
+        });
+
+        document.querySelectorAll('.js-col-filter').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                const v = sel.value.trim();
+                if (v) {
+                    // match exacto contra el texto de la celda (badges incluidos)
+                    table.column(parseInt(sel.dataset.column, 10)).search('^' + v + '$', true, false);
+                } else {
+                    table.column(parseInt(sel.dataset.column, 10)).search('', true, false);
+                }
+                table.draw();
+            });
+        });
+
+        document.getElementById('resetFiltros').addEventListener('click', () => {
+            document.querySelectorAll('.js-col-filter').forEach(sel => { sel.value = ''; });
+            const venc = document.getElementById('soloVencidos');
+            if (venc.checked) { venc.checked = false; table.filterVencidos = false; }
+            table.search('').columns().search('').draw();
+        });
     </script>
 
-</body>
-
-</html>
-
-<?php $db->close(); ?>
+<?php $main = ob_get_clean();
+include __DIR__ . '/include/layout.php';

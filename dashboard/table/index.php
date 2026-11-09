@@ -1,3 +1,6 @@
+<?php
+$canPropertyStatus = auth_has_role(array('admin', 'operador'));
+?>
 <div class="container-fluid text-start">
     <table class="table table-striped table-sm table-hover" id="myTable">
         <thead>
@@ -10,31 +13,49 @@
                 <th>Descripción</th>
                 <th>Serial</th>
                 <th>Estado</th>
-                <th>Cant.Manten.</th>
+                <th>Mant.</th>
                 <th class="text-center">Acciones</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($properties as $property) : ?>
-                <?php $status_class = ($property['status']=="BUENO") ? "fw-bold text-success" : null; ?>
-                <?php $status_class = ($property['status']=="REGULAR") ? "fw-bold text-warning" : $status_class; ?>
-                <?php $status_class = ($property['status']=="MALO") ? "fw-bold text-danger" : $status_class; ?>
-                <?php $condition = " WHERE property_id=".$property['id']; $maintenances = $db->index("maintenances",$condition); ?>
+                <?php $maintenances = $db->index('maintenances', array('property_id' => $property['id'])); ?>
                 <tr>
-                    <td><?php echo $property['id']; ?></td>
-                    <td><?php echo $property['grupo']; ?></td>
-                    <td><?php echo str_pad($property['subgrupo'], 4, "0", STR_PAD_LEFT); ?></td>
-                    <td><?php echo str_pad($property['seccion'], 4, "0", STR_PAD_LEFT); ?></td>
-                    <td><?php echo str_pad($property['ident'], 4, "0", STR_PAD_LEFT); ?></td>
-                    <td><?php echo $property['description']; ?></td>
-                    <td><?php echo $property['serial']; ?></td>
-                    <td class="<?php echo $status_class; ?>"><?php echo $property['status']; ?></td>
-                    <td><?php echo count($maintenances); ?></td>
+                    <td><?= e($property['id']) ?></td>
+                    <td><?= e($property['grupo']) ?></td>
+                    <td><?= e(str_pad((string) $property['subgrupo'], 4, '0', STR_PAD_LEFT)) ?></td>
+                    <td><?= e(str_pad((string) $property['seccion'], 4, '0', STR_PAD_LEFT)) ?></td>
+                    <td><?= e(str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT)) ?></td>
+                    <td><?= e($property['description']) ?></td>
+                    <td><?= e($property['serial']) ?></td>
+                    <td><?= sat_badge(badge_clase_bien((string) $property['status']), (string) $property['status']) ?></td>
+                    <td><?= e(count($maintenances)) ?></td>
                     <td>
-                        <div class="btn-group" role="group" aria-label="Button group name">
-                            <a class="btn btn-primary btn-sm " href="./maintenances.php?modeCreate=true&property_id=<?php echo $property['id']; ?>" role="button">Mantenimiento</a>
-                            <a class="btn btn-dark btn-sm " target="_blank" href="./historials.php?property_id=<?php echo $property['id']; ?>" role="button">Historial</a>
-                            <a class="btn btn-success btn-sm " href="./dashboard/actions/status.php?property_id=<?php echo $property['id']; ?>&status=<?php echo $property['status']; ?>&ident=<?php echo $property['ident']; ?>" role="button">Estado</a>
+                        <div class="btn-group" role="group" aria-label="Acciones del bien">
+                            <a class="btn btn-outline-primary btn-sm property-action-btn"
+                               href="<?= e(url('maintenances.php?modeCreate=true&property_id=' . (int) $property['id'])) ?>"
+                               role="button" aria-label="Registrar mantenimiento" title="Registrar mantenimiento">
+                                <i class="bi bi-wrench-adjustable-circle" aria-hidden="true"></i>
+                            </a>
+
+                            <a class="btn btn-outline-secondary btn-sm property-action-btn" target="_blank" rel="noopener"
+                               href="<?= e(url('historials.php?property_id=' . (int) $property['id'])) ?>"
+                               role="button" aria-label="Ver historial en una nueva pestaña" title="Ver historial">
+                                <i class="bi bi-journal-text" aria-hidden="true"></i>
+                            </a>
+
+                            <?php if ($canPropertyStatus) : ?>
+                                <form method="post" action="<?= e(url('dashboard/actions/status.php')) ?>"
+                                      class="btn-group" role="group" aria-label="Cambiar estado del bien">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="property_id" value="<?= e($property['id']) ?>">
+                                    <input type="hidden" name="ident" value="<?= e($property['ident']) ?>">
+                                    <button type="submit" class="btn btn-outline-success btn-sm property-action-btn"
+                                            aria-label="Cambiar estado del bien" title="Cambiar estado">
+                                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </td>
                 </tr>

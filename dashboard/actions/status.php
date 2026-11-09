@@ -1,29 +1,35 @@
 <?php
+require_once __DIR__ . '/../../conn.php';
+require_once __DIR__ . '/../../include/auth.php';
 
-$base = $_SERVER['DOCUMENT_ROOT']; 
-include_once($base.'/conn.php');
-$db = new DB($base.'/db.db');
+require_role(array('admin', 'operador'));
+verify_csrf();
 
-$table = "properties";
-$property_id = (array_key_exists('property_id',$_GET)) ? $_GET['property_id'] : null;
-$status = (array_key_exists('status',$_GET)) ? $_GET['status'] : null;
-$ident = $_GET['ident'];
+$propertyId = isset($_POST['property_id']) ? filter_var($_POST['property_id'], FILTER_VALIDATE_INT) : false;
+$ident = isset($_POST['ident']) ? (string) $_POST['ident'] : '';
 
-if ($status && $property_id) {
-    try {
-        switch ($status) {
-            case 'BUENO': $status="MALO"; break;
-            case 'REGULAR': $status="BUENO"; break;
-            case 'MALO': $status="REGULAR"; break;            
-            default: $status="BUENO"; break;
-        }
-        $data = array(
-            'status' => $status,
-        );
-        $result = $db->update($table, $property_id, $data);
-        header("Location: ../../dashboard.php?search=".str_pad($ident, 4, "0", STR_PAD_LEFT));
-        exit();
-    } catch (PDOException $e) {
-        echo "Error al procesar los datos: " . $e->getMessage();
-    }
+if ($propertyId === false || $propertyId === null) {
+    http_response_code(400);
+    exit('Bien inválido');
+}
+
+$db = db();
+$property = $db->getFirstForId('properties', $propertyId);
+
+if (!$property) {
+    http_response_code(404);
+    exit('Bien no encontrado');
+}
+
+try {
+    $nextStatus = property_next_status((string) $property['status']);
+    $db->update('properties', $propertyId, array('status' => $nextStatus));
+
+    $search = str_pad($ident !== '' ? $ident : (string) $property['ident'], 4, '0', STR_PAD_LEFT);
+    header('Location: ' . url('dashboard.php?search=' . urlencode($search)));
+    exit();
+} catch (Exception $e) {
+    error_log('Error actualizando estado del bien: ' . $e->getMessage());
+    http_response_code(500);
+    exit('No se pudo actualizar el estado del bien.');
 }

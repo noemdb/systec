@@ -1,58 +1,111 @@
-<html lang="en" class="h-100" data-bs-theme="light">
-
 <?php
-$title = "Dashboard";
-$base = $_SERVER['DOCUMENT_ROOT']; 
-include_once($base.'/conn.php');
-$db = new DB($base.'/db.db');
+require_once __DIR__ . '/conn.php';
+require_once __DIR__ . '/include/auth.php';
+require_login();
 
-$properties = $db->index("properties");
+$title = 'Dashboard';
+$db = db();
 
-?>
+$properties = $db->index('properties', array(), '*', 'id ASC');
+$propertyCount = count($properties);
+$goodPropertyCount = 0;
+$attentionPropertyCount = 0;
 
-<head>
+foreach ($properties as $property) {
+    $status = mb_strtoupper(trim((string) $property['status']));
+    if ($status === 'BUENO') {
+        $goodPropertyCount++;
+    }
+    if ($status === 'MALO' || $status === 'MUY MALO') {
+        $attentionPropertyCount++;
+    }
+}
 
-    <?php include('include/head.php'); ?>
+$canImportInventory = auth_has_role(array('admin', 'operador'));
 
-</head>
+ob_start(); ?>
 
-<body class="d-flex h-100 text-center shadow-none">
+    <div class="container-fluid">
 
-<div class=" d-flex w-100 h-100 mx-auto flex-column">
+        <h2 class="">Dashboard</h2>
+        <p class="">Bienvenido!</p>
 
-        <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
-            <?php include('include/header.php'); ?>
-        </header>
-
-        <main class="px-3 w-100 mt-2">
-            <div class="container-fluid">
-
-                <h2 class="">Dashboard</h2>
-                <p class="">Bienvenido!</p>
-
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3>Lista de Bienes Registrados</h3>
-
-                        <?php include('dashboard/table/index.php'); ?>                        
-
+        <section class="row g-3 mb-4" aria-label="Indicadores del inventario">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card h-100 border-start border-4 border-primary shadow-sm">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="rounded-circle bg-primary-subtle text-primary p-3" aria-hidden="true">
+                            <i class="bi bi-box-seam fs-4"></i>
+                        </span>
+                        <div>
+                            <p class="small text-muted mb-1">Bienes registrados</p>
+                            <p class="h3 mb-0"><?= e($propertyCount) ?></p>
+                        </div>
                     </div>
-                </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card h-100 border-start border-4 border-success shadow-sm">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="rounded-circle bg-success-subtle text-success p-3" aria-hidden="true">
+                            <i class="bi bi-check-circle fs-4"></i>
+                        </span>
+                        <div>
+                            <p class="small text-muted mb-1">En buen estado</p>
+                            <p class="h3 mb-0"><?= e($goodPropertyCount) ?></p>
+                        </div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card h-100 border-start border-4 border-danger shadow-sm">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="rounded-circle bg-danger-subtle text-danger p-3" aria-hidden="true">
+                            <i class="bi bi-exclamation-triangle fs-4"></i>
+                        </span>
+                        <div>
+                            <p class="small text-muted mb-1">Requieren atención</p>
+                            <p class="h3 mb-0"><?= e($attentionPropertyCount) ?></p>
+                            <p class="small text-muted mb-0">Malo o muy malo</p>
+                        </div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card h-100 border-start border-4 border-info shadow-sm">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="rounded-circle bg-info-subtle text-info p-3" aria-hidden="true">
+                            <i class="bi bi-database fs-4"></i>
+                        </span>
+                        <div class="flex-grow-1">
+                            <p class="small text-muted mb-1">Sincronización con legacy</p>
+                            <p class="h5 mb-1">Manual</p>
+                            <p class="small text-muted mb-2">PostgreSQL se consulta en solo lectura.</p>
+                            <?php if ($canImportInventory) : ?>
+                                <a class="small fw-semibold" href="<?= e(url('updates.php')) ?>">
+                                    Importar bienes <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <div class="card">
+            <div class="card-body">
+
+                <h3>Lista de Bienes Registrados</h3>
+
+                <?php include __DIR__ . '/dashboard/table/index.php'; ?>
 
             </div>
-        </main>
-
-        <footer class="mt-auto text-white-50 bg-secondary-subtle py-2">
-            <?php include('include/footer.php'); ?>
-        </footer>
+        </div>
 
     </div>
 
-    <?php include('include/script.php'); ?>
-
     <script type="text/javascript">
-        const search = "<?php echo $_GET['search']; ?>";
+        const search = <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>;
 
         const table = new DataTable('#myTable', {
             search: {
@@ -72,9 +125,5 @@ $properties = $db->index("properties");
         })
     </script>
 
-    <?php $db->close(); ?>
-
-</body>
-
-</html>
-
+<?php $main = ob_get_clean();
+include __DIR__ . '/include/layout.php';

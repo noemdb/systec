@@ -2,219 +2,482 @@
 
 date_default_timezone_set('America/Caracas');
 
+require_once __DIR__ . '/include/config.php';
+require_once __DIR__ . '/include/security.php';
+require_once __DIR__ . '/include/helpers.php';
+
+/**
+ * Capa de datos de SysTec GMB.
+ *
+ * Reglas:
+ * - Los nombres de tabla/columna se validan contra listas blancas.
+ * - Los valores siempre viajan como parámetros vinculados.
+ * - La conexión no se cierra dentro de los métodos; la cierra el llamador
+ *   o el final del request.
+ */
 class DB extends SQLite3
 {
-    function __construct($filename) {
-        $this->open($filename);
-        $this->exec('CREATE TABLE IF NOT EXISTS properties (id INTEGER PRIMARY KEY AUTOINCREMENT, grupo STRING, subgrupo STRING, seccion STRING, ident STRING, adscription STRING, description STRING, model STRING, color STRING, serial STRING, status STRING)');
-        $this->exec('CREATE TABLE IF NOT EXISTS maintenances (id INTEGER PRIMARY KEY AUTOINCREMENT, property_id INTEGER, code STRING, type STRING, description STRING, date DATETIME, time_taken INTEGER, technician VARCHAR(255), next_maintenance_date DATETIME, failure_reason TEXT, notes TEXT, status STRING)');
+    private static $schema = array(
+        'properties' => array(
+            'id', 'grupo', 'subgrupo', 'seccion', 'ident', 'adscription',
+            'description', 'model', 'color', 'serial', 'status',
+        ),
+        'maintenances' => array(
+            'id', 'property_id', 'code', 'type', 'description', 'date',
+            'time_taken', 'technician', 'next_maintenance_date',
+            'failure_reason', 'notes', 'status',
+        ),
+        'users' => array(
+            'id', 'username', 'password_hash', 'role', 'active', 'created_at',
+        ),
+    );
+
+    public function __construct($filename = null)
+    {
+        $this->open($filename ?: SYSTEC_DB);
+        $this->busyTimeout(5000);
+        $this->exec('PRAGMA foreign_keys = ON');
+        $this->ensureSchema();
+    }
+
+    private function ensureSchema()
+    {
+        $this->exec('CREATE TABLE IF NOT EXISTS properties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            grupo STRING,
+            subgrupo STRING,
+            seccion STRING,
+            ident STRING,
+            adscription STRING,
+            description STRING,
+            model STRING,
+            color STRING,
+            serial STRING,
+            status STRING
+        )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS maintenances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            property_id INTEGER,
+            code STRING,
+            type STRING,
+            description STRING,
+            date DATETIME,
+            time_taken INTEGER,
+            technician VARCHAR(255),
+            next_maintenance_date DATETIME,
+            failure_reason TEXT,
+            notes TEXT,
+            status STRING
+        )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT \'consulta\',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )');
+    }
+
+    private function tableName($table)
+    {
+        $table = (string) $table;
+
+        if (!array_key_exists($table, self::$schema)) {
+            throw new InvalidArgumentException('Tabla no permitida: ' . $table);
+        }
+
+        return $table;
+    }
+
+    private function columnName($table, $column)
+    {
+        $table = $this->tableName($table);
+        $column = (string) $column;
+
+        if (!in_array($column, self::$schema[$table], true)) {
+            throw new InvalidArgumentException('Columna no permitida: ' . $table . '.' . $column);
+        }
+
+        return $column;
+    }
+
+    private function fieldsSql($table, $fields)
+    {
+        if ($fields === null || trim((string) $fields) === '' || trim((string) $fields) === '*') {
+            return '*';
+        }
+
+        $columns = array();
+        foreach (explode(',', (string) $fields) as $column) {
+            $columns[] = $this->columnName($table, trim($column));
+        }
+
+        return implode(', ', $columns);
+    }
+
+    private function orderSql($table, $sort)
+    {
+        if ($sort === null || trim((string) $sort) === '') {
+            return '';
+        }
+
+        $sort = trim((string) $sort);
+        if (!preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(ASC|DESC))?$/i', $sort, $matches)) {
+            throw new InvalidArgumentException('Orden no permitido: ' . $sort);
+        }
+
+        $column = $this->columnName($table, $matches[1]);
+        $direction = isset($matches[2]) ? strtoupper($matches[2]) : 'ASC';
+
+        return ' ORDER BY ' . $column . ' ' . $direction;
+    }
+
+    private function whereSql($table, array $conditions, array &$params)
+    {
+        if (!$conditions) {
+            return '';
+        }
+
+        $clauses = array();
+        foreach ($conditions as $key => $condition) {
+            if (is_int($key)) {
+                if (!is_array($condition) || count($condition) < 2) {
+                    throw new InvalidArgumentException('Condición inválida');
+                }
+
+                $column = $condition[0];
+                $operator = strtoupper((string) $condition[1]);
+                $value = array_key_exists(2, $condition) ? $condition[2] : null;
+            } else {
+                $column = $key;
+                $operator = '=';
+                $value = $condition;
+            }
+
+            $column = $this->columnName($table, $column);
+            $operators = array('=', '!=', '<>', '<', '<=', '>', '>=', 'LIKE');
+
+            if (!in_array($operator, $operators, true)) {
+                throw new InvalidArgumentException('Operador no permitido: ' . $operator);
+            }
+
+            $param = ':c' . count($params);
+            $clauses[] = $column . ' ' . $operator . ' ' . $param;
+            $params[$param] = $value;
+        }
+
+        return ' WHERE ' . implode(' AND ', $clauses);
+    }
+
+    private function bindValues($stmt, array $params)
+    {
+        foreach ($params as $name => $value) {
+            if ($value === null) {
+                $type = SQLITE3_NULL;
+            } elseif (is_int($value) || is_bool($value)) {
+                $type = SQLITE3_INTEGER;
+            } else {
+                $type = SQLITE3_TEXT;
+            }
+
+            $stmt->bindValue($name, $value, $type);
+        }
+    }
+
+    private function fetchAll($query, array $params = array())
+    {
+        $stmt = $this->prepare($query);
+
+        if (!$stmt) {
+            throw new RuntimeException('Error preparando consulta: ' . $this->lastErrorMsg());
+        }
+
+        $this->bindValues($stmt, $params);
+        $result = $stmt->execute();
+
+        if (!$result) {
+            throw new RuntimeException('Error ejecutando consulta: ' . $this->lastErrorMsg());
+        }
+
+        $rows = array();
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    private function formatCode($row)
+    {
+        if (!$row) {
+            return null;
+        }
+
+        return $row['grupo']
+            . '-' . str_pad((string) $row['subgrupo'], 4, '0', STR_PAD_LEFT)
+            . '-' . str_pad((string) $row['seccion'], 4, '0', STR_PAD_LEFT)
+            . '-' . str_pad((string) $row['ident'], 4, '0', STR_PAD_LEFT);
     }
 
     public function createOrUpdate($dataCsv)
     {
-        $table = "properties";
-        $ident = $dataCsv[3];
-        $condition = " WHERE ident=".$ident;
-        $property = $this->getFirstForConditions($table,$condition); 
+        if (!is_array($dataCsv) || count($dataCsv) < 11) {
+            throw new InvalidArgumentException('Fila CSV incompleta');
+        }
 
-        if (! $property) {
+        $ident = str_pad(trim((string) $dataCsv[3]), 4, '0', STR_PAD_LEFT);
+        $property = $this->getFirstForConditions('properties', array('ident' => $ident));
+
+        if (!$property) {
+            $modelParts = array_filter(array_map(function ($value) {
+                return trim((string) $value);
+            }, array($dataCsv[5], $dataCsv[6])), function ($value) {
+                return $value !== '';
+            });
             $data = array(
                 'grupo' => $dataCsv[0],
-                'subgrupo' => str_pad($dataCsv[1], 4, "0", STR_PAD_LEFT),
-                'seccion' => str_pad($dataCsv[2], 3, "0", STR_PAD_LEFT),
-                'ident' => str_pad($dataCsv[3], 4, "0", STR_PAD_LEFT),
+                'subgrupo' => str_pad((string) $dataCsv[1], 4, '0', STR_PAD_LEFT),
+                'seccion' => str_pad((string) $dataCsv[2], 3, '0', STR_PAD_LEFT),
+                'ident' => $ident,
                 'description' => $dataCsv[4],
-                'model' => $dataCsv[5].' - '.$dataCsv[6],
+                'model' => implode(' - ', $modelParts),
                 'serial' => $dataCsv[7],
                 'color' => $dataCsv[9],
-                'status' => $dataCsv[10],                
+                'status' => $dataCsv[10],
             );
-            $this->create($table,$data);
+            $this->create('properties', $data);
+            return 'inserted';
+        } else {
+            if ((string) $property['status'] === trim((string) $dataCsv[10])) {
+                return 'unchanged';
+            }
+            $this->update('properties', $property['id'], array('status' => $dataCsv[10]));
+            return 'updated';
         }
-
-        if($property){
-            $id = $property['id'];
-            $data = array(
-                'status' => $dataCsv[10]                
-            );
-            $this->update($table, $id, $data); 
-        }
-        
-        $this->close();
-    }    
-
-    function create($table,$data)
-    {    
-        $keys = implode(', ', array_keys($data));
-        $values = ':' . implode(', :', array_keys($data));     
-        $query = "INSERT INTO $table ($keys) VALUES ($values)";
-        $stmt = $this->prepare($query); //var_dump($stmt);die();
-        foreach ($data as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
-        }    
-        $result = $stmt->execute(); 
-        $this->close();
     }
 
-    public function update($table, $id, $data) {
-        $prepare = array();
-        foreach ($data as $key => $value) {
-            $prepare[] = $key."=:{$key}";
-        } 
-        $query = "UPDATE ".$table." SET " . implode(", ", $prepare) . " WHERE id={$id}";
+    public function create($table, array $data)
+    {
+        $table = $this->tableName($table);
+
+        if (!$data) {
+            throw new InvalidArgumentException('No hay datos para insertar');
+        }
+
+        $columns = array();
+        $placeholders = array();
+        $params = array();
+
+        foreach ($data as $column => $value) {
+            $columns[] = $this->columnName($table, $column);
+            $param = ':p' . count($params);
+            $placeholders[] = $param;
+            $params[$param] = $value;
+        }
+
+        $query = 'INSERT INTO ' . $table . ' (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
         $stmt = $this->prepare($query);
-        foreach ($data as $key => $value) {
-            $stmt->bindValue(':'.$key, $value);
+
+        if (!$stmt) {
+            throw new RuntimeException('Error preparando inserción: ' . $this->lastErrorMsg());
         }
-        $stmt->execute();
-        
+
+        $this->bindValues($stmt, $params);
+
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Error insertando en la base local SysTec (SQLite): ' . $this->lastErrorMsg());
+        }
+
+        return $this->lastInsertRowID();
     }
 
-    public function indexWithMaintenances($fields = "*", $sort = null) {
+    public function update($table, $id, array $data)
+    {
+        $table = $this->tableName($table);
+        $id = filter_var($id, FILTER_VALIDATE_INT);
+
+        if ($id === false || $id === null) {
+            throw new InvalidArgumentException('Identificador inválido');
+        }
+
+        if (!$data) {
+            return 0;
+        }
+
+        $sets = array();
+        $params = array(':id' => $id);
+
+        foreach ($data as $column => $value) {
+            $column = $this->columnName($table, $column);
+            $param = ':p' . count($params);
+            $sets[] = $column . ' = ' . $param;
+            $params[$param] = $value;
+        }
+
+        $query = 'UPDATE ' . $table . ' SET ' . implode(', ', $sets) . ' WHERE id = :id';
+        $stmt = $this->prepare($query);
+
+        if (!$stmt) {
+            throw new RuntimeException('Error preparando actualización: ' . $this->lastErrorMsg());
+        }
+
+        $this->bindValues($stmt, $params);
+
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Error actualizando la base local SysTec (SQLite): ' . $this->lastErrorMsg());
+        }
+
+        return $this->changes();
+    }
+
+    public function indexWithMaintenances($fields = 'properties.*', $sort = null)
+    {
+        if ($fields !== '*' && $fields !== 'properties.*') {
+            throw new InvalidArgumentException('Campos no permitidos para el reporte');
+        }
+
         $query = "
-            SELECT $fields 
-            FROM properties 
+            SELECT DISTINCT $fields
+            FROM properties
             INNER JOIN maintenances ON properties.id = maintenances.property_id
             WHERE TRIM(maintenances.notes) != ''
             AND maintenances.notes LIKE '%desincorporación%'
             AND (properties.status = 'MALO' OR properties.status = 'MUY MALO')
         ";
-        if ($sort) {
-            $query .= " $sort";
-        }
 
-        // $query .= " LIMIT 0,5";
-    
+        $query .= $this->orderSql('maintenances', $sort);
+
         $stmt = $this->query($query);
-        $tabla_index = [];
+        $rows = array();
+
         if ($stmt) {
-            while ($row = $stmt->fetchArray()) {
-                $tabla_index[] = $row;
+            while ($row = $stmt->fetchArray(SQLITE3_ASSOC)) {
+                $rows[] = $row;
             }
         }
-        return $tabla_index;
-    }
-    
-    
 
-    public function index($table,$conditions=null,$fields="*",$sort=null) {
-        $stmt = $this->query("SELECT ".$fields." FROM ".$table." ".$conditions." ".$sort);
-        $tabla_index = [];
-        if ($stmt) {
-            while ($row = $stmt->fetchArray()) {
-                $tabla_index[] = $row;
-            }
-        }
-        return $tabla_index;
+        return $rows;
     }
 
-    public function getListProperties($table) {
-        $stmt = $this->query("SELECT * FROM ".$table." ");
-        $list_arr = [];
-        if ($stmt) {
-            while ($row = $stmt->fetchArray()) {
-                $code = $this->getCodeId($row['id']);
-                $list_arr[$row['id']] = $code;
-            }
-        }        
-        return $list_arr;
-    }
-    ////////////////////////////////////////////////////
-
-    function getCodeId($id)
+    public function index($table, array $conditions = array(), $fields = '*', $sort = null, $limit = null)
     {
-        $stmt = $this->query("SELECT * FROM properties WHERE id = ".$id." order by ident ASC"); //var_dump($stmt);die();
-        if ($stmt) {
-            $arr = $stmt->fetchArray();
-            $grupo = $arr['grupo'];
-            $subgrupo = str_pad($arr['subgrupo'], 4, "0", STR_PAD_LEFT);
-            $seccion = str_pad($arr['seccion'], 4, "0", STR_PAD_LEFT);
-            $ident = str_pad($arr['ident'], 4, "0", STR_PAD_LEFT);
-            return ($arr) ? $grupo.'-'.$subgrupo.'-'.$seccion.'-'.$ident: null;
-        }        
+        $table = $this->tableName($table);
+        $fields = $this->fieldsSql($table, $fields);
+        $params = array();
+        $where = $this->whereSql($table, $conditions, $params);
+        $order = $this->orderSql($table, $sort);
+        $limitSql = '';
+
+        if ($limit !== null) {
+            $limitSql = ' LIMIT ' . max(0, (int) $limit);
+        }
+
+        $query = 'SELECT ' . $fields . ' FROM ' . $table . $where . $order . $limitSql;
+
+        return $this->fetchAll($query, $params);
     }
 
-    function select(string $query)
+    public function getListProperties($table = 'properties')
+    {
+        $rows = $this->index($table, array(), '*', 'id ASC');
+        $list = array();
+
+        foreach ($rows as $row) {
+            $list[$row['id']] = $this->formatCode($row);
+        }
+
+        return $list;
+    }
+
+    public function getCodeId($id)
+    {
+        $row = $this->getFirstForId('properties', $id);
+
+        return $this->formatCode($row);
+    }
+
+    /**
+     * Solo para SQL estático interno. Nunca pasar entrada de usuario.
+     */
+    public function select(string $query)
     {
         $stmt = $this->query($query);
-        $result = [];
+        $result = array();
+
         if ($stmt) {
-            while ($row = $stmt->fetchArray()) {
-                array_push($result, $row);
+            while ($row = $stmt->fetchArray(SQLITE3_ASSOC)) {
+                $result[] = $row;
             }
-        }        
+        }
+
         return $result;
-    }    
-
-    function getFirstForId($table,$id)
-    {
-        $query = "SELECT * FROM ".$table." WHERE id = ".$id.""; //die();
-        $stmt = $this->query($query);
-        $fetchArray = ($stmt) ? $stmt->fetchArray() : null ;
-        return $fetchArray ;
     }
 
-    function getFirstForConditions($table,$conditions)
+    public function getFirstForId($table, $id)
     {
-        $query = "SELECT * FROM ".$table. $conditions; //die();
-        $stmt = $this->query($query);
-        $fetchArray = ($stmt) ? $stmt->fetchArray() : null ;
-        return $fetchArray ;
+        $id = filter_var($id, FILTER_VALIDATE_INT);
+
+        if ($id === false || $id === null) {
+            return null;
+        }
+
+        return $this->getFirstForConditions($table, array(array('id', '=', $id)));
     }
 
-    //INI List select////////////////////////////////////////////////////////////////
-    function getListPropertyStatus()
+    public function getFirstForConditions($table, array $conditions)
     {
-        return ['bueno'=>'Bueno','regular'=>'Regular','malo'=>'Malo'];
-    }
-    function getListMaintenanceStatus()
-    {
-        return ['iniciado'=>'Iniciado','revision'=>'Revisión','finalizado'=>'Finalizado'];
-    }
-    function getListMaintenanceType()
-    {
-        return ['preventivo'=>'Preventivo','correctivo'=>'Correctivo','predictivo'=>'Predictivo'];
-    }
-    function getListMaintenanceTechnician()
-    {
-        return ['jmedina'=>'jmedina','ndominguez'=>'ndominguez'];
-    }
-    //FIN List select////////////////////////////////////////////////////////////////
+        $rows = $this->index($table, $conditions, '*', null, 1);
 
-    function restarFechasEnHoras(DateTime $fecha1, DateTime $fecha2) {
-        $intervalo = $fecha1->diff($fecha2);
-        return $intervalo->h;
+        return $rows ? $rows[0] : null;
     }
 
-    // function restarFechasEnHoras(DateTime $fecha1, DateTime $fecha2) {
-    //     return round(($fecha1->getTimestamp() - $fecha2->getTimestamp()) / 3600);
-    // }
+    public function getListPropertyStatus()
+    {
+        return array('bueno' => 'Bueno', 'regular' => 'Regular', 'malo' => 'Malo', 'muy malo' => 'Muy malo');
+    }
+
+    public function getListMaintenanceStatus()
+    {
+        return array('iniciado' => 'Iniciado', 'revision' => 'Revisión', 'finalizado' => 'Finalizado');
+    }
+
+    public function getListMaintenanceType()
+    {
+        return array(
+            'preventivo' => 'Preventivo',
+            'correctivo' => 'Correctivo',
+            'predictivo' => 'Predictivo',
+            'evaluativo' => 'Evaluativo',
+        );
+    }
+
+    public function getListMaintenanceTechnician()
+    {
+        return array('jmedina' => 'jmedina', 'ndominguez' => 'ndominguez');
+    }
+
+    public function getListRoles()
+    {
+        return array('admin' => 'Administrador', 'operador' => 'Operador', 'tecnico' => 'Técnico', 'consulta' => 'Consulta');
+    }
+
+    public function restarFechasEnHoras(DateTime $fecha1, DateTime $fecha2)
+    {
+        return (int) round(abs($fecha1->getTimestamp() - $fecha2->getTimestamp()) / 3600);
+    }
 }
 
-/*
-properties
-grupo: Un campo de tipo VARCHAR(255) para almacenar el grupo del bien.
-subgrupo: Un campo de tipo VARCHAR(255) para almacenar el subgrupo del bien.
-seccion: Un campo de tipo VARCHAR(255) para almacenar la sección del bien.
-ident: Un campo de tipo VARCHAR(255) para almacenar el identificador del bien.
-adscription: Un campo de tipo VARCHAR(255) para almacenar la dirección del bien.
-description: Un campo de tipo TEXT para almacenar la descripción del bien.
-model: Un campo de tipo TEXT para almacenar el modelo del bien.
-color: Un campo de tipo TEXT para almacenar el color del bien.
-serial: Un campo de tipo TEXT para almacenar el serial del bien.
-status: Un campo de tipo VARCHAR(255) para almacenar el estado del bien.
+/** Conexión compartida por request. */
+function db(): DB
+{
+    static $instance = null;
 
-maintenances
-id: Un campo de tipo INTEGER para almacenar el identificador único del registro.
-property_id: Un campo de tipo VARCHAR(255) para almacenar el identificador del bien a la que se refiere el registro.
-code: Un campo de tipo VARCHAR(255) para almacenar el código del bien a la que se refiere el registro.
-type: Un campo de tipo VARCHAR(255) para almacenar el tipo de mantenimiento, ya sea preventivo/correctivo.
-description: Un campo de tipo TEXT para almacenar una descripción detallada del mantenimiento.
-date: Un campo de tipo DATETIME para almacenar la fecha en la que se realizó el mantenimiento.
-time_taken: Un campo de tipo INTEGER para almacenar el tiempo que tardó el mantenimiento.
-technician: Un campo de tipo VARCHAR(255) para almacenar el nombre del técnico que realizó el mantenimiento.
-status: Un campo de tipo VARCHAR(255) para almacenar el estado del mantenimiento, ya sea completado o pendiente.
-next_maintenance_date: Un campo de tipo DATETIME para almacenar la fecha del próximo mantenimiento programado.
-failure_reason: Un campo de tipo TEXT para almacenar la razón del mantenimiento preventivo/correctivo.
-notes: Un campo de tipo TEXT para almacenar cualquier información adicional sobre el mantenimiento.
-*/
+    if ($instance === null) {
+        $instance = new DB();
+    }
+
+    return $instance;
+}

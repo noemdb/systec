@@ -1,18 +1,18 @@
 <?php
-$title = "Reporte de Bienes Dañados";
-$base = $_SERVER['DOCUMENT_ROOT'];
-include_once($base.'/conn.php');
-$db = new DB($base.'/db.db');
+require_once __DIR__ . '/conn.php';
+require_once __DIR__ . '/include/auth.php';
+require_login();
 
-$properties = $db->indexWithMaintenances("properties.*", " order by date ASC ");
+$title = 'Reporte de Bienes Dañados';
+$db = db();
 
-
+$properties = $db->indexWithMaintenances('properties.*', 'date ASC');
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <?php include($base.'/include/head.php'); ?>
+    <?php include __DIR__ . '/include/head.php'; ?>
 
     <style>
         @media print {
@@ -67,14 +67,14 @@ $properties = $db->indexWithMaintenances("properties.*", " order by date ASC ");
                             <div class="d-flex w-100 h-100 mx-auto flex-column">
                                 <header class="bg-secondary-subtle border-bottom shadow-sm py-2 px-2">
                                     <div class="container-fluid">
-                                        <?php include('historials/membrete.php'); ?> 
+                                        <?php include __DIR__ . '/historials/membrete.php'; ?>
                                     </div>
                                 </header>
 
                                 <main class="px-0 mx-0 w-100 mt-2">
                                     <div class="container-fluid">
                                         <h4>Historial de mantenimiento </h4>
-                                        <?php include('historials/report.php'); ?>
+                                        <?php include __DIR__ . '/historials/report.php'; ?>
 
                                         
                                     </div>
@@ -93,6 +93,5 @@ $properties = $db->indexWithMaintenances("properties.*", " order by date ASC ");
 
 </div>
 
-<?php $db->close(); ?>
 </body>
 </html>
