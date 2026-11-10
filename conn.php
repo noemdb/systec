@@ -30,6 +30,17 @@ class DB extends SQLite3
         'users' => array(
             'id', 'username', 'password_hash', 'role', 'active', 'created_at',
         ),
+        'ticket_status' => array(
+            'id', 'code', 'name', 'sort_order', 'is_terminal', 'active',
+        ),
+        'tickets' => array(
+            'id', 'property_id', 'status_id', 'title', 'description', 'observation',
+            'created_by', 'assigned_to', 'created_at', 'updated_at', 'closed_at',
+        ),
+        'ticket_histories' => array(
+            'id', 'ticket_id', 'actor_user_id', 'action_type', 'description', 'observation',
+            'from_status_id', 'to_status_id', 'created_at',
+        ),
     );
 
     public function __construct($filename = null)
@@ -79,6 +90,53 @@ class DB extends SQLite3
             active INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS ticket_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_terminal INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1
+        )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            property_id INTEGER NOT NULL,
+            status_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            observation TEXT,
+            created_by INTEGER NOT NULL,
+            assigned_to INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            closed_at DATETIME
+        )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS ticket_histories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL,
+            actor_user_id INTEGER NOT NULL,
+            action_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            observation TEXT,
+            from_status_id INTEGER,
+            to_status_id INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )');
+
+        $statuses = array(
+            array('iniciado', 'Iniciado', 1, 0),
+            array('en_progreso', 'En progreso', 2, 0),
+            array('con_retraso', 'Con retraso', 3, 0),
+            array('en_espera', 'En espera', 4, 0),
+            array('finalizado', 'Finalizado', 5, 1),
+        );
+
+        foreach ($statuses as $status) {
+            $this->exec('INSERT OR IGNORE INTO ticket_status (code, name, sort_order, is_terminal, active) VALUES (\'' . $status[0] . '\', \'' . $status[1] . '\', ' . $status[2] . ', ' . $status[3] . ', 1)');
+        }
     }
 
     private function tableName($table)
@@ -216,13 +274,10 @@ class DB extends SQLite3
             return null;
         }
 
-        return $row['grupo']
-            . '-' . str_pad((string) $row['subgrupo'], 4, '0', STR_PAD_LEFT)
-            . '-' . str_pad((string) $row['seccion'], 4, '0', STR_PAD_LEFT)
-            . '-' . str_pad((string) $row['ident'], 4, '0', STR_PAD_LEFT);
+        return property_code($row);
     }
 
-    public function createOrUpdate($dataCsv)
+    public function createOrUpdate($dataCsv, bool $preserveExistingStatus = false)
     {
         if (!is_array($dataCsv) || count($dataCsv) < 11) {
             throw new InvalidArgumentException('Fila CSV incompleta');
@@ -251,6 +306,10 @@ class DB extends SQLite3
             $this->create('properties', $data);
             return 'inserted';
         } else {
+            if ($preserveExistingStatus
+                && (string) $property['status'] !== trim((string) $dataCsv[10])) {
+                return 'preserved';
+            }
             if ((string) $property['status'] === trim((string) $dataCsv[10])) {
                 return 'unchanged';
             }
@@ -380,6 +439,44 @@ class DB extends SQLite3
         return $this->fetchAll($query, $params);
     }
 
+    public function countRows($table, array $conditions = array()): int
+    {
+        $table = $this->tableName($table);
+        $params = array();
+        $where = $this->whereSql($table, $conditions, $params);
+        $stmt = $this->prepare('SELECT COUNT(*) AS row_count FROM ' . $table . $where);
+
+        if (!$stmt) {
+            throw new RuntimeException('Error preparando conteo: ' . $this->lastErrorMsg());
+        }
+
+        $this->bindValues($stmt, $params);
+        $result = $stmt->execute();
+        if (!$result) {
+            throw new RuntimeException('Error ejecutando conteo: ' . $this->lastErrorMsg());
+        }
+
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+
+        return (int) ($row['row_count'] ?? 0);
+    }
+
+    public function maintenanceCountsByProperty(): array
+    {
+        $rows = $this->fetchAll(
+            'SELECT property_id, COUNT(*) AS maintenance_count
+             FROM maintenances
+             GROUP BY property_id'
+        );
+        $counts = array();
+
+        foreach ($rows as $row) {
+            $counts[(int) $row['property_id']] = (int) $row['maintenance_count'];
+        }
+
+        return $counts;
+    }
+
     public function getListProperties($table = 'properties')
     {
         $rows = $this->index($table, array(), '*', 'id ASC');
@@ -461,7 +558,36 @@ class DB extends SQLite3
 
     public function getListRoles()
     {
-        return array('admin' => 'Administrador', 'operador' => 'Operador', 'tecnico' => 'Técnico', 'consulta' => 'Consulta');
+        return array(
+            'admin' => 'Administrador',
+            'operador' => 'Operador',
+            'tecnico' => 'Técnico',
+            'consulta' => 'Consulta',
+            'personal' => 'Personal',
+        );
+    }
+
+    public function getTicketStatuses(): array
+    {
+        $rows = $this->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');
+        $statuses = array();
+
+        foreach ($rows as $row) {
+            $statuses[(int) $row['id']] = $row;
+        }
+
+        return $statuses;
+    }
+
+    public function getTicketStatusByCode(string $code): ?array
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $row = $this->getFirstForConditions('ticket_status', array(array('code', '=', $code), array('active', '=', 1)));
+        return $row ?: null;
     }
 
     public function restarFechasEnHoras(DateTime $fecha1, DateTime $fecha2)

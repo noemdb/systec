@@ -12,6 +12,20 @@ $property = ($property_id !== false && $property_id !== null) ? $db->getFirstFor
 $maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
 $technician = '';
 
+if (isset($_GET['embed']) && $_GET['embed'] === '1') {
+    if (!$property) {
+        echo '<div class="alert alert-warning mb-0" role="alert">No se encontró el bien solicitado.</div>';
+        exit();
+    }
+
+    echo '<div class="container-fluid p-3">';
+    include __DIR__ . '/historials/membrete.php';
+    echo '<hr class="my-2">';
+    include __DIR__ . '/historials/main.php';
+    echo '</div>';
+    exit();
+}
+
 $no_footer = true;
 $header_file = __DIR__ . '/historials/membrete.php';
 

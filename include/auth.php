@@ -2,7 +2,7 @@
 /**
  * Autenticación, autorización y CSRF.
  *
- * Roles: admin, operador, tecnico, consulta.
+ * Roles: admin, operador, tecnico, consulta, personal.
  */
 
 require_once __DIR__ . '/../conn.php';
@@ -41,6 +41,47 @@ function auth_has_role(array $roles): bool
     $user = auth_user();
 
     return $user !== null && in_array($user['role'], $roles, true);
+}
+
+function auth_can_manage_all_tickets(): bool
+{
+    return auth_has_role(array('admin', 'operador', 'tecnico'));
+}
+
+function auth_can_access_ticket_for_user(int $ticketCreatedBy): bool
+{
+    $user = auth_user();
+    if ($user === null) {
+        return false;
+    }
+
+    if (auth_can_manage_all_tickets()) {
+        return true;
+    }
+
+    return auth_has_role(array('personal')) && (int) $user['id'] === $ticketCreatedBy;
+}
+
+function auth_is_personal_area(): bool
+{
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+    return strpos($path, '/personal/') !== false || $path === '/personal' || $path === '/personal/index.php';
+}
+
+function require_personal_scope(): void
+{
+    require_login();
+
+    $user = auth_user();
+    if (!is_array($user) || ($user['role'] ?? '') !== 'personal') {
+        header('Location: ' . url('login.php'));
+        exit();
+    }
+
+    if (!auth_is_personal_area()) {
+        header('Location: ' . url('personal/index.php'));
+        exit();
+    }
 }
 
 function auth_login(string $username, string $password): bool
@@ -130,6 +171,11 @@ function auth_intended_url(): string
 
     if (is_string($next) && $next !== '' && $next[0] === '/' && substr($next, 0, 2) !== '//' && strpos($next, "\n") === false) {
         return $next;
+    }
+
+    $user = auth_user();
+    if (is_array($user) && isset($user['role']) && $user['role'] === 'personal') {
+        return url('personal/index.php');
     }
 
     return url('dashboard.php');

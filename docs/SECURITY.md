@@ -47,8 +47,9 @@
 #### H-01 · Sin autenticación ni autorización — ✅ Resuelto en F1
 
 - **Evidencia original:** no existía login, sesión ni comprobación de permisos.
-- **Implementación:** `include/auth.php` con `password_hash`/`password_verify`, sesión `HttpOnly`/`SameSite=Lax`, `require_login()`, `require_role()` y roles `admin`/`operador`/`tecnico`/`consulta`. `login.php`, `logout.php` y `bin/create-user.php` completan el flujo.
-- **Evidencia de verificación:** `/` → 302 a `login.php`; `consulta` recibe 403 al intentar cambiar estado; el formulario de estado no se renderiza para ese rol.
+- **Implementación:** `include/auth.php` con `password_hash`/`password_verify`, sesión `HttpOnly`/`SameSite=Lax`, `require_login()`, `require_role()` y roles `admin`/`operador`/`tecnico`/`consulta`/`personal`. `login.php`, `logout.php` y `bin/create-user.php` completan el flujo.
+- **Evidencia de verificación:** `/` → 302 a `login.php`; `consulta` recibe 403 al intentar cambiar estado; el formulario de estado no se renderiza para ese rol; `personal` es redirigido al ámbito `/personal/*` y bloqueado fuera de ese prefijo.
+- **Ámbito personal:** el rol `personal` tiene un subespacio propio en `/personal/` con sus pantallas, acciones y permisos. Cualquier acceso a `/dashboard.php`, `/maintenances.php`, `/tickets.php` o cualquier ruta ajena al prefijo personal se redirige al área personal o al login, según la sesión.
 - **Pendiente:** auditoría de cambios (`audit_events`) y rate limiting de login (F3).
 
 #### H-02 · Inyección SQL por concatenación — ✅ Resuelto en F1

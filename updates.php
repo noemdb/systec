@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ob_start(); ?>
 
-    <style>
+    <style nonce="<?= e(systec_csp_nonce()) ?>">
         .inventory-source-card {
             cursor: pointer;
             border: 1px solid var(--bs-border-color);
@@ -121,7 +121,8 @@ ob_start(); ?>
             <div class="card-body">
                 <?php if (!$confirmed) : ?>
                     <div class="alert alert-warning">
-                        <strong>Antes de importar:</strong> los bienes existentes solo actualizarán su estado y los nuevos podrán insertarse.
+                        <strong>Antes de importar:</strong> al usar PostgreSQL, los bienes existentes conservan su estado actual en SysTec;
+                        el estado de legacy solo se usa para los bienes nuevos. Los CSV/XLS mantienen la actualización de estado habitual.
                         Verifica que exista un backup. Todos los orígenes están limitados a 5000 bienes; los archivos CSV/XLS tienen
                         además un límite de 5 MB.
                     </div>
@@ -202,7 +203,8 @@ ob_start(); ?>
                                     <h3 class="h6 mb-1">Conexión de solo lectura</h3>
                                     <p class="mb-0 small text-muted">
                                         Se consultarán los bienes no desincorporados. La base PostgreSQL legacy no se modifica;
-                                        solo se guardarán los resultados en SysTec.
+                                        los bienes existentes conservarán su estado en SysTec y solo los bienes nuevos recibirán
+                                        el estado indicado por legacy.
                                     </p>
                                     <span class="badge text-bg-info mt-2">Límite: 5000 bienes</span>
                                 </div>
@@ -231,7 +233,8 @@ ob_start(); ?>
                     <?php
                     try {
                         $db = db();
-                        $processor = function ($rows) {
+                        $preserveExistingStatus = $importSource === 'legacy_postgres';
+                        $processor = function ($rows) use ($preserveExistingStatus) {
                             $inventoryImportRows = $rows;
                             define('SYSTEC_IMPORT_CONTEXT', true);
                             include __DIR__ . '/properties/table/propertiesCsv.php';
@@ -257,7 +260,7 @@ ob_start(); ?>
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= e(systec_csp_nonce()) ?>">
         (function () {
             var sourceChoices = document.querySelectorAll('input[name="import_source"]');
             var fileSection = document.getElementById('inventory-file-source');

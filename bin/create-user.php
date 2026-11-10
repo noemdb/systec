@@ -5,7 +5,7 @@
  * Uso:
  *   php bin/create-user.php <usuario> <rol> [contraseña]
  *
- * Roles: admin, operador, tecnico, consulta.
+ * Roles: admin, operador, tecnico, consulta, personal.
  * Si se omite la contraseña, se genera una aleatoria y se imprime una sola vez.
  */
 
@@ -18,7 +18,7 @@ if (PHP_SAPI !== 'cli') {
 
 if ($argc < 3) {
     fwrite(STDERR, "Uso: php bin/create-user.php <usuario> <rol> [contraseña]\n");
-    fwrite(STDERR, "Roles: admin, operador, tecnico, consulta\n");
+    fwrite(STDERR, "Roles: admin, operador, tecnico, consulta, personal\n");
     exit(1);
 }
 

@@ -10,16 +10,25 @@
 
 <link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/app.css">
 <link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/cover.css">
+<link rel="stylesheet" href="<?= e(url('responsive.css')) ?>">
 
 <link rel="stylesheet" href="./vendor/datatables/datatables.min.css" />
 <script src="./vendor/datatables/datatables.min.js"></script>
 
 
-<style>
+<style nonce="<?= e(systec_csp_nonce()) ?>">
     .property-action-btn {
-        width: 2.5rem;
-        height: 2.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.4rem;
+        height: 2.4rem;
         padding: 0;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .property-action-btn:hover {
+        transform: translateY(-1px);
     }
 
     .property-action-btn .bi {

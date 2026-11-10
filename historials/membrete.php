@@ -6,7 +6,7 @@ $propertySerial = ($property && isset($property['serial'])) ? $property['serial'
 $propertyColor = ($property && isset($property['color'])) ? $property['color'] : '';
 $propertyStatus = ($property && isset($property['status'])) ? $property['status'] : '';
 ?>
-<div class="container-fluid">
+<div class="container-fluid" id="historyLetterhead">
     <div class="row">
         <div class="col-12">
             <div class="text-start">

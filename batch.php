@@ -11,11 +11,11 @@ $db = db();
 <head>
     <?php include __DIR__ . '/include/head.php'; ?>
 
-    <style>
+    <style nonce="<?= e(systec_csp_nonce()) ?>">
         html { margin: 0.8rem; text-transform: uppercase }
     </style>
 
-    <style type="text/css" media="print">
+    <style type="text/css" media="print" nonce="<?= e(systec_csp_nonce()) ?>">
         html { margin: 0.8cm; text-transform: uppercase }
         body { text-transform: uppercase; }
     </style>

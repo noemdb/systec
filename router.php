@@ -4,6 +4,11 @@
  * Deniega el acceso directo a datos, documentación y código interno.
  */
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_name('systec_session');
+    session_start();
+}
+
 $path = parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/', PHP_URL_PATH);
 $path = rawurldecode((string) $path);
 $path = '/' . ltrim($path, '/');
@@ -27,6 +32,19 @@ foreach ($blockedFiles as $file) {
         echo 'Acceso no permitido';
         return true;
     }
+}
+
+$userRole = isset($_SESSION['user']['role']) ? (string) $_SESSION['user']['role'] : '';
+if ($userRole === 'personal') {
+    if (strpos($path, '/personal') !== 0 && $path !== '/login.php' && $path !== '/logout.php') {
+        header('Location: /personal/index.php');
+        exit();
+    }
+}
+
+if (strpos($path, '/personal') === 0 && $userRole !== 'personal') {
+    header('Location: /login.php');
+    exit();
 }
 
 if (preg_match('/\.(db|sqlite|sqlite3|csv|log|md|env)$/i', $path)) {

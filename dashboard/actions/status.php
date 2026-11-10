@@ -6,7 +6,7 @@ require_role(array('admin', 'operador'));
 verify_csrf();
 
 $propertyId = isset($_POST['property_id']) ? filter_var($_POST['property_id'], FILTER_VALIDATE_INT) : false;
-$ident = isset($_POST['ident']) ? (string) $_POST['ident'] : '';
+$status = isset($_POST['status']) ? mb_strtolower(trim((string) $_POST['status'])) : '';
 
 if ($propertyId === false || $propertyId === null) {
     http_response_code(400);
@@ -14,6 +14,12 @@ if ($propertyId === false || $propertyId === null) {
 }
 
 $db = db();
+$validStatuses = $db->getListPropertyStatus();
+if (!array_key_exists($status, $validStatuses)) {
+    http_response_code(400);
+    exit('Estado inválido');
+}
+
 $property = $db->getFirstForId('properties', $propertyId);
 
 if (!$property) {
@@ -22,10 +28,9 @@ if (!$property) {
 }
 
 try {
-    $nextStatus = property_next_status((string) $property['status']);
-    $db->update('properties', $propertyId, array('status' => $nextStatus));
+    $db->update('properties', $propertyId, array('status' => mb_strtoupper($status)));
 
-    $search = str_pad($ident !== '' ? $ident : (string) $property['ident'], 4, '0', STR_PAD_LEFT);
+    $search = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
     header('Location: ' . url('dashboard.php?search=' . urlencode($search)));
     exit();
 } catch (Exception $e) {

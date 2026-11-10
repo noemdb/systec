@@ -14,7 +14,7 @@ $properties = $db->indexWithMaintenances('properties.*', 'date ASC');
 <head>
     <?php include __DIR__ . '/include/head.php'; ?>
 
-    <style>
+    <style nonce="<?= e(systec_csp_nonce()) ?>">
         @media print {
             body {
                 margin: 0;

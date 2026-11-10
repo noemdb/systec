@@ -11,6 +11,8 @@ $processed = 0;
 $inserted = 0;
 $updated = 0;
 $unchanged = 0;
+$preservedStatus = 0;
+$preservedStatusDetails = array();
 $errors = 0;
 $errorDetails = array();
 $statusCounts = array();
@@ -41,7 +43,8 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
             <th>Serial</th>
             <th>Material</th>
             <th>Color</th>
-            <th>Estado</th>
+            <th>Estado de origen</th>
+            <th>Estado en SysTec</th>
             <th>Resultado</th>
         </tr>
     </thead>
@@ -55,11 +58,15 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
             $row = array_pad($row, 11, '');
             $result = 'Procesado';
             $resultClass = 'text-bg-success';
+            $localStatus = '';
 
             try {
-                $result = $db->createOrUpdate($row);
+                $result = $db->createOrUpdate($row, !empty($preserveExistingStatus));
                 $processed++;
-                $status = trim((string) $row[10]);
+                $ident = str_pad(trim((string) $row[3]), 4, '0', STR_PAD_LEFT);
+                $property = $db->getFirstForConditions('properties', array('ident' => $ident));
+                $localStatus = $property ? trim((string) $property['status']) : '';
+                $status = $localStatus;
                 if (!isset($statusCounts[$status])) {
                     $statusCounts[$status] = 0;
                 }
@@ -70,6 +77,18 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
                 } elseif ($result === 'updated') {
                     $updated++;
                     $result = 'Estado actualizado';
+                } elseif ($result === 'preserved') {
+                    $preservedStatus++;
+                    $preservedStatusDetails[] = array(
+                        'code' => trim((string) $row[0])
+                            . '-' . str_pad(trim((string) $row[1]), 4, '0', STR_PAD_LEFT)
+                            . '-' . str_pad(trim((string) $row[2]), 3, '0', STR_PAD_LEFT)
+                            . '-' . str_pad(trim((string) $row[3]), 4, '0', STR_PAD_LEFT),
+                        'description' => trim((string) $row[4]),
+                        'local_status' => $localStatus,
+                        'legacy_status' => trim((string) $row[10]),
+                    );
+                    $result = 'Estado SysTec conservado';
                 } else {
                     $unchanged++;
                     $result = 'Sin cambios';
@@ -92,6 +111,7 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
                 <?php foreach ($row as $item) : ?>
                     <td><?= e($item) ?></td>
                 <?php endforeach; ?>
+                <td><?= e($localStatus) ?></td>
                 <td><span class="badge <?= e($resultClass) ?>"><?= e($result) ?></span></td>
             </tr>
         <?php endforeach; ?>
@@ -101,6 +121,12 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
 <section class="card border-primary-subtle mt-3" aria-labelledby="inventory-import-summary">
     <div class="card-body">
         <h3 id="inventory-import-summary" class="h5">Resumen detallado de la importación</h3>
+        <?php if (!empty($preserveExistingStatus)) : ?>
+            <div class="alert alert-info" role="status">
+                En <?= e($preservedStatus) ?> bienes existentes, el estado de PostgreSQL difería y no se aplicó;
+                SysTec conservó su estado. Los bienes nuevos sí recibieron el estado de legacy.
+            </div>
+        <?php endif; ?>
         <dl class="row mb-2">
             <dt class="col-sm-8">Bienes procesados correctamente</dt>
             <dd class="col-sm-4"><?= e($processed) ?></dd>
@@ -110,11 +136,70 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
             <dd class="col-sm-4"><?= e($updated) ?></dd>
             <dt class="col-sm-8">Bienes existentes sin cambios de estado</dt>
             <dd class="col-sm-4"><?= e($unchanged) ?></dd>
+            <?php if (!empty($preserveExistingStatus)) : ?>
+                <dt class="col-sm-8">Bienes existentes con estado legacy diferente (se conservó SysTec)</dt>
+                <dd class="col-sm-2"><?= e($preservedStatus) ?></dd>
+                <dd class="col-sm-2">
+                    <?php if ($preservedStatusDetails) : ?>
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                data-bs-toggle="modal" data-bs-target="#preserved-status-details">
+                            <i class="bi bi-list-ul me-1" aria-hidden="true"></i>Ver bienes
+                        </button>
+                    <?php else : ?>
+                        <span class="text-muted">—</span>
+                    <?php endif; ?>
+                </dd>
+            <?php endif; ?>
             <dt class="col-sm-8">Filas con error</dt>
             <dd class="col-sm-4"><?= e($errors) ?></dd>
             <dt class="col-sm-8">Total de filas consideradas</dt>
             <dd class="col-sm-4"><?= e($processed + $errors) ?></dd>
         </dl>
+        <?php if ($preservedStatusDetails) : ?>
+            <div class="modal fade" id="preserved-status-details" tabindex="-1"
+                 aria-labelledby="preserved-status-details-title" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content text-start">
+                        <div class="modal-header">
+                            <h4 class="modal-title fs-5" id="preserved-status-details-title">
+                                Bienes con estado de SysTec conservado
+                            </h4>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">
+                                PostgreSQL reportó un estado diferente para estos bienes. SysTec conservó su estado actual.
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-bordered align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Código completo</th>
+                                            <th scope="col">Descripción</th>
+                                            <th scope="col">Estado SysTec</th>
+                                            <th scope="col">Estado legacy</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($preservedStatusDetails as $detail) : ?>
+                                            <tr>
+                                                <td class="text-nowrap"><?= e($detail['code']) ?></td>
+                                                <td><?= e($detail['description'] !== '' ? $detail['description'] : 'Sin descripción') ?></td>
+                                                <td><?= e($detail['local_status'] !== '' ? $detail['local_status'] : 'Sin estado') ?></td>
+                                                <td><?= e($detail['legacy_status'] !== '' ? $detail['legacy_status'] : 'Sin estado') ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php if ($statusCounts) : ?>
             <h4 class="h6">Bienes procesados por estado final</h4>
             <ul class="mb-2">
@@ -153,7 +238,8 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
             </details>
         <?php endif; ?>
         <p class="small text-muted mb-0">
-            En bienes existentes solo se actualiza el estado. El detalle anterior identifica cada fila rechazada y el motivo.
+            En importaciones CSV/XLS los bienes existentes actualizan su estado; desde PostgreSQL, SysTec conserva el estado local.
+            El detalle de errores identifica las filas rechazadas y el motivo.
         </p>
     </div>
 </section>

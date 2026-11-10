@@ -5,7 +5,11 @@ require_once __DIR__ . '/conn.php';
 require_once __DIR__ . '/include/auth.php';
 
 if (auth_check()) {
-    header('Location: ' . url('dashboard.php'));
+    $user = auth_user();
+    $destination = is_array($user) && isset($user['role']) && $user['role'] === 'personal'
+        ? 'personal/index.php'
+        : 'dashboard.php';
+    header('Location: ' . url($destination));
     exit();
 }
 

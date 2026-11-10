@@ -53,7 +53,10 @@ if (isset($_POST['register'])) {
         );
         $db->create($table, $data);
 
-        header('Location: ' . url('maintenances.php'));
+        $returnPage = isset($_POST['return_to']) && $_POST['return_to'] === 'dashboard'
+            ? 'dashboard.php'
+            : 'maintenances.php';
+        header('Location: ' . url($returnPage));
         exit();
     } catch (Exception $e) {
         error_log('Error registrando mantenimiento: ' . $e->getMessage());

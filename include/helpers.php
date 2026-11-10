@@ -44,6 +44,23 @@ function badge_clase_bien(string $status): string
     }
 }
 
+/** Etiqueta legible y consistente del estado de un bien. */
+function property_status_label(string $status): string
+{
+    switch (mb_strtoupper(trim($status))) {
+        case 'BUENO':
+            return 'Bueno';
+        case 'REGULAR':
+            return 'Regular';
+        case 'MALO':
+            return 'Malo';
+        case 'MUY MALO':
+            return 'Muy malo';
+        default:
+            return trim($status);
+    }
+}
+
 /** Estado del MANTENIMIENTO: iniciado | revisión | finalizado */
 function badge_clase_mantenimiento(string $status): string
 {
@@ -125,6 +142,33 @@ function property_next_status(string $status): string
         default:
             return 'BUENO';
     }
+}
+
+/** Categoría del bien según su código de grupo, subgrupo y sección. */
+function property_category(array $property): string
+{
+    $group = trim((string) ($property['grupo'] ?? ''));
+    $subgroup = str_pad(trim((string) ($property['subgrupo'] ?? '')), 4, '0', STR_PAD_LEFT);
+    $section = str_pad(trim((string) ($property['seccion'] ?? '')), 3, '0', STR_PAD_LEFT);
+
+    if ($group === '2' && ($subgroup === '0101' || ($subgroup === '0012' && $section === '005'))) {
+        return 'informatica';
+    }
+
+    if ($group === '2' && $subgroup === '0005' && in_array($section, array('003', '008', '037'), true)) {
+        return 'redes';
+    }
+
+    return 'otros';
+}
+
+/** Código legible de un bien, con el mismo formato en todas las vistas. */
+function property_code(array $property): string
+{
+    return trim((string) ($property['grupo'] ?? ''))
+        . '-' . str_pad(trim((string) ($property['subgrupo'] ?? '')), 4, '0', STR_PAD_LEFT)
+        . '-' . str_pad(trim((string) ($property['seccion'] ?? '')), 4, '0', STR_PAD_LEFT)
+        . '-' . str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
 }
 
 /** Transiciones permitidas para un mantenimiento. */

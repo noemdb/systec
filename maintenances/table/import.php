@@ -96,7 +96,7 @@ $i = 1;
     </tbody>
 </table>
 
-<script>
+<script nonce="<?= e(systec_csp_nonce()) ?>">
     document.getElementById('importInserted').textContent = <?= js($inserted) ?>;
     document.getElementById('importSkipped').textContent = <?= js($skipped) ?>;
     document.getElementById('importErrors').textContent = <?= js($errors) ?>;

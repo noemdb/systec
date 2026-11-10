@@ -4,7 +4,9 @@ require_once __DIR__ . '/conn.php';
 require_once __DIR__ . '/include/auth.php';
 require_login();
 
+$user = auth_user();
 $title = 'Inicio';
+$targetPage = is_array($user) && isset($user['role']) && $user['role'] === 'personal' ? 'tickets.php' : 'dashboard.php';
 
 ob_start(); ?>
 
@@ -16,7 +18,9 @@ ob_start(); ?>
         la información de todos los mantenimientos realizados.
     </p>
     <p class="lead">
-        <a href="dashboard.php" class="btn btn-lg btn-light fw-bold border-white bg-white">Ir al Dashboard</a>
+        <a href="<?= e(url($targetPage)) ?>" class="btn btn-lg btn-light fw-bold border-white bg-white">
+            <?= $targetPage === 'tickets.php' ? 'Ir a Tickets' : 'Ir al Dashboard' ?>
+        </a>
     </p>
 </div>
 

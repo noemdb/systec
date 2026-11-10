@@ -55,6 +55,11 @@
 | 2 | POST | `/login.php` | `login.php` | Público + CSRF | Autentica y redirige | `302` |
 | 3 | POST | `/logout.php` | `logout.php` | Sesión + CSRF | Cierra sesión | `302` |
 | 4 | GET | `/index.php` o `/` | `index.php` | Sesión | Portada | HTML |
+| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja de tickets del usuario personal | HTML |
+| 4b | GET | `/personal/register.php` | `personal/register.php` | `personal` | Formulario de alta de ticket del ámbito personal | HTML |
+| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket del ámbito personal | `302` |
+| 4d | GET | `/personal/detail.php?id={id}` | `personal/detail.php` | `personal` + propietario | Detalle y historial del ticket personal | HTML |
+| 4e | POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + CSRF | Agrega seguimiento a un ticket propio | `302` |
 | 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search` | HTML |
 | 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Avanza el estado de un bien | `302` |
 | 7 | GET | `/maintenances.php` | `maintenances.php` | Sesión | Lista, alta o edición según parámetros | HTML |
