@@ -408,17 +408,37 @@ body {
     overflow-wrap: anywhere;
 }
 
-.ticket-details-modal-dialog {
+.personal-ticket-modal-dialog {
     --bs-modal-width: 95vw;
     max-width: 95vw;
 }
 
-.ticket-details-modal-dialog .modal-content {
+.personal-ticket-modal-dialog .modal-content {
+    max-height: 95vh;
+}
+
+.support-ticket-modal-dialog {
+    --bs-modal-width: 95vw;
+    max-width: 95vw;
+}
+
+.support-ticket-modal-dialog .modal-content {
     max-height: 95vh;
 }
 
 .ticket-modal-copy {
     white-space: pre-wrap;
+}
+
+.ticket-modal-meta dt {
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+    font-weight: 600;
+}
+
+.ticket-modal-meta dd {
+    margin-bottom: .75rem;
+    overflow-wrap: anywhere;
 }
 
 .app-main pre,

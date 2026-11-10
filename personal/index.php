@@ -190,8 +190,12 @@ ob_start();
                                 'title' => (string) $ticket['title'],
                                 'property' => (string) ($property['description'] ?? 'Bien desconocido'),
                                 'property_code' => (string) ($property['ident'] ?? 'Sin código'),
+                                'property_status' => (string) ($property['status'] ?? 'No disponible'),
+                                'property_category' => property_category($property),
                                 'status' => (string) ($status['name'] ?? 'Sin estado'),
+                                'status_id' => (int) $ticket['status_id'],
                                 'status_class' => $statusClass,
+                                'created_by_name' => (string) ($user['username'] ?? ''),
                                 'description' => (string) $ticket['description'],
                                 'observation' => (string) ($ticket['observation'] ?? ''),
                                 'created_at' => (string) ($ticket['created_at'] ?? ''),
@@ -213,7 +217,7 @@ ob_start();
                                 <td><?= e((string) $ticket['updated_at']) ?></td>
                                 <td class="text-end">
                                     <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#ticketDetailsModal"
+                                            data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
                                             data-ticket="<?= e(js($ticketDetails)) ?>">
                                         <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver
                                     </button>
@@ -228,7 +232,7 @@ ob_start();
     </section>
 </div>
 
-<?php include __DIR__ . '/../include/ticket_details_modal.php'; ?>
+<?php include __DIR__ . '/../include/personal_ticket_details_modal.php'; ?>
 
 <div class="modal fade" id="registerPersonalTicketModal" tabindex="-1"
      aria-labelledby="registerPersonalTicketTitle" aria-describedby="registerPersonalTicketHelp" aria-hidden="true">

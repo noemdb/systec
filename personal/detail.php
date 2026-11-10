@@ -41,7 +41,7 @@ ob_start();
     </div>
 
     <div class="row g-3">
-        <div class="col-lg-8">
+        <div class="col-12">
             <section class="card shadow-sm mb-3" aria-labelledby="ticket-details-title">
                 <div class="card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
                     <h2 class="h6 mb-0" id="ticket-details-title">Datos del ticket</h2>
@@ -82,27 +82,6 @@ ob_start();
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
-                </div>
-            </section>
-        </div>
-
-        <div class="col-lg-4">
-            <section class="card shadow-sm" aria-labelledby="ticket-followup-title">
-                <div class="card-header">
-                    <h2 class="h6 mb-0" id="ticket-followup-title">Añadir seguimiento</h2>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="<?= e(url('personal/actions/history.php')) ?>">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="ticket_id" value="<?= e((string) $ticket['id']) ?>">
-                        <div class="mb-3">
-                            <label for="description" class="form-label fw-semibold">Nota</label>
-                            <textarea class="form-control" id="description" name="description" rows="4" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Registrar seguimiento
-                        </button>
-                    </form>
                 </div>
             </section>
         </div>

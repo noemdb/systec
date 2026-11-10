@@ -23,6 +23,7 @@ if (auth_has_role(array('personal'))) {
 $tickets = $db->index('tickets', $conditions, '*', 'updated_at DESC');
 $statuses = $db->getTicketStatuses();
 $properties = array();
+$ticketCreators = array();
 $ticketHistories = array();
 $statusClasses = array(
     'iniciado' => 'primary',
@@ -34,6 +35,8 @@ $statusClasses = array(
 foreach ($tickets as $ticket) {
     $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
     $properties[(int) $ticket['id']] = $property ?: array('description' => 'Bien eliminado');
+    $creator = $db->getFirstForId('users', (int) $ticket['created_by']);
+    $ticketCreators[(int) $ticket['id']] = $creator ?: array('username' => 'Usuario');
     $ticketHistories[(int) $ticket['id']] = $db->index(
         'ticket_histories',
         array('ticket_id' => (int) $ticket['id']),
@@ -74,6 +77,7 @@ ob_start();
                 <tbody>
                 <?php foreach ($tickets as $ticket) :
                     $property = $properties[(int) $ticket['id']];
+                    $creator = $ticketCreators[(int) $ticket['id']];
                     $status = $statuses[(int) $ticket['status_id']] ?? array('name' => 'Sin estado');
                     $statusCode = isset($status['code']) ? (string) $status['code'] : '';
                     $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
@@ -91,8 +95,12 @@ ob_start();
                         'title' => (string) $ticket['title'],
                         'property' => (string) ($property['description'] ?? 'Bien desconocido'),
                         'property_code' => (string) ($property['ident'] ?? 'Sin código'),
+                        'property_status' => (string) ($property['status'] ?? 'No disponible'),
+                        'property_category' => property_category($property),
                         'status' => (string) ($status['name'] ?? 'Sin estado'),
+                        'status_id' => (int) $ticket['status_id'],
                         'status_class' => $statusClass,
+                        'created_by_name' => (string) ($creator['username'] ?? 'Usuario'),
                         'description' => (string) $ticket['description'],
                         'observation' => (string) ($ticket['observation'] ?? ''),
                         'created_at' => (string) ($ticket['created_at'] ?? ''),
@@ -118,7 +126,7 @@ ob_start();
                         <td><?= e((string) $ticket['updated_at']) ?></td>
                         <td class="text-end">
                             <button type="button" class="btn btn-sm btn-outline-primary"
-                                    data-bs-toggle="modal" data-bs-target="#ticketDetailsModal"
+                                    data-bs-toggle="modal" data-bs-target="#supportTicketDetailsModal"
                                     data-ticket="<?= e(js($ticketDetails)) ?>">
                                 <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver detalle
                             </button>
@@ -130,7 +138,7 @@ ob_start();
         </div>
     <?php endif; ?>
 </div>
-<?php include __DIR__ . '/include/ticket_details_modal.php'; ?>
+<?php include __DIR__ . '/include/support_ticket_details_modal.php'; ?>
 <?php
 $main = ob_get_clean();
 include __DIR__ . '/include/layout.php';
