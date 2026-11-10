@@ -35,7 +35,11 @@ foreach ($blockedFiles as $file) {
 }
 
 $userRole = isset($_SESSION['user']['role']) ? (string) $_SESSION['user']['role'] : '';
-if ($userRole === 'personal') {
+$staticAssetExtension = preg_match('/\.(css|js|map|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|eot)$/i', $path) === 1;
+$isPublicAsset = ($staticAssetExtension && (strpos($path, '/vendor/') === 0 || strpos($path, '/assets/') === 0))
+    || in_array($path, array('/responsive.css', '/favicon.svg'), true);
+
+if ($userRole === 'personal' && !$isPublicAsset) {
     if (strpos($path, '/personal') !== 0 && $path !== '/login.php' && $path !== '/logout.php') {
         header('Location: /personal/index.php');
         exit();

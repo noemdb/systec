@@ -35,4 +35,36 @@ class DashboardDataTest extends TestCase
             $db->close();
         }
     }
+
+    public function testIndexSupportsMultipleValidatedOrderColumns(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            $firstId = $db->create('properties', array('ident' => '0001', 'description' => 'Equipo'));
+            $secondId = $db->create('properties', array('ident' => '0002', 'description' => 'Equipo'));
+            $thirdId = $db->create('properties', array('ident' => '0003', 'description' => 'Monitor'));
+
+            $rows = $db->index('properties', array(), 'id, description', 'description ASC, id DESC');
+            $sortedIds = array_map(function ($row) {
+                return (int) $row['id'];
+            }, $rows);
+
+            self::assertSame(array($secondId, $firstId, $thirdId), $sortedIds);
+        } finally {
+            $db->close();
+        }
+    }
+
+    public function testIndexRejectsUnknownColumnInMultipleOrderTerms(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            $this->expectException(InvalidArgumentException::class);
+            $db->index('properties', array(), '*', 'description ASC, unknown_column DESC');
+        } finally {
+            $db->close();
+        }
+    }
 }

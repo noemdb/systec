@@ -23,9 +23,23 @@ if (auth_has_role(array('personal'))) {
 $tickets = $db->index('tickets', $conditions, '*', 'updated_at DESC');
 $statuses = $db->getTicketStatuses();
 $properties = array();
+$ticketHistories = array();
+$statusClasses = array(
+    'iniciado' => 'primary',
+    'en_progreso' => 'info',
+    'con_retraso' => 'warning',
+    'en_espera' => 'secondary',
+    'finalizado' => 'success',
+);
 foreach ($tickets as $ticket) {
     $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
     $properties[(int) $ticket['id']] = $property ?: array('description' => 'Bien eliminado');
+    $ticketHistories[(int) $ticket['id']] = $db->index(
+        'ticket_histories',
+        array('ticket_id' => (int) $ticket['id']),
+        '*',
+        'created_at ASC, id ASC'
+    );
 }
 
 $title = 'Tickets';
@@ -61,6 +75,33 @@ ob_start();
                 <?php foreach ($tickets as $ticket) :
                     $property = $properties[(int) $ticket['id']];
                     $status = $statuses[(int) $ticket['status_id']] ?? array('name' => 'Sin estado');
+                    $statusCode = isset($status['code']) ? (string) $status['code'] : '';
+                    $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
+                    $historyDetails = array();
+                    foreach ($ticketHistories[(int) $ticket['id']] as $historyEntry) {
+                        $historyDetails[] = array(
+                            'created_at' => (string) $historyEntry['created_at'],
+                            'action_type' => (string) $historyEntry['action_type'],
+                            'description' => (string) $historyEntry['description'],
+                            'observation' => (string) ($historyEntry['observation'] ?? ''),
+                        );
+                    }
+                    $ticketDetails = array(
+                        'id' => (int) $ticket['id'],
+                        'title' => (string) $ticket['title'],
+                        'property' => (string) ($property['description'] ?? 'Bien desconocido'),
+                        'property_code' => (string) ($property['ident'] ?? 'Sin código'),
+                        'status' => (string) ($status['name'] ?? 'Sin estado'),
+                        'status_class' => $statusClass,
+                        'description' => (string) $ticket['description'],
+                        'observation' => (string) ($ticket['observation'] ?? ''),
+                        'created_at' => (string) ($ticket['created_at'] ?? ''),
+                        'updated_at' => (string) ($ticket['updated_at'] ?? ''),
+                        'closed_at' => (string) ($ticket['closed_at'] ?? ''),
+                        'created_by' => (int) $ticket['created_by'],
+                        'assigned_to' => (string) ($ticket['assigned_to'] ?? ''),
+                        'history' => $historyDetails,
+                    );
                     ?>
                     <tr>
                         <td>#<?= e((string) $ticket['id']) ?></td>
@@ -70,15 +111,17 @@ ob_start();
                         </td>
                         <td><?= e((string) $ticket['title']) ?></td>
                         <td>
-                            <span class="badge text-bg-light border">
+                            <span class="badge text-bg-<?= e($statusClass) ?>">
                                 <?= e((string) $status['name']) ?>
                             </span>
                         </td>
                         <td><?= e((string) $ticket['updated_at']) ?></td>
                         <td class="text-end">
-                            <a href="<?= e(url('tickets/detail.php?id=' . (int) $ticket['id'])) ?>" class="btn btn-sm btn-outline-primary">
-                                Ver detalle
-                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    data-bs-toggle="modal" data-bs-target="#ticketDetailsModal"
+                                    data-ticket="<?= e(js($ticketDetails)) ?>">
+                                <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver detalle
+                            </button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -87,6 +130,7 @@ ob_start();
         </div>
     <?php endif; ?>
 </div>
+<?php include __DIR__ . '/include/ticket_details_modal.php'; ?>
 <?php
 $main = ob_get_clean();
 include __DIR__ . '/include/layout.php';

@@ -182,15 +182,18 @@ class DB extends SQLite3
             return '';
         }
 
-        $sort = trim((string) $sort);
-        if (!preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(ASC|DESC))?$/i', $sort, $matches)) {
-            throw new InvalidArgumentException('Orden no permitido: ' . $sort);
+        $sortTerms = array();
+        foreach (explode(',', trim((string) $sort)) as $sortTerm) {
+            if (!preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(ASC|DESC))?$/i', trim($sortTerm), $matches)) {
+                throw new InvalidArgumentException('Orden no permitido: ' . $sort);
+            }
+
+            $column = $this->columnName($table, $matches[1]);
+            $direction = isset($matches[2]) ? strtoupper($matches[2]) : 'ASC';
+            $sortTerms[] = $column . ' ' . $direction;
         }
 
-        $column = $this->columnName($table, $matches[1]);
-        $direction = isset($matches[2]) ? strtoupper($matches[2]) : 'ASC';
-
-        return ' ORDER BY ' . $column . ' ' . $direction;
+        return ' ORDER BY ' . implode(', ', $sortTerms);
     }
 
     private function whereSql($table, array $conditions, array &$params)

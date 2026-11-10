@@ -4,16 +4,16 @@
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>">
 <title>SysTec - <?= e(!empty($title) ? $title : 'Inicio') ?></title>
 
-<link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/style.css">
-<link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/bootstrap.min.css">
-<link rel="stylesheet" href="./vendor/bootstrap/5.3.2/icon/css/bootstrap-icons.css">
+<link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/bootstrap.min.css')) ?>">
+<link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/icon/css/bootstrap-icons.css')) ?>">
 
-<link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/app.css">
-<link rel="stylesheet" href="./vendor/bootstrap/5.3.2/css/cover.css">
+<link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/app.css')) ?>">
+<link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/cover.css')) ?>">
 <link rel="stylesheet" href="<?= e(url('responsive.css')) ?>">
 
-<link rel="stylesheet" href="./vendor/datatables/datatables.min.css" />
-<script src="./vendor/datatables/datatables.min.js"></script>
+<link rel="stylesheet" href="<?= e(url('vendor/datatables/datatables.min.css')) ?>" />
+<script src="<?= e(url('vendor/datatables/datatables.min.js')) ?>"></script>
 
 
 <style nonce="<?= e(systec_csp_nonce()) ?>">

@@ -398,6 +398,29 @@ body {
     min-width: 0;
 }
 
+.property-picker-results {
+    max-height: 16rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.property-picker-option {
+    overflow-wrap: anywhere;
+}
+
+.ticket-details-modal-dialog {
+    --bs-modal-width: 95vw;
+    max-width: 95vw;
+}
+
+.ticket-details-modal-dialog .modal-content {
+    max-height: 95vh;
+}
+
+.ticket-modal-copy {
+    white-space: pre-wrap;
+}
+
 .app-main pre,
 .app-main code,
 .app-main .text-break {
