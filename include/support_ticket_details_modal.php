@@ -1,90 +1,139 @@
-<?php
-$supportTicketStatuses = $db->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');
-?>
 <div class="modal fade" id="supportTicketDetailsModal" tabindex="-1"
      aria-labelledby="supportTicketDetailsTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable support-ticket-modal-dialog">
         <div class="modal-content text-start">
             <div class="modal-header">
-                <div>
+                <div class="support-ticket-modal-heading">
                     <h2 class="modal-title fs-5" id="supportTicketDetailsTitle">Ticket</h2>
-                    <p class="small text-body-secondary mb-0" id="supportTicketDetailsSubtitle"></p>
+                    <p class="small text-body-secondary text-break mb-0" id="supportTicketDetailsSubtitle"></p>
                 </div>
                 <span class="badge text-bg-light border" id="supportTicketDetailsStatus"></span>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-4">
-                    <div class="col-12 col-xl-8">
-                        <section class="mb-4" aria-labelledby="supportTicketDescriptionTitle">
-                            <h3 class="h6" id="supportTicketDescriptionTitle">Descripción</h3>
-                            <div class="ticket-modal-copy text-break" id="supportTicketDescription"></div>
-                        </section>
-                        <section class="mb-4" aria-labelledby="supportTicketObservationTitle">
-                            <h3 class="h6" id="supportTicketObservationTitle">Observación</h3>
-                            <div class="ticket-modal-copy text-break" id="supportTicketObservation"></div>
-                        </section>
-                        <section class="border-top pt-3" aria-labelledby="supportTicketHistoryTitle">
-                            <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-                                <h3 class="h6 mb-0" id="supportTicketHistoryTitle">Historial</h3>
-                                <span class="small text-body-secondary" id="supportTicketHistoryCount"></span>
+                <div class="row g-3 bento-grid">
+                    <!-- Columna izquierda - Información principal -->
+                    <div class="col-12 col-lg-6">
+                        <!-- Tarjeta 1: Descripción -->
+                        <section class="bento-card card border h-100" aria-labelledby="supportTicketDescriptionTitle">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h3 class="h6 mb-0" id="supportTicketDescriptionTitle">
+                                        <i class="bi bi-card-text me-2" aria-hidden="true"></i>Descripción
+                                    </h3>
+                                </div>
+                                <div class="ticket-modal-copy text-break" id="supportTicketDescription"></div>
                             </div>
-                            <div class="d-flex flex-column gap-3" id="supportTicketHistory"></div>
                         </section>
                     </div>
-                    <aside class="col-12 col-xl-4" aria-label="Datos y acciones del ticket">
-                        <section class="border-start border-3 ps-3 mb-4" aria-labelledby="supportTicketInfoTitle">
-                            <h3 class="h6 mb-3" id="supportTicketInfoTitle">Datos del ticket</h3>
-                            <dl class="ticket-modal-meta mb-0">
-                                <dt>Bien</dt>
-                                <dd id="supportTicketProperty"></dd>
-                                <dt>Código del bien</dt>
-                                <dd id="supportTicketPropertyCode"></dd>
-                                <dt>Estado del bien</dt>
-                                <dd id="supportTicketPropertyStatus"></dd>
-                                <dt>Categoría</dt>
-                                <dd id="supportTicketPropertyCategory"></dd>
-                                <dt>Solicitante</dt>
-                                <dd id="supportTicketCreatedBy"></dd>
-                                <dt>Asignado a</dt>
-                                <dd id="supportTicketAssignedTo"></dd>
-                                <dt>Creado</dt>
-                                <dd id="supportTicketCreatedAt"></dd>
-                                <dt>Actualizado</dt>
-                                <dd id="supportTicketUpdatedAt"></dd>
-                                <dt>Cerrado</dt>
-                                <dd id="supportTicketClosedAt"></dd>
-                            </dl>
+
+                    <!-- Columna derecha - Información del bien -->
+                    <div class="col-12 col-lg-6">
+                        <!-- Tarjeta 2: Información del bien -->
+                        <section class="bento-card card border h-100" aria-labelledby="supportTicketInfoTitle">
+                            <div class="card-body">
+                                <h3 class="h6 mb-3" id="supportTicketInfoTitle">
+                                    <i class="bi bi-box me-2" aria-hidden="true"></i>Información del bien
+                                </h3>
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-6">
+                                        <div class="d-flex flex-column">
+                                            <span class="small text-secondary mb-1">Bien</span>
+                                            <span class="fw-medium" id="supportTicketProperty"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <div class="d-flex flex-column">
+                                            <span class="small text-secondary mb-1">Código</span>
+                                            <span class="fw-medium" id="supportTicketPropertyCode"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <div class="d-flex flex-column">
+                                            <span class="small text-secondary mb-1">Estado</span>
+                                            <span class="fw-medium" id="supportTicketPropertyStatus"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <div class="d-flex flex-column">
+                                            <span class="small text-secondary mb-1">Categoría</span>
+                                            <span class="fw-medium" id="supportTicketPropertyCategory"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </section>
-                        <section class="border-top pt-3 mb-4" aria-labelledby="supportTicketFollowupTitle">
-                            <h3 class="h6" id="supportTicketFollowupTitle">Añadir seguimiento</h3>
-                            <form method="post" action="<?= e(url('tickets/actions/history.php')) ?>">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="ticket_id" id="supportTicketFollowupId">
-                                <label for="supportTicketFollowupDescription" class="form-label small">Nueva nota</label>
-                                <textarea class="form-control mb-2" id="supportTicketFollowupDescription" name="description" rows="3" required></textarea>
-                                <button type="submit" class="btn btn-outline-primary w-100">
-                                    <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Registrar seguimiento
-                                </button>
-                            </form>
+                    </div>
+
+                    <!-- Observación (mitad ancho) -->
+                    <div class="col-12 col-md-6">
+                        <section class="bento-card card border h-100" aria-labelledby="supportTicketObservationTitle">
+                            <div class="card-body">
+                                <h3 class="h6 mb-3" id="supportTicketObservationTitle">
+                                    <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>Observación
+                                </h3>
+                                <div class="ticket-modal-copy text-break" id="supportTicketObservation"></div>
+                            </div>
                         </section>
-                        <section class="border-top pt-3" aria-labelledby="supportTicketStatusTitle">
-                            <h3 class="h6" id="supportTicketStatusTitle">Cambiar estado</h3>
-                            <form method="post" action="<?= e(url('tickets/actions/status.php')) ?>">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="ticket_id" id="supportTicketStatusId">
-                                <label for="supportTicketStatusSelect" class="form-label small">Estado</label>
-                                <select class="form-select mb-2" id="supportTicketStatusSelect" name="status_id" required>
-                                    <?php foreach ($supportTicketStatuses as $statusOption) : ?>
-                                        <option value="<?= e((string) $statusOption['id']) ?>"><?= e((string) $statusOption['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Actualizar estado
-                                </button>
-                            </form>
+                    </div>
+
+                    <!-- Información del ticket (mitad ancho) -->
+                    <div class="col-12 col-md-6">
+                        <section class="bento-card card border h-100" aria-labelledby="supportTicketMetaTitle">
+                            <div class="card-body">
+                                <h3 class="h6 mb-3" id="supportTicketMetaTitle">
+                                    <i class="bi bi-info-circle me-2" aria-hidden="true"></i>Información del ticket
+                                </h3>
+                                <div class="row g-2 small">
+                                    <div class="col-6">
+                                        <span class="text-secondary">Solicitante</span>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <span id="supportTicketCreatedBy"></span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-secondary">Asignado a</span>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <span id="supportTicketAssignedTo"></span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-secondary">Creado</span>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <span id="supportTicketCreatedAt"></span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-secondary">Actualizado</span>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <span id="supportTicketUpdatedAt"></span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-secondary">Cerrado</span>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <span id="supportTicketClosedAt"></span>
+                                    </div>
+                                </div>
+                            </div>
                         </section>
-                    </aside>
+                    </div>
+
+                    <!-- Historial (ancho completo) -->
+                    <div class="col-12">
+                        <section class="bento-card card border" aria-labelledby="supportTicketHistoryTitle">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                    <h3 class="h6 mb-0" id="supportTicketHistoryTitle">
+                                        <i class="bi bi-clock-history me-2" aria-hidden="true"></i>Historial
+                                    </h3>
+                                    <span class="badge bg-light text-secondary border" id="supportTicketHistoryCount"></span>
+                                </div>
+                                <div class="d-flex flex-column gap-3" id="supportTicketHistory"></div>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -118,9 +167,6 @@ $supportTicketStatuses = $db->index('ticket_status', array('active' => 1), '*', 
         document.getElementById('supportTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('supportTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
         document.getElementById('supportTicketFullLink').href = <?= js(url('tickets/detail.php?id=')) ?> + ticket.id;
-        document.getElementById('supportTicketFollowupId').value = String(ticket.id);
-        document.getElementById('supportTicketStatusId').value = String(ticket.id);
-        document.getElementById('supportTicketStatusSelect').value = String(ticket.status_id);
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';
@@ -148,19 +194,36 @@ $supportTicketStatuses = $db->index('ticket_status', array('active' => 1), '*', 
         }
 
         const labels = { created: 'Ticket creado', status_change: 'Cambio de estado', comment: 'Seguimiento' };
+        const actorStyles = [
+            { border: 'border-primary', badge: 'bg-primary-subtle text-primary-emphasis' },
+            { border: 'border-success', badge: 'bg-success-subtle text-success-emphasis' },
+            { border: 'border-danger', badge: 'bg-danger-subtle text-danger-emphasis' },
+            { border: 'border-warning', badge: 'bg-warning-subtle text-warning-emphasis' },
+            { border: 'border-info', badge: 'bg-info-subtle text-info-emphasis' },
+            { border: 'border-secondary', badge: 'bg-secondary-subtle text-secondary-emphasis' }
+        ];
+        const actorStyleByName = new Map();
         entries.forEach((entry) => {
+            const actorName = entry.actor_username || 'Usuario no disponible';
+            if (!actorStyleByName.has(actorName)) {
+                actorStyleByName.set(actorName, actorStyles[actorStyleByName.size % actorStyles.length]);
+            }
+            const actorStyle = actorStyleByName.get(actorName);
             const article = document.createElement('article');
-            article.className = 'border-start border-3 ps-3';
+            article.className = `border-start border-3 ps-3 ${actorStyle.border}`;
             const date = document.createElement('div');
             date.className = 'small text-body-secondary mb-1';
             date.textContent = formatDateTime(entry.created_at);
+            const actor = document.createElement('span');
+            actor.className = `badge rounded-pill ${actorStyle.badge} mb-2`;
+            actor.textContent = `Registrado por: ${actorName}`;
             const action = document.createElement('div');
             action.className = 'fw-semibold mb-1';
             action.textContent = labels[entry.action_type] || entry.action_type;
             const description = document.createElement('div');
             description.className = 'ticket-modal-copy text-break';
             description.textContent = entry.description;
-            article.append(date, action, description);
+            article.append(date, actor, action, description);
             if (entry.observation) {
                 const observation = document.createElement('div');
                 observation.className = 'small text-body-secondary mt-1 ticket-modal-copy text-break';

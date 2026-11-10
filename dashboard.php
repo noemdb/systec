@@ -575,8 +575,8 @@ ob_start(); ?>
                     h1, h2, h3, h4, h5 { margin: 0 0 8px; }
                     #historyLetterhead { display: block !important; color: #000 !important; margin: 0 0 16px; }
                     #historyLetterhead, #historyLetterhead * { visibility: visible !important; }
-                    #historyLetterhead h5 { font-size: 15px; }
-                    #historyLetterhead .small { font-size: 12px; }
+                    #historyLetterhead h5 { font-size: .9375rem; }
+                    #historyLetterhead .small { font-size: .75rem; }
                     table { border-collapse: collapse; width: 100%; }
                     th, td { border: 1px solid #adb5bd; padding: 6px; text-align: left; vertical-align: top; }
                     th { background: #e9ecef; }

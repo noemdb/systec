@@ -35,7 +35,7 @@ if (!auth_can_access_ticket_for_user((int) $ticket['created_by'])) {
 
 $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
 $status = $db->getFirstForId('ticket_status', (int) $ticket['status_id']);
-$history = $db->index('ticket_histories', array('ticket_id' => (int) $ticket['id']), '*', 'created_at ASC, id ASC');
+$history = $db->ticketHistoryWithActors((int) $ticket['id']);
 
 $title = 'Detalle del ticket';
 ob_start();
@@ -89,6 +89,7 @@ ob_start();
                                 <div class="border-start ps-3 pb-3 position-relative">
                                     <span class="position-absolute start-0 top-0 translate-middle rounded-circle bg-primary" style="width:10px;height:10px;"></span>
                                     <div class="small text-muted mb-1"><?= e((string) $entry['created_at']) ?></div>
+                                    <div class="small text-muted mb-1"><?= e((string) ($entry['actor_username'] ?? 'Usuario no disponible')) ?></div>
                                     <div class="fw-semibold"><?= e((string) $entry['action_type']) ?></div>
                                     <div><?= nl2br(e((string) $entry['description'])) ?></div>
                                     <?php if (!empty($entry['observation'])) : ?>

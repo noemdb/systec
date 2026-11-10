@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bento Grid - Ejemplo de Diseño</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        /* Estilos del Bento Grid */
+        .bento-grid {
+            --bento-gap: 1rem;
+            --bento-card-radius: 0.75rem;
+            --bento-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --bento-card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .bento-card {
+            border-radius: var(--bento-card-radius);
+            box-shadow: var(--bento-card-shadow);
+            transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+            border: 1px solid #dee2e6;
+            margin-bottom: var(--bento-gap);
+        }
+
+        .bento-card:hover {
+            box-shadow: var(--bento-card-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .bento-card .card-body {
+            padding: 1.25rem;
+        }
+
+        .bento-card h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0d6efd;
+        }
+
+        .bento-card h3 i {
+            font-size: 0.9rem;
+        }
+
+        /* Simulación del layout del modal */
+        .modal-dialog {
+            max-width: 1200px;
+        }
+
+        .example-content {
+            padding: 2rem;
+            background: #f8f9fa;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="example-content">
+        <div class="container">
+            <h1 class="mb-4">Bento Grid - Rediseño del Modal de Tickets</h1>
+            <p class="lead mb-5">Ejemplo visual del nuevo diseño tipo Bento Grid para el modal de detalles de tickets.</p>
+            
+            <!-- Simulación del modal -->
+            <div class="card shadow-lg">
+                <div class="card-header bg-white border-bottom">
+                    <h2 class="h5 mb-0">Ticket #123</h2>
+                    <p class="text-muted small mb-0">Problema con la fuente de poder</p>
+                    <span class="badge bg-secondary">En espera</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4 bento-grid">
+                        <!-- Columna izquierda - Información principal -->
+                        <div class="col-12 col-lg-6">
+                            <!-- Tarjeta 1: Descripción -->
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-card-text me-2"></i>Descripción
+                                    </h3>
+                                    <div class="text-break">
+                                        La fuente de poder del equipo no está funcionando correctamente. Se apaga aleatoriamente durante el uso y requiere reinicio manual.
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <!-- Columna derecha - Información del bien -->
+                        <div class="col-12 col-lg-6">
+                            <!-- Tarjeta 2: Información del bien -->
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-box me-2"></i>Información del bien
+                                    </h3>
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <div class="d-flex flex-column">
+                                                <span class="small text-secondary mb-1">Bien</span>
+                                                <span class="fw-medium">FUENTE DE PODER, MARCA: POWER SUPPLY, MODELO: ATX-550JM</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="d-flex flex-column">
+                                                <span class="small text-secondary mb-1">Código</span>
+                                                <span class="fw-medium">665</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="d-flex flex-column">
+                                                <span class="small text-secondary mb-1">Estado</span>
+                                                <span class="fw-medium">MALO</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="d-flex flex-column">
+                                                <span class="small text-secondary mb-1">Categoría</span>
+                                                <span class="fw-medium">Informática</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <!-- Observación (mitad ancho) -->
+                        <div class="col-12 col-md-6">
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-clipboard-check me-2"></i>Observación
+                                    </h3>
+                                    <div class="text-break">
+                                        El equipo ya ha presentado este problema anteriormente. Se recomienda reemplazar la fuente de poder completa.
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <!-- Información del ticket (mitad ancho) -->
+                        <div class="col-12 col-md-6">
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>Información del ticket
+                                    </h3>
+                                    <div class="row g-2 small">
+                                        <div class="col-6">
+                                            <span class="text-secondary">Solicitante</span>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <span>Personal (#5)</span>
+                                        </div>
+                                        <div class="col-6">
+                                            <span class="text-secondary">Asignado a</span>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <span>Sin asignar</span>
+                                        </div>
+                                        <div class="col-6">
+                                            <span class="text-secondary">Creado</span>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <span>10 nov 2026 23:05</span>
+                                        </div>
+                                        <div class="col-6">
+                                            <span class="text-secondary">Actualizado</span>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <span>10 nov 2026 09:01</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <!-- Historial (ancho completo) -->
+                        <div class="col-12">
+                            <section class="bento-card card border">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                        <h3 class="h6 mb-0">
+                                            <i class="bi bi-clock-history me-2"></i>Historial (8 eventos)
+                                        </h3>
+                                        <span class="badge bg-light text-secondary border">8 eventos</span>
+                                    </div>
+                                    <div class="d-flex flex-column gap-3">
+                                        <article class="border-start border-3 ps-3 border-primary">
+                                            <div class="small text-body-secondary mb-1">10 nov 2026 23:05</div>
+                                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis mb-2">Registrado por: personal</span>
+                                            <div class="fw-semibold mb-1">Ticket creado</div>
+                                            <div class="text-break">Ticket registrado por el usuario.</div>
+                                        </article>
+                                        <article class="border-start border-3 ps-3 border-success">
+                                            <div class="small text-body-secondary mb-1">10 nov 2026 23:11</div>
+                                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis mb-2">Registrado por: admin</span>
+                                            <div class="fw-semibold mb-1">Cambio de estado</div>
+                                            <div class="text-break">Cambio de estado a En progreso.</div>
+                                        </article>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <!-- Acciones rápidas (2 columnas) -->
+                        <div class="col-12 col-md-6">
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-chat-left-text me-2"></i>Añadir seguimiento
+                                    </h3>
+                                    <form>
+                                        <textarea class="form-control mb-3" rows="3" placeholder="Escribe tu comentario aquí..."></textarea>
+                                        <button type="submit" class="btn btn-outline-primary w-100">
+                                            <i class="bi bi-send me-1"></i>Registrar
+                                        </button>
+                                    </form>
+                                </div>
+                            </section>
+                        </div>
+                        
+                        <div class="col-12 col-md-6">
+                            <section class="bento-card card border h-100">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3">
+                                        <i class="bi bi-arrow-repeat me-2"></i>Cambiar estado
+                                    </h3>
+                                    <form>
+                                        <select class="form-select mb-3">
+                                            <option>En espera</option>
+                                            <option>En progreso</option>
+                                            <option>Con retraso</option>
+                                            <option>Finalizado</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="bi bi-check-circle me-1"></i>Aplicar
+                                        </button>
+                                    </form>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top">
+                    <button class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Abrir detalle completo
+                    </button>
+                    <button class="btn btn-outline-secondary">Cerrar</button>
+                </div>
+            </div>
+            
+            <div class="mt-5 pt-4 border-top">
+                <h3>Características del diseño Bento Grid:</h3>
+                <ul>
+                    <li><strong>Diseño modular:</strong> Cada sección es una "tarjeta" independiente que puede reorganizarse fácilmente</li>
+                    <li><strong>Uso eficiente del espacio:</strong> Aprovecha mejor el área disponible en el modal</li>
+                    <li><strong>Visualización clara:</strong> Información agrupada lógicamente por categorías</li>
+                    <li><strong>Responsivo:</strong> Se adapta automáticamente a diferentes tamaños de pantalla</li>
+                    <li><strong>Interactivo:</strong> Efectos visuales sutiles mejoran la experiencia del usuario</li>
+                    <li><strong>Iconografía:</strong> Uso de iconos para facilitar el escaneo rápido</li>
+                </ul>
+                
+                <h4 class="mt-4">Distribución del espacio:</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5>En pantallas grandes:</h5>
+                                <ul class="small">
+                                    <li>Descripción e información del bien en 2 columnas iguales</li>
+                                    <li>Observación y metadatos del ticket en 2 columnas iguales</li>
+                                    <li>Historial ocupa todo el ancho</li>
+                                    <li>Acciones en 2 columnas iguales</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5>En pantallas pequeñas:</h5>
+                                <ul class="small">
+                                    <li>Todas las tarjetas se apilan verticalmente</li>
+                                    <li>Misma información pero en una sola columna</li>
+                                    <li>Optimizado para dispositivos móviles</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

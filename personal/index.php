@@ -29,12 +29,7 @@ $statusClasses = array(
 foreach ($tickets as $ticket) {
     $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
     $properties[(int) $ticket['id']] = $property ?: array('description' => 'Bien eliminado');
-    $ticketHistories[(int) $ticket['id']] = $db->index(
-        'ticket_histories',
-        array('ticket_id' => (int) $ticket['id']),
-        '*',
-        'created_at ASC, id ASC'
-    );
+    $ticketHistories[(int) $ticket['id']] = $db->ticketHistoryWithActors((int) $ticket['id']);
 
     $statusCode = isset($statuses[(int) $ticket['status_id']]['code']) ? (string) $statuses[(int) $ticket['status_id']]['code'] : '';
     switch ($statusCode) {
@@ -183,6 +178,7 @@ ob_start();
                                     'action_type' => (string) $historyEntry['action_type'],
                                     'description' => (string) $historyEntry['description'],
                                     'observation' => (string) ($historyEntry['observation'] ?? ''),
+                                    'actor_username' => (string) ($historyEntry['actor_username'] ?? ''),
                                 );
                             }
                             $ticketDetails = array(

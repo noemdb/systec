@@ -54,13 +54,13 @@
 
     .title {
     font-weight: bold;
-    font-size: 14px;
+    font-size: .875rem;
     text-align: center; 
     width: 60px;
     }
 
     .value {
-    font-size: 14px;
+    font-size: .875rem;
     padding: 5px 0;
     }
 </style>

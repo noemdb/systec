@@ -58,7 +58,7 @@ try {
         'created_at' => $now,
     ));
 
-    header('Location: ' . url('tickets/detail.php?id=' . (int) $ticket_id));
+    header('Location: ' . url('tickets.php'));
     exit();
 } catch (Throwable $e) {
     error_log('Error actualizando ticket: ' . $e->getMessage());

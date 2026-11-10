@@ -582,6 +582,22 @@ class DB extends SQLite3
         return $statuses;
     }
 
+    public function ticketHistoryWithActors(int $ticketId): array
+    {
+        if ($ticketId < 1) {
+            return array();
+        }
+
+        return $this->fetchAll(
+            'SELECT ticket_histories.*, users.username AS actor_username
+             FROM ticket_histories
+             LEFT JOIN users ON users.id = ticket_histories.actor_user_id
+             WHERE ticket_histories.ticket_id = :ticket_id
+             ORDER BY ticket_histories.created_at ASC, ticket_histories.id ASC',
+            array(':ticket_id' => $ticketId)
+        );
+    }
+
     public function getTicketStatusByCode(string $code): ?array
     {
         $code = trim($code);

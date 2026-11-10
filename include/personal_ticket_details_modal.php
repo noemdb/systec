@@ -51,13 +51,23 @@
                                 <dd id="personalTicketClosedAt"></dd>
                             </dl>
                         </section>
+                        <section class="border-top pt-3 mt-4" aria-labelledby="personalTicketFollowupTitle">
+                            <h3 class="h6" id="personalTicketFollowupTitle">Añadir seguimiento</h3>
+                            <form method="post" action="<?= e(url('personal/actions/history.php')) ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="ticket_id" id="personalTicketFollowupId">
+                                <label for="personalTicketFollowupDescription" class="form-label small">Nueva nota</label>
+                                <textarea class="form-control mb-2" id="personalTicketFollowupDescription"
+                                          name="description" rows="3" required></textarea>
+                                <button type="submit" class="btn btn-outline-primary w-100">
+                                    <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Registrar seguimiento
+                                </button>
+                            </form>
+                        </section>
                     </aside>
                 </div>
             </div>
             <div class="modal-footer">
-                <a class="btn btn-outline-primary" id="personalTicketFullLink" href="#">
-                    <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir detalle
-                </a>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
@@ -81,7 +91,7 @@
         document.getElementById('personalTicketClosedAt').textContent = ticket.closed_at || 'No cerrado';
         document.getElementById('personalTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('personalTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
-        document.getElementById('personalTicketFullLink').href = <?= js(url('personal/detail.php?id=')) ?> + ticket.id;
+        document.getElementById('personalTicketFollowupId').value = String(ticket.id);
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';
@@ -111,19 +121,36 @@
         }
 
         const labels = { created: 'Ticket creado', status_change: 'Cambio de estado', comment: 'Seguimiento' };
+        const actorStyles = [
+            { border: 'border-primary', badge: 'bg-primary-subtle text-primary-emphasis' },
+            { border: 'border-success', badge: 'bg-success-subtle text-success-emphasis' },
+            { border: 'border-danger', badge: 'bg-danger-subtle text-danger-emphasis' },
+            { border: 'border-warning', badge: 'bg-warning-subtle text-warning-emphasis' },
+            { border: 'border-info', badge: 'bg-info-subtle text-info-emphasis' },
+            { border: 'border-secondary', badge: 'bg-secondary-subtle text-secondary-emphasis' }
+        ];
+        const actorStyleByName = new Map();
         entries.forEach((entry) => {
+            const actorName = entry.actor_username || 'Usuario no disponible';
+            if (!actorStyleByName.has(actorName)) {
+                actorStyleByName.set(actorName, actorStyles[actorStyleByName.size % actorStyles.length]);
+            }
+            const actorStyle = actorStyleByName.get(actorName);
             const article = document.createElement('article');
-            article.className = 'border-start border-3 ps-3';
+            article.className = `border-start border-3 ps-3 ${actorStyle.border}`;
             const date = document.createElement('div');
             date.className = 'small text-body-secondary mb-1';
             date.textContent = formatDateTime(entry.created_at);
+            const actor = document.createElement('span');
+            actor.className = `badge rounded-pill ${actorStyle.badge} mb-2`;
+            actor.textContent = `Registrado por: ${actorName}`;
             const action = document.createElement('div');
             action.className = 'fw-semibold mb-1';
             action.textContent = labels[entry.action_type] || entry.action_type;
             const description = document.createElement('div');
             description.className = 'ticket-modal-copy text-break';
             description.textContent = entry.description;
-            article.append(date, action, description);
+            article.append(date, actor, action, description);
             if (entry.observation) {
                 const observation = document.createElement('div');
                 observation.className = 'small text-body-secondary mt-1 ticket-modal-copy text-break';
