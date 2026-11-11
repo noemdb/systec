@@ -3,6 +3,9 @@ require_once __DIR__ . '/../conn.php';
 require_once __DIR__ . '/../include/auth.php';
 require_personal_scope();
 
+$followupSaved = !empty($_SESSION['personal_ticket_followup_saved']);
+unset($_SESSION['personal_ticket_followup_saved']);
+
 $db = db();
 $user = auth_user();
 $statuses = $db->getTicketStatuses();
@@ -125,6 +128,7 @@ $statusClasses = array(
     'en_espera' => 'secondary',
     'finalizado' => 'success',
 );
+$inactiveTicketCutoff = strtotime('-7 days');
 
 $formState = isset($_SESSION['personal_ticket_form']) && is_array($_SESSION['personal_ticket_form'])
     ? $_SESSION['personal_ticket_form']
@@ -165,6 +169,14 @@ ob_start();
             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Nuevo ticket
         </button>
     </div>
+
+    <?php if ($followupSaved) : ?>
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2" role="status">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span>El seguimiento se registró correctamente.</span>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    <?php endif; ?>
 
     <section class="row g-3 mb-4" aria-label="Indicadores del área personal">
         <div class="col-6 col-md-4 col-xl">
@@ -338,7 +350,7 @@ ob_start();
             </div>
         <?php else : ?>
             <div class="card-body p-0">
-                <div class="table-responsive">
+                <div class="table-responsive personal-ticket-table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                         <tr>
@@ -363,15 +375,30 @@ ob_start();
                             $statusCode = (string) ($ticket['status_code'] ?? '');
                             $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
                             $updatedTimestamp = strtotime((string) $ticket['updated_at']);
+                            $isInactive = $statusCode !== 'finalizado'
+                                && $updatedTimestamp !== false
+                                && $updatedTimestamp <= $inactiveTicketCutoff;
+                            $rowClass = $statusCode === 'con_retraso' || $isInactive ? 'table-warning' : '';
+                            $followupTicket = array(
+                                'id' => (int) $ticket['id'],
+                                'title' => (string) $ticket['title'],
+                            );
                             ?>
-                            <tr>
+                            <tr class="<?= e($rowClass) ?>">
                                 <td><span class="fw-semibold">#<?= e((string) $ticket['id']) ?></span></td>
                                 <td>
                                     <span class="fw-semibold"><?= e($property['description']) ?></span>
                                     <div class="small text-body-secondary"><?= e(property_code($property)) ?></div>
                                 </td>
                                 <td><?= e((string) $ticket['title']) ?></td>
-                                <td><span class="badge text-bg-<?= e($statusClass) ?>"><?= e((string) ($ticket['status_name'] ?? 'Sin estado')) ?></span></td>
+                                <td>
+                                    <span class="badge text-bg-<?= e($statusClass) ?>"><?= e((string) ($ticket['status_name'] ?? 'Sin estado')) ?></span>
+                                    <?php if ($isInactive) : ?>
+                                        <span class="badge text-bg-warning ms-1" title="Sin cambios durante 7 días o más">
+                                            <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Sin actividad
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if ($updatedTimestamp !== false) : ?>
                                         <time datetime="<?= e(date(DATE_ATOM, $updatedTimestamp)) ?>"
@@ -384,11 +411,21 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
-                                    <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
-                                            data-ticket-id="<?= e((string) $ticket['id']) ?>">
-                                        <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver
-                                    </button>
+                                    <div class="btn-group btn-group-sm" role="group"
+                                         aria-label="Acciones para el ticket #<?= e((string) $ticket['id']) ?>">
+                                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
+                                                aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
+                                                data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
+                                                data-ticket-id="<?= e((string) $ticket['id']) ?>">
+                                            <i class="bi bi-eye me-1" aria-hidden="true"></i>Detalle
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                                aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
+                                                data-bs-toggle="modal" data-bs-target="#personalTicketFollowupModal"
+                                                data-ticket="<?= e(js($followupTicket)) ?>">
+                                            <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -422,6 +459,7 @@ ob_start();
 </div>
 
 <?php include __DIR__ . '/../include/personal_ticket_details_modal.php'; ?>
+<?php include __DIR__ . '/../include/personal_ticket_followup_modal.php'; ?>
 
 <div class="modal fade" id="registerPersonalTicketModal" tabindex="-1"
      data-properties-url="<?= e(url('personal/actions/properties.php')) ?>"
