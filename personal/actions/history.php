@@ -51,6 +51,7 @@ try {
     }
     $transactionStarted = false;
 
+    $_SESSION['personal_ticket_followup_saved'] = true;
     header('Location: ' . url('personal/index.php'));
     exit();
 } catch (Throwable $e) {

@@ -395,6 +395,10 @@ table.table.table-striped.table-sm,
     overflow-y: hidden;
 }
 
+.personal-ticket-table-responsive {
+    overflow-y: hidden;
+}
+
 .app-main .dataTables_wrapper {
     min-width: 0;
 }
@@ -431,8 +435,8 @@ table.table.table-striped.table-sm,
 }
 
 .personal-ticket-modal-dialog {
-    --bs-modal-width: 95vw;
-    max-width: 95vw;
+    --bs-modal-width: min(95vw, 1200px);
+    max-width: min(95vw, 1200px);
 }
 
 .personal-ticket-modal-dialog .modal-content {
@@ -579,4 +583,105 @@ table.table.table-striped.table-sm,
 
 .support-ticket-modal-dialog .bento-card .row.g-2 .col-6 {
     padding-block: .25rem;
+}
+
+.personal-ticket-modal-dialog .personal-ticket-modal-heading {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.personal-ticket-modal-dialog .bento-card {
+    height: 100%;
+    min-width: 0;
+    border-radius: .75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+}
+
+.app-main .personal-ticket-modal-dialog .bento-card .card-body {
+    padding: 1rem !important;
+}
+
+.app-main .personal-ticket-modal-dialog .bento-card h3 {
+    color: var(--bs-primary);
+    font-size: .95rem !important;
+    font-weight: 600;
+}
+
+.personal-ticket-modal-dialog .bento-card h3 i {
+    font-size: .9em;
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory article {
+    padding: .75rem;
+    border-radius: .5rem;
+    background-color: var(--bs-tertiary-bg);
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory article .badge {
+    font-size: .75rem;
+    padding: .25rem .5rem;
+}
+
+.personal-ticket-modal-dialog .ticket-modal-copy {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.personal-ticket-modal-dialog .ticket-modal-meta dd {
+    margin-bottom: .25rem;
+}
+
+.ticket-status-indicator {
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.ticket-status-indicator:hover {
+    transform: translateY(-1px);
+}
+
+.ticket-status-indicator:focus-visible {
+    outline: .2rem solid var(--bs-primary);
+    outline-offset: .15rem;
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory {
+    position: relative;
+    padding-left: 1.25rem;
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory::before {
+    position: absolute;
+    top: .5rem;
+    bottom: .5rem;
+    left: .3rem;
+    width: 2px;
+    background-color: var(--bs-border-color);
+    content: "";
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory article {
+    position: relative;
+}
+
+.personal-ticket-modal-dialog #personalTicketHistory article::before {
+    position: absolute;
+    top: .95rem;
+    left: -1.25rem;
+    width: .6rem;
+    height: .6rem;
+    border: 2px solid var(--bs-body-bg);
+    border-radius: 50%;
+    background-color: var(--bs-primary);
+    content: "";
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ticket-status-indicator {
+        transition: none;
+    }
+
+    .ticket-status-indicator:hover {
+        transform: none;
+    }
 }

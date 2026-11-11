@@ -3,66 +3,79 @@
     <div class="modal-dialog modal-dialog-scrollable personal-ticket-modal-dialog">
         <div class="modal-content text-start">
             <div class="modal-header">
-                <div>
-                    <h2 class="modal-title fs-5" id="personalTicketDetailsTitle">Ticket</h2>
-                    <p class="small text-body-secondary mb-0" id="personalTicketDetailsSubtitle"></p>
+                <div class="personal-ticket-modal-heading">
+                    <h2 class="modal-title fs-5" id="personalTicketDetailsTitle">
+                        <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>Ticket
+                    </h2>
+                    <p class="small text-body-secondary text-break mb-0" id="personalTicketDetailsSubtitle"></p>
                 </div>
                 <span class="badge text-bg-light border" id="personalTicketDetailsStatus"></span>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-4">
-                    <div class="col-12 col-xl-8">
-                        <section class="mb-4" aria-labelledby="personalTicketDescriptionTitle">
-                            <h3 class="h6" id="personalTicketDescriptionTitle">Descripción</h3>
-                            <div class="ticket-modal-copy text-break" id="personalTicketDescription"></div>
-                        </section>
-                        <section class="mb-4" aria-labelledby="personalTicketObservationTitle">
-                            <h3 class="h6" id="personalTicketObservationTitle">Observación</h3>
-                            <div class="ticket-modal-copy text-break" id="personalTicketObservation"></div>
-                        </section>
-                        <section class="border-top pt-3" aria-labelledby="personalTicketHistoryTitle">
-                            <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-                                <h3 class="h6 mb-0" id="personalTicketHistoryTitle">Historial</h3>
-                                <span class="small text-body-secondary" id="personalTicketHistoryCount"></span>
+                <div class="row g-3 bento-grid">
+                    <div class="col-12 col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <section class="bento-card card border h-100" aria-labelledby="personalTicketDescriptionTitle">
+                                    <div class="card-body">
+                                        <h3 class="h6 mb-3" id="personalTicketDescriptionTitle">
+                                            <i class="bi bi-card-text me-2" aria-hidden="true"></i>Descripción
+                                        </h3>
+                                        <div class="ticket-modal-copy text-break" id="personalTicketDescription"></div>
+                                    </div>
+                                </section>
                             </div>
-                            <div class="d-flex flex-column gap-3" id="personalTicketHistory"></div>
-                        </section>
+                            <div class="col-12">
+                                <section class="bento-card card border h-100" aria-labelledby="personalTicketObservationTitle">
+                                    <div class="card-body">
+                                        <h3 class="h6 mb-3" id="personalTicketObservationTitle">
+                                            <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>Observación
+                                        </h3>
+                                        <div class="ticket-modal-copy text-break" id="personalTicketObservation"></div>
+                                    </div>
+                                </section>
+                            </div>
+                            <div class="col-12">
+                                <section class="bento-card card border h-100" aria-labelledby="personalTicketHistoryTitle">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                            <h3 class="h6 mb-0" id="personalTicketHistoryTitle">
+                                                <i class="bi bi-clock-history me-2" aria-hidden="true"></i>Historial
+                                            </h3>
+                                            <span class="badge bg-light text-secondary border" id="personalTicketHistoryCount"></span>
+                                        </div>
+                                        <div class="d-flex flex-column gap-2" id="personalTicketHistory"></div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
                     </div>
-                    <aside class="col-12 col-xl-4" aria-label="Datos del ticket">
-                        <section class="border-start border-3 ps-3" aria-labelledby="personalTicketInfoTitle">
-                            <h3 class="h6 mb-3" id="personalTicketInfoTitle">Datos del ticket</h3>
-                            <dl class="ticket-modal-meta mb-0">
-                                <dt>Bien</dt>
-                                <dd id="personalTicketProperty"></dd>
-                                <dt>Código</dt>
-                                <dd id="personalTicketPropertyCode"></dd>
-                                <dt>Estado del bien</dt>
-                                <dd id="personalTicketPropertyStatus"></dd>
-                                <dt>Categoría</dt>
-                                <dd id="personalTicketPropertyCategory"></dd>
-                                <dt>Estado del ticket</dt>
-                                <dd id="personalTicketStatusValue"></dd>
-                                <dt>Creado</dt>
-                                <dd id="personalTicketCreatedAt"></dd>
-                                <dt>Actualizado</dt>
-                                <dd id="personalTicketUpdatedAt"></dd>
-                                <dt>Cerrado</dt>
-                                <dd id="personalTicketClosedAt"></dd>
-                            </dl>
-                        </section>
-                        <section class="border-top pt-3 mt-4" aria-labelledby="personalTicketFollowupTitle">
-                            <h3 class="h6" id="personalTicketFollowupTitle">Añadir seguimiento</h3>
-                            <form method="post" action="<?= e(url('personal/actions/history.php')) ?>">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="ticket_id" id="personalTicketFollowupId">
-                                <label for="personalTicketFollowupDescription" class="form-label small">Nueva nota</label>
-                                <textarea class="form-control mb-2" id="personalTicketFollowupDescription"
-                                          name="description" rows="3" required></textarea>
-                                <button type="submit" class="btn btn-outline-primary w-100">
-                                    <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Registrar seguimiento
-                                </button>
-                            </form>
+                    <aside class="col-12 col-lg-4" aria-label="Datos del ticket">
+                        <section class="bento-card card border h-100" aria-labelledby="personalTicketInfoTitle">
+                            <div class="card-body">
+                                <h3 class="h6 mb-3" id="personalTicketInfoTitle">
+                                    <i class="bi bi-info-circle me-2" aria-hidden="true"></i>Datos del ticket
+                                </h3>
+                                <dl class="ticket-modal-meta row g-2 mb-0">
+                                    <dt class="col-5">Bien</dt>
+                                    <dd class="col-7 text-end" id="personalTicketProperty"></dd>
+                                    <dt class="col-5">Código</dt>
+                                    <dd class="col-7 text-end" id="personalTicketPropertyCode"></dd>
+                                    <dt class="col-5">Estado del bien</dt>
+                                    <dd class="col-7 text-end" id="personalTicketPropertyStatus"></dd>
+                                    <dt class="col-5">Categoría</dt>
+                                    <dd class="col-7 text-end" id="personalTicketPropertyCategory"></dd>
+                                    <dt class="col-5">Estado del ticket</dt>
+                                    <dd class="col-7 text-end" id="personalTicketStatusValue"></dd>
+                                    <dt class="col-5">Creado</dt>
+                                    <dd class="col-7 text-end" id="personalTicketCreatedAt"></dd>
+                                    <dt class="col-5">Actualizado</dt>
+                                    <dd class="col-7 text-end" id="personalTicketUpdatedAt"></dd>
+                                    <dt class="col-5">Cerrado</dt>
+                                    <dd class="col-7 text-end" id="personalTicketClosedAt"></dd>
+                                </dl>
+                            </div>
                         </section>
                     </aside>
                 </div>
@@ -79,7 +92,10 @@
         const ticket = JSON.parse(event.relatedTarget.dataset.ticket);
         document.getElementById('personalTicketDetailsTitle').textContent = `Ticket #${ticket.id}`;
         document.getElementById('personalTicketDetailsSubtitle').textContent = ticket.title;
-        document.getElementById('personalTicketDetailsStatus').textContent = ticket.status;
+        const statusBadge = document.getElementById('personalTicketDetailsStatus');
+        const allowedStatusClasses = ['primary', 'info', 'warning', 'secondary', 'success', 'light'];
+        statusBadge.className = `badge text-bg-${allowedStatusClasses.includes(ticket.status_class) ? ticket.status_class : 'light'}`;
+        statusBadge.textContent = ticket.status;
         document.getElementById('personalTicketProperty').textContent = ticket.property;
         document.getElementById('personalTicketPropertyCode').textContent = ticket.property_code;
         document.getElementById('personalTicketPropertyStatus').textContent = ticket.property_status || 'No disponible';
@@ -91,7 +107,6 @@
         document.getElementById('personalTicketClosedAt').textContent = ticket.closed_at || 'No cerrado';
         document.getElementById('personalTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('personalTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
-        document.getElementById('personalTicketFollowupId').value = String(ticket.id);
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';

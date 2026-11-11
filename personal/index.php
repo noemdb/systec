@@ -3,6 +3,9 @@ require_once __DIR__ . '/../conn.php';
 require_once __DIR__ . '/../include/auth.php';
 require_personal_scope();
 
+$followupSaved = !empty($_SESSION['personal_ticket_followup_saved']);
+unset($_SESSION['personal_ticket_followup_saved']);
+
 $db = db();
 $user = auth_user();
 $conditions = array('created_by' => (int) $user['id']);
@@ -25,6 +28,7 @@ $statusClasses = array(
     'en_espera' => 'secondary',
     'finalizado' => 'success',
 );
+$inactiveTicketCutoff = strtotime('-7 days');
 
 foreach ($tickets as $ticket) {
     $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
@@ -62,9 +66,19 @@ ob_start();
         </button>
     </div>
 
+    <?php if ($followupSaved) : ?>
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2" role="status">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span>El seguimiento se registró correctamente.</span>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    <?php endif; ?>
+
     <section class="row g-3 mb-4" aria-label="Indicadores del área personal">
         <div class="col-6 col-md-4 col-xl">
-            <article class="card h-100 border-start border-4 border-primary shadow-sm text-start">
+            <button type="button" class="card h-100 w-100 border-start border-4 border-primary shadow-sm text-start text-body ticket-status-indicator"
+                    data-status-filter="" <?= $tickets !== array() ? 'aria-controls="personalTicketTableBody"' : 'disabled' ?> aria-pressed="false"
+                    aria-label="Mostrar todos los tickets">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-primary-subtle text-primary p-2" aria-hidden="true">
                         <i class="bi bi-ticket-detailed fs-4"></i>
@@ -74,10 +88,12 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['total']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-4 col-xl">
-            <article class="card h-100 border-start border-4 border-info shadow-sm text-start">
+            <button type="button" class="card h-100 w-100 border-start border-4 border-info shadow-sm text-start text-body ticket-status-indicator"
+                    data-status-filter="en_progreso" <?= $tickets !== array() ? 'aria-controls="personalTicketTableBody"' : 'disabled' ?> aria-pressed="false"
+                    aria-label="Filtrar tickets en progreso">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-info-subtle text-info p-2" aria-hidden="true">
                         <i class="bi bi-hourglass-split fs-4"></i>
@@ -87,10 +103,12 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['in_progress']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-4 col-xl">
-            <article class="card h-100 border-start border-4 border-warning shadow-sm text-start">
+            <button type="button" class="card h-100 w-100 border-start border-4 border-warning shadow-sm text-start text-body ticket-status-indicator"
+                    data-status-filter="con_retraso" <?= $tickets !== array() ? 'aria-controls="personalTicketTableBody"' : 'disabled' ?> aria-pressed="false"
+                    aria-label="Filtrar tickets con retraso">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-warning-subtle text-warning p-2" aria-hidden="true">
                         <i class="bi bi-exclamation-triangle fs-4"></i>
@@ -100,10 +118,12 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['delayed']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-4 col-xl">
-            <article class="card h-100 border-start border-4 border-secondary shadow-sm text-start">
+            <button type="button" class="card h-100 w-100 border-start border-4 border-secondary shadow-sm text-start text-body ticket-status-indicator"
+                    data-status-filter="en_espera" <?= $tickets !== array() ? 'aria-controls="personalTicketTableBody"' : 'disabled' ?> aria-pressed="false"
+                    aria-label="Filtrar tickets en espera">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-secondary-subtle text-secondary p-2" aria-hidden="true">
                         <i class="bi bi-pause-circle fs-4"></i>
@@ -113,10 +133,12 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['waiting']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-4 col-xl">
-            <article class="card h-100 border-start border-4 border-success shadow-sm text-start">
+            <button type="button" class="card h-100 w-100 border-start border-4 border-success shadow-sm text-start text-body ticket-status-indicator"
+                    data-status-filter="finalizado" <?= $tickets !== array() ? 'aria-controls="personalTicketTableBody"' : 'disabled' ?> aria-pressed="false"
+                    aria-label="Filtrar tickets finalizados">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-success-subtle text-success p-2" aria-hidden="true">
                         <i class="bi bi-check-circle fs-4"></i>
@@ -126,7 +148,7 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['closed']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
     </section>
 
@@ -152,25 +174,108 @@ ob_start();
                 </div>
             </div>
         <?php else : ?>
+            <div class="card-body border-bottom">
+                    <h3 class="h6 mb-3" id="personalTicketFiltersTitle">
+                        <i class="bi bi-funnel me-2 text-primary" aria-hidden="true"></i>Buscar y filtrar
+                    </h3>
+                    <form id="personalTicketFilters" role="search" aria-labelledby="personalTicketFiltersTitle">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-12 col-md-6">
+                                <label for="personalTicketSearch" class="form-label small fw-semibold">Buscar</label>
+                                <input type="search" class="form-control form-control-sm" id="personalTicketSearch"
+                                       placeholder="Título, descripción, bien o código" autocomplete="off">
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="personalTicketStatusFilter" class="form-label small fw-semibold">Estado</label>
+                                <select class="form-select form-select-sm" id="personalTicketStatusFilter">
+                                    <option value="">Todos los estados</option>
+                                    <?php foreach ($statuses as $statusOption) : ?>
+                                        <option value="<?= e((string) ($statusOption['code'] ?? '')) ?>">
+                                            <?= e((string) ($statusOption['name'] ?? 'Sin estado')) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="personalTicketPropertyFilter" class="form-label small fw-semibold">Bien</label>
+                                <select class="form-select form-select-sm" id="personalTicketPropertyFilter">
+                                    <option value="">Todos los bienes</option>
+                                    <?php
+                                    $seenPropertyIds = array();
+                                    foreach ($tickets as $ticket) :
+                                        $propertyId = (int) $ticket['property_id'];
+                                        if (isset($seenPropertyIds[$propertyId])) {
+                                            continue;
+                                        }
+                                        $seenPropertyIds[$propertyId] = true;
+                                        $property = $properties[(int) $ticket['id']];
+                                        $propertyLabel = trim((string) ($property['ident'] ?? ''));
+                                        $propertyDescription = trim((string) ($property['description'] ?? 'Bien desconocido'));
+                                        if ($propertyLabel !== '') {
+                                            $propertyLabel .= ' · ';
+                                        }
+                                        $propertyLabel .= $propertyDescription;
+                                        ?>
+                                        <option value="<?= e((string) $propertyId) ?>"><?= e($propertyLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label for="personalTicketDateFrom" class="form-label small fw-semibold">Actualizado desde</label>
+                                <input type="date" class="form-control form-control-sm" id="personalTicketDateFrom"
+                                       aria-describedby="personalTicketDateError">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label for="personalTicketDateTo" class="form-label small fw-semibold">Actualizado hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="personalTicketDateTo"
+                                       aria-describedby="personalTicketDateError">
+                            </div>
+                            <div class="col-12 col-md-6 d-flex flex-wrap align-items-center gap-2">
+                                <button type="reset" class="btn btn-sm btn-outline-secondary" id="personalTicketResetFilters">
+                                    <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Limpiar filtros
+                                </button>
+                                <span class="small text-body-secondary">Sin actividad: 7 o más días en tickets abiertos.</span>
+                            </div>
+                        </div>
+                        <div class="invalid-feedback" id="personalTicketDateError" role="alert">
+                            La fecha inicial no puede ser posterior a la fecha final.
+                        </div>
+                    </form>
+                    <p class="small text-body-secondary mb-0 mt-2" id="personalTicketFilterCount" role="status" aria-live="polite"></p>
+            </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
+                <div class="table-responsive personal-ticket-table-responsive">
                     <table class="table table-hover align-middle mb-0">
+                            <caption class="visually-hidden">Tickets personales, ordenados por última actualización</caption>
                         <thead class="table-light">
                         <tr>
                             <th scope="col">Ticket</th>
                             <th scope="col">Bien</th>
                             <th scope="col">Incidencia</th>
                             <th scope="col">Estado</th>
-                            <th scope="col">Actualizado</th>
+                            <th scope="col" aria-sort="descending">Actualizado</th>
                             <th scope="col" class="text-end">Acción</th>
                         </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="personalTicketTableBody">
                         <?php foreach ($tickets as $ticket) :
                             $property = $properties[(int) $ticket['id']];
                             $status = $statuses[(int) $ticket['status_id']] ?? array('name' => 'Sin estado');
                             $statusCode = isset($status['code']) ? (string) $status['code'] : '';
                             $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
+                            $updatedAt = (string) ($ticket['updated_at'] ?? '');
+                            $updatedAtTimestamp = strtotime($updatedAt);
+                            $isInactive = $statusCode !== 'finalizado'
+                                && $updatedAtTimestamp !== false
+                                && $updatedAtTimestamp <= $inactiveTicketCutoff;
+                            $rowClass = $statusCode === 'con_retraso' || $isInactive ? 'table-warning' : '';
+                            $searchText = mb_strtolower(implode(' ', array(
+                                (string) $ticket['id'],
+                                (string) $ticket['title'],
+                                (string) $ticket['description'],
+                                (string) ($property['description'] ?? ''),
+                                (string) ($property['ident'] ?? ''),
+                            )), 'UTF-8');
                             $ticketHistory = array();
                             foreach ($ticketHistories[(int) $ticket['id']] as $historyEntry) {
                                 $ticketHistory[] = array(
@@ -202,24 +307,50 @@ ob_start();
                                 'history' => $ticketHistory,
                             );
                             ?>
-                            <tr>
+                            <tr class="<?= e($rowClass) ?>"
+                                data-status-code="<?= e($statusCode) ?>"
+                                data-property-id="<?= e((string) $ticket['property_id']) ?>"
+                                data-updated-date="<?= e(substr($updatedAt, 0, 10)) ?>"
+                                data-ticket-search="<?= e($searchText) ?>">
                                 <td><span class="fw-semibold">#<?= e((string) $ticket['id']) ?></span></td>
                                 <td>
                                     <span class="fw-semibold"><?= e((string) ($property['description'] ?? 'Bien desconocido')) ?></span>
                                     <div class="small text-body-secondary"><?= e((string) ($property['ident'] ?? 'Sin código')) ?></div>
                                 </td>
                                 <td><?= e((string) $ticket['title']) ?></td>
-                                <td><span class="badge text-bg-<?= e($statusClass) ?>"><?= e((string) $status['name']) ?></span></td>
-                                <td><?= e((string) $ticket['updated_at']) ?></td>
+                                <td>
+                                    <span class="badge text-bg-<?= e($statusClass) ?>"><?= e((string) ($status['name'] ?? 'Sin estado')) ?></span>
+                                    <?php if ($isInactive) : ?>
+                                        <span class="badge text-bg-warning ms-1" title="Sin cambios durante 7 días o más">
+                                            <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Sin actividad
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-nowrap"><?= e($updatedAt) ?></td>
                                 <td class="text-end">
-                                    <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
-                                            data-ticket="<?= e(js($ticketDetails)) ?>">
-                                        <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver
-                                    </button>
+                                    <div class="btn-group btn-group-sm" role="group"
+                                         aria-label="Acciones para el ticket #<?= e((string) $ticket['id']) ?>">
+                                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
+                                                aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
+                                                data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
+                                                data-ticket="<?= e(js($ticketDetails)) ?>">
+                                            <i class="bi bi-eye me-1" aria-hidden="true"></i>Detalle
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                                aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
+                                                data-bs-toggle="modal" data-bs-target="#personalTicketFollowupModal"
+                                                data-ticket="<?= e(js($ticketDetails)) ?>">
+                                            <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <tr id="personalTicketNoMatches" class="d-none">
+                            <td colspan="6" class="py-4 text-center text-body-secondary">
+                                <i class="bi bi-search me-1" aria-hidden="true"></i>No hay tickets que coincidan con los filtros.
+                            </td>
+                        </tr>
                         </tbody>
                     </table>
                 </div>
@@ -229,6 +360,7 @@ ob_start();
 </div>
 
 <?php include __DIR__ . '/../include/personal_ticket_details_modal.php'; ?>
+<?php include __DIR__ . '/../include/personal_ticket_followup_modal.php'; ?>
 
 <div class="modal fade" id="registerPersonalTicketModal" tabindex="-1"
      aria-labelledby="registerPersonalTicketTitle" aria-describedby="registerPersonalTicketHelp" aria-hidden="true">
@@ -334,6 +466,76 @@ ob_start();
             document.activeElement.blur();
         }
     });
+
+    const personalTicketFilters = document.getElementById('personalTicketFilters');
+    if (personalTicketFilters) {
+        const statusFilter = document.getElementById('personalTicketStatusFilter');
+        const propertyFilter = document.getElementById('personalTicketPropertyFilter');
+        const searchFilter = document.getElementById('personalTicketSearch');
+        const dateFromFilter = document.getElementById('personalTicketDateFrom');
+        const dateToFilter = document.getElementById('personalTicketDateTo');
+        const dateError = document.getElementById('personalTicketDateError');
+        const filterCount = document.getElementById('personalTicketFilterCount');
+        const noMatchesRow = document.getElementById('personalTicketNoMatches');
+        const ticketRows = Array.from(document.querySelectorAll('#personalTicketTableBody tr[data-status-code]'));
+        const statusIndicators = Array.from(document.querySelectorAll('.ticket-status-indicator'));
+        const normalizeSearchText = (value) => String(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLocaleLowerCase('es');
+
+        const applyPersonalTicketFilters = () => {
+            const searchTerm = normalizeSearchText(searchFilter.value.trim());
+            const fromDate = dateFromFilter.value;
+            const toDate = dateToFilter.value;
+            const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate);
+
+            [dateFromFilter, dateToFilter].forEach((input) => {
+                input.classList.toggle('is-invalid', invalidDateRange);
+                if (invalidDateRange) {
+                    input.setAttribute('aria-invalid', 'true');
+                } else {
+                    input.removeAttribute('aria-invalid');
+                }
+            });
+            dateError.classList.toggle('d-block', invalidDateRange);
+
+            let visibleCount = 0;
+            ticketRows.forEach((row) => {
+                const updatedDate = row.dataset.updatedDate || '';
+                const matches = !invalidDateRange
+                    && (!statusFilter.value || row.dataset.statusCode === statusFilter.value)
+                    && (!propertyFilter.value || row.dataset.propertyId === propertyFilter.value)
+                    && (!searchTerm || normalizeSearchText(row.dataset.ticketSearch || '').includes(searchTerm))
+                    && (!fromDate || updatedDate >= fromDate)
+                    && (!toDate || updatedDate <= toDate);
+                row.classList.toggle('d-none', !matches);
+                if (matches) visibleCount++;
+            });
+
+            noMatchesRow.classList.toggle('d-none', invalidDateRange || visibleCount > 0);
+            filterCount.textContent = invalidDateRange
+                ? 'Corrige el rango de fechas para ver los resultados.'
+                : `${visibleCount} de ${ticketRows.length} tickets`;
+
+            statusIndicators.forEach((indicator) => {
+                indicator.setAttribute('aria-pressed', String(indicator.dataset.statusFilter === statusFilter.value));
+            });
+        };
+
+        personalTicketFilters.addEventListener('input', applyPersonalTicketFilters);
+        personalTicketFilters.addEventListener('change', applyPersonalTicketFilters);
+        personalTicketFilters.addEventListener('reset', () => window.requestAnimationFrame(applyPersonalTicketFilters));
+        statusIndicators.forEach((indicator) => {
+            indicator.addEventListener('click', () => {
+                const nextStatus = indicator.dataset.statusFilter || '';
+                statusFilter.value = statusFilter.value === nextStatus ? '' : nextStatus;
+                applyPersonalTicketFilters();
+            });
+        });
+
+        applyPersonalTicketFilters();
+    }
 </script>
 <?php
 $main = ob_get_clean();
