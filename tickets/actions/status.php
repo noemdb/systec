@@ -24,7 +24,10 @@ if ($ticket_id === false || $ticket_id === null || $status_id === false || $stat
     exit('Parámetros del ticket inválidos.');
 }
 
-$ticket = $db->getFirstForId('tickets', $ticket_id);
+$ticket = $db->getFirstForConditions(
+    'tickets',
+    array(array('id', '=', (int) $ticket_id), array('deleted_at', 'IS', null))
+);
 if (!$ticket) {
     http_response_code(404);
     exit('Ticket no encontrado.');

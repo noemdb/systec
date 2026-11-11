@@ -6,6 +6,43 @@
 
 ---
 
+## 2026-11-11 — Mejoras del área personal de tickets
+
+**Alcance:** se optimizó la bandeja `/personal/index.php` y el registro de tickets.
+
+- La lista consulta tickets con sus bienes en bloque, muestra 25 por página y filtra por búsqueda, categoría, estado, adscripción/unidad y fecha; el historial y detalle se solicitan al abrir cada ticket.
+- Se agregó `migrations/005_personal_ticket_lookup.sql` para cubrir con un índice compuesto la consulta paginada de tickets activos por creador.
+- Los indicadores permiten filtrar por estado; se localizaron fechas, se distinguió el estado vacío de los filtros sin resultados y se conservaron los datos del formulario ante errores.
+- El selector de bienes se carga al abrir el modal; las adscripciones de SIA se cachean cinco minutos y se advierte cuando se usa un cache vencido.
+- Se evitó desmarcar silenciosamente un bien seleccionado al cambiar filtros, se añadieron confirmación de selección y búsqueda con debounce.
+- Se documentaron las rutas JSON para cargar bienes/direcciones y el detalle del ticket.
+
+---
+
+## 2026-11-11 — Baja lógica de tickets desde soporte
+
+**Alcance:** se agregó una acción de eliminación confirmada en `/tickets.php`, exclusiva de administrador y operador.
+
+- La acción requiere POST + CSRF y actualiza `tickets.deleted_at`; el ticket desaparece de listas y ya no admite cambios ni seguimientos.
+- El ticket y sus eventos previos se conservan; se registra también el actor/fecha de la baja en `ticket_histories`.
+- Se agregó `migrations/004_soft_delete_tickets.sql`; aplicarla con un backup verificado antes de usar la acción en una base existente.
+- El dashboard cuenta solo tickets activos; detalle, área personal y acciones rechazan tickets dados de baja.
+
+---
+
+## 2026-11-11 — Adscripción por unidad operativa en el dashboard
+
+**Alcance:** el inventario del dashboard puede filtrarse por la adscripción vigente de cada bien, obtenida de SIA sin escribir en PostgreSQL.
+
+- `legacy_postgres_inventory_snapshot()` devuelve los bienes vigentes para sincronización y resuelve las adscripciones de los identificadores locales en la misma transacción de solo lectura.
+- La asignación enlaza `BIEN015.cod_dependencia`, `cod_direccion` y `cod_departamento` con `BIEN001`, `BIEN005` y `BIEN006`; la etiqueta usa el departamento y aplica fallback a dirección/dependencia.
+- Se agrega la columna y filtro “Adscripción / unidad operativa”; se puede compartir el estado mediante `?adscription=...`.
+- Se incorpora un indicador de tickets registrados con enlace a `/tickets.php`, visible solo para roles con acceso a tickets.
+- `properties.adscription` permanece sin persistir; los bienes no encontrados en SIA usan el valor local o “Sin adscripción”.
+- Se actualizaron `DOMAIN.md`, `DATABASE.md`, `API.md`, `ARCHITECTURE.md`, `TODO.md` y los diagramas de dominio.
+
+---
+
 ## 2026-11-09 — Importación del reporte de inventario del sistema de bienes
 
 **Alcance:** `/updates.php` ahora permite cargar el CSV de inventario o el reporte `.xls` descargado directamente del sistema de bienes.

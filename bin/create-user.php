@@ -7,6 +7,8 @@
  *
  * Roles: admin, operador, tecnico, consulta, personal.
  * Si se omite la contraseña, se genera una aleatoria y se imprime una sola vez.
+ * personal
+ * php bin/create-user.php personal personal personal
  */
 
 require_once __DIR__ . '/../conn.php';

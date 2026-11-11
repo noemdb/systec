@@ -1,4 +1,5 @@
 <?php
+$canRegisterMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
 $canPropertyStatus = auth_has_role(array('admin', 'operador'));
 ?>
 <div class="container-fluid text-start">
@@ -11,6 +12,7 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 <th scope="col">SG</th>
                 <th scope="col">Sec</th>
                 <th scope="col">Ident.</th>
+                <th scope="col">Adscripción / unidad operativa</th>
                 <th scope="col">Descripción</th>
                 <th scope="col">Serial</th>
                 <th scope="col">Estado</th>
@@ -27,26 +29,33 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 $section = str_pad(trim((string) $property['seccion']), 3, '0', STR_PAD_LEFT);
                 $propertyCategory = property_category($property);
                 $propertyCode = property_code($property);
+                $propertyAdscription = $adscriptionsByPropertyId[(int) $property['id']]
+                    ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
                 ?>
-                <tr data-category="<?= e($propertyCategory) ?>">
+                <tr data-category="<?= e($propertyCategory) ?>"
+                    data-adscription="<?= e($propertyAdscription['key']) ?>"
+                    data-status="<?= e(mb_strtoupper(trim((string) $property['status']))) ?>">
                     <td><?= e($property['id']) ?></td>
                     <td><?= e($property['grupo']) ?></td>
                     <td><?= e($subgroup) ?></td>
                     <td><?= e($section) ?></td>
                     <td><?= e(str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT)) ?></td>
+                    <td><?= e($propertyAdscription['label']) ?></td>
                     <td><?= e($property['description']) ?></td>
                     <td><?= e($property['serial']) ?></td>
                     <td><?= sat_badge(badge_clase_bien((string) $property['status']), property_status_label((string) $property['status'])) ?></td>
                     <td><?= e($maintenanceCountsByProperty[(int) $property['id']] ?? 0) ?></td>
                     <td>
                         <div class="btn-group" role="group" aria-label="Acciones del bien">
-                            <button type="button" class="btn btn-primary btn-sm property-action-btn"
-                                    data-bs-toggle="modal" data-bs-target="#registerMaintenanceModal"
-                                    data-property-id="<?= e($property['id']) ?>"
-                                    data-property-code="<?= e($propertyCode) ?>"
-                                    aria-label="Registrar mantenimiento" title="Registrar mantenimiento">
-                                <i class="bi bi-tools" aria-hidden="true"></i>
-                            </button>
+                            <?php if ($canRegisterMaintenance) : ?>
+                                <button type="button" class="btn btn-primary btn-sm property-action-btn"
+                                        data-bs-toggle="modal" data-bs-target="#registerMaintenanceModal"
+                                        data-property-id="<?= e($property['id']) ?>"
+                                        data-property-code="<?= e($propertyCode) ?>"
+                                        aria-label="Registrar mantenimiento" title="Registrar mantenimiento">
+                                    <i class="bi bi-tools" aria-hidden="true"></i>
+                                </button>
+                            <?php endif; ?>
 
                             <button type="button" class="btn btn-secondary btn-sm property-action-btn"
                                     data-bs-toggle="modal" data-bs-target="#propertyHistoryModal"

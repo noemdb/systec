@@ -24,7 +24,7 @@
 | **Modelo** | Marca/modelo del bien; en la importación se compone como `marca - modelo`. | "tipo" (el tipo es del mantenimiento) |
 | **Serial** | Número de serie del bien. | "serie" (ambigua con series documentales, que aquí no existen) |
 | **Color** | Color del bien. | — |
-| **Adscripción** | Campo previsto para la dependencia o ubicación del bien. **Nunca se carga en los datos actuales.** | "ubicación", "dependencia" |
+| **Adscripción** | Unidad operativa a la que está asignado el bien. Se obtiene de la dependencia, dirección y departamento registrados en SIA; no es la dirección física del bien. | "ubicación física" |
 | **Estado del bien** | Condición física declarada del bien: `BUENO`, `REGULAR`, `MALO`, `MUY MALO`. | "condición" (válido como sinónimo conceptual, pero el campo es `status`) |
 | **Bien dañado** | Bien en estado `MALO` o `MUY MALO` con al menos un mantenimiento cuya nota contiene `desincorporación`. | "bien averiado", "bien desincorporado" (la desincorporación es el trámite, no el estado) |
 | **Desincorporación** | Proceso administrativo por el cual un bien se retira del inventario. En el sistema se detecta por una nota de texto, no por un estado formal. | "baja", "descarte" |
@@ -64,7 +64,7 @@
 
 | Término | Definición | Sinónimos a evitar |
 |---|---|---|
-| **Dashboard** | Pantalla de listado de bienes con búsqueda, conteo de mantenimientos y acciones. | "panel", "home" |
+| **Dashboard** | Pantalla de inventario con búsqueda, filtros por estado/categoría/adscripción y resumen de mantenimientos y tickets permitidos por rol. | "panel", "home" |
 | **Historial imprimible** | Vista por bien con membrete, tabla de mantenimientos y observaciones, pensada para imprimir. | "reporte de bien" (válido) |
 | **Reporte de bienes dañados** | Vista que lista bienes en mal estado con notas de desincorporación. | "reporte de bajas" (la baja no es un estado formal) |
 | **Lote** | Impresión conjunta de dos historiales en una sola página (`batch.php`). | "batch" (técnico) |
@@ -89,7 +89,8 @@
 - **Reglas de negocio:**
   - El código visible se compone de `grupo-subgrupo-seccion-ident` con relleno de ceros.
   - `ident` es la clave de búsqueda de la importación; no hay restricción de unicidad en BD, pero los datos actuales no tienen duplicados.
-  - `adscription` está previsto pero nunca se carga.
+  - `adscription` sigue vacío en SQLite; el dashboard resuelve en tiempo de consulta la unidad operativa desde `BIEN015` y los catálogos `BIEN001`, `BIEN005` y `BIEN006`.
+  - La unidad operativa mostrada es el departamento; si falta su denominación, se usa la dirección y luego la dependencia. Los CSV/XLS actuales no contienen este dato.
   - `status` no se deriva de los mantenimientos; se cambia manualmente.
   - Un bien puede no tener mantenimientos (450 de 617 en el snapshot).
   - No se elimina un bien desde la aplicación.
@@ -129,6 +130,12 @@
   - `active=0` impide el login; no hay UI de baja.
   - La gestión es por CLI (`bin/create-user.php`).
 - **Relaciones:** no se relaciona con mantenimientos; el técnico sigue siendo texto.
+
+### 2.3.2 Ticket (`tickets`)
+
+- **Eliminación:** solo `admin` y `operador` pueden dar de baja un ticket desde el listado de soporte.
+- **Baja lógica:** `deleted_at` oculta el ticket de las listas y bloquea su edición/seguimiento; la fila y el historial se conservan.
+- **Trazabilidad:** la operación agrega un evento `deleted` al historial con actor y fecha. No existe restauración desde la interfaz.
 
 ### 2.4 Reporte (derivado)
 

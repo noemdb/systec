@@ -193,7 +193,7 @@
             return;
         }
 
-        const labels = { created: 'Ticket creado', status_change: 'Cambio de estado', comment: 'Seguimiento' };
+        const labels = { created: 'Ticket creado', status_change: 'Cambio de estado', comment: 'Seguimiento', deleted: 'Ticket eliminado' };
         const actorStyles = [
             { border: 'border-primary', badge: 'bg-primary-subtle text-primary-emphasis' },
             { border: 'border-success', badge: 'bg-success-subtle text-success-emphasis' },

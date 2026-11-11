@@ -11,13 +11,21 @@
         const search = document.getElementById(picker.dataset.searchInput);
         const resultCount = document.getElementById(picker.dataset.resultCount);
         const categoryFilter = document.getElementById(picker.dataset.categoryFilter);
+        const directionFilter = picker.dataset.directionFilter
+            ? document.getElementById(picker.dataset.directionFilter)
+            : null;
         if (!search || !resultCount || !categoryFilter) return;
 
         const isSelect = picker.tagName === 'SELECT';
+        const preserveSelection = picker.hasAttribute('data-preserve-selection');
         const options = isSelect
             ? Array.from(picker.options).filter((option) => option.value !== '')
             : Array.from(picker.querySelectorAll('[data-property-picker-option]'));
         const getInput = (option) => isSelect ? null : option.querySelector('input[type="radio"]');
+        const normalizedSearchText = new WeakMap();
+        options.forEach((option) => {
+            normalizedSearchText.set(option, normalize(option.dataset.search || option.textContent));
+        });
 
         const filterOptions = () => {
             const query = normalize(search.value);
@@ -25,10 +33,12 @@
 
             options.forEach((option) => {
                 const searchMatches = !query
-                    || normalize(option.dataset.search || option.textContent).includes(query);
+                    || normalizedSearchText.get(option).includes(query);
                 const categoryMatches = !categoryFilter.value
                     || option.dataset.category === categoryFilter.value;
-                const match = searchMatches && categoryMatches;
+                const directionMatches = !directionFilter || !directionFilter.value
+                    || option.dataset.direction === directionFilter.value;
+                const match = searchMatches && categoryMatches && directionMatches;
 
                 if (isSelect) {
                     option.hidden = !match;
@@ -37,8 +47,8 @@
                     const input = getInput(option);
                     option.classList.toggle('d-none', !match);
                     if (input) {
-                        input.disabled = !match;
-                        if (!match) input.checked = false;
+                        if (!match && !preserveSelection) input.checked = false;
+                        input.disabled = !match && !(preserveSelection && input.checked);
                         option.classList.toggle('active', input.checked);
                     }
                 }
@@ -59,22 +69,24 @@
                     : `${matches} bienes disponibles`;
         };
 
-        search.addEventListener('input', filterOptions);
+        let searchTimer = null;
+        search.addEventListener('input', () => {
+            global.clearTimeout(searchTimer);
+            searchTimer = global.setTimeout(filterOptions, 120);
+        });
         categoryFilter.addEventListener('change', filterOptions);
+        directionFilter?.addEventListener('change', filterOptions);
         picker.addEventListener('change', (event) => {
             const radio = isSelect ? null : event.target.closest('input[type="radio"]');
             const hasSelection = isSelect ? Boolean(picker.value) : Boolean(radio && radio.checked);
-            if (!hasSelection) return;
-
             if (!isSelect) {
                 picker.querySelectorAll('[data-property-picker-option]').forEach((option) => {
                     option.classList.toggle('active', getInput(option)?.checked || false);
                 });
                 const validationMessage = document.getElementById(picker.dataset.validationMessage);
-                if (validationMessage) validationMessage.classList.remove('d-block');
+                if (hasSelection && validationMessage) validationMessage.classList.remove('d-block');
             }
 
-            search.value = '';
             filterOptions();
         });
 

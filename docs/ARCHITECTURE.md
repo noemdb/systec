@@ -50,7 +50,7 @@ graph TD
         DBLAYER[conn.php · clase DB<br/>SQLite3 + prepared statements]
         FORMS[Formularios y validaciones<br/>maintenances/form, validations]
         CSV[Importadores CSV y XLS HTML<br/>properties/table, maintenances/table]
-        INVENTORY[include/inventory_import.php<br/>archivos + PostgreSQL legacy]
+        INVENTORY[include/inventory_import.php<br/>archivos + inventario/adscripción SIA]
         CSVTX[include/csv_import.php<br/>límites + transacción]
         MIG[bin/migrate.php<br/>migraciones versionadas]
     end
@@ -119,7 +119,7 @@ systec/
 │   ├── footer.php                # Pie institucional
 │   ├── script.php                # Bootstrap bundle
 │   ├── helpers.php               # Escape, badges y transiciones
-│   ├── inventory_import.php      # CSV, XLS HTML y lectura PostgreSQL de inventario
+│   ├── inventory_import.php      # CSV, XLS HTML, snapshot PostgreSQL y adscripción SIA
 │   └── csv_import.php            # Límites y transacción de importaciones CSV
 ├── dashboard/
 │   ├── table/index.php           # Tabla de bienes y acciones

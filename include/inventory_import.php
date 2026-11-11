@@ -50,6 +50,12 @@ function execute_legacy_postgres_inventory_import($db, callable $processor): str
 
 function legacy_postgres_inventory_rows(): array
 {
+    $snapshot = legacy_postgres_inventory_snapshot();
+    return $snapshot['rows'];
+}
+
+function legacy_postgres_inventory_snapshot(array $propertyIdentifiers = array(), bool $includeInventoryRows = true): array
+{
     $host = inventory_environment_value('SYSTEC_LEGACY_PG_HOST', 'localhost');
     $port = inventory_environment_value('SYSTEC_LEGACY_PG_PORT', '5432');
     $database = inventory_environment_value('SYSTEC_LEGACY_PG_DATABASE', 'DATOS');
@@ -93,7 +99,9 @@ function legacy_postgres_inventory_rows(): array
             throw new CsvImportException('El formato de códigos de la empresa de origen no coincide con el validado.');
         }
 
-        $statement = $pdo->query(
+        $rows = array();
+        if ($includeInventoryRows) {
+            $statement = $pdo->query(
             "SELECT
                 b.cod_bien_mue,
                 substr(b.cod_clasificacion, 1, 1) AS grupo,
@@ -113,66 +121,70 @@ function legacy_postgres_inventory_rows(): array
             WHERE b.desincorporado = 'N'
             ORDER BY b.cod_bien_mue
             LIMIT " . (SYSTEC_IMPORT_MAX_ROWS + 1)
-        );
-        $sourceRows = $statement->fetchAll();
+            );
+            $sourceRows = $statement->fetchAll();
 
-        if (count($sourceRows) > SYSTEC_IMPORT_MAX_ROWS) {
-            throw new CsvImportException('La fuente PostgreSQL supera el límite de 5000 bienes.');
-        }
-        if (!$sourceRows) {
-            throw new CsvImportException('La fuente PostgreSQL no contiene bienes no desincorporados para importar.');
-        }
-
-        $rows = array();
-        $seenIdentifiers = array();
-        foreach ($sourceRows as $sourceRow) {
-            $group = trim((string) $sourceRow['grupo']);
-            $subgroup = trim((string) $sourceRow['subgrupo']);
-            $section = trim((string) $sourceRow['seccion']);
-            $ident = trim((string) $sourceRow['ident']);
-            $sourceCode = trim((string) $sourceRow['cod_bien_mue']);
-            $expectedCode = $group . '-' . $subgroup . '-' . $section . '-' . $ident;
-
-            if (!preg_match('/^[0-9]$/', $group)
-                || !preg_match('/^[0-9]{4}$/', $subgroup)
-                || !preg_match('/^[0-9]{3}$/', $section)
-                || !preg_match('/^[0-9]{4}$/', $ident)
-                || $sourceCode !== $expectedCode) {
-                throw new CsvImportException('La fuente contiene un código de bien que no se puede normalizar con seguridad.');
+            if (count($sourceRows) > SYSTEC_IMPORT_MAX_ROWS) {
+                throw new CsvImportException('La fuente PostgreSQL supera el límite de 5000 bienes.');
+            }
+            if (!$sourceRows) {
+                throw new CsvImportException('La fuente PostgreSQL no contiene bienes no desincorporados para importar.');
             }
 
-            if (isset($seenIdentifiers[$ident])) {
-                throw new CsvImportException('La fuente contiene identificadores repetidos; se canceló la importación para evitar actualizar el bien equivocado.');
+            $seenIdentifiers = array();
+            foreach ($sourceRows as $sourceRow) {
+                $group = trim((string) $sourceRow['grupo']);
+                $subgroup = trim((string) $sourceRow['subgrupo']);
+                $section = trim((string) $sourceRow['seccion']);
+                $ident = trim((string) $sourceRow['ident']);
+                $sourceCode = trim((string) $sourceRow['cod_bien_mue']);
+                $expectedCode = $group . '-' . $subgroup . '-' . $section . '-' . $ident;
+
+                if (!preg_match('/^[0-9]$/', $group)
+                    || !preg_match('/^[0-9]{4}$/', $subgroup)
+                    || !preg_match('/^[0-9]{3}$/', $section)
+                    || !preg_match('/^[0-9]{4}$/', $ident)
+                    || $sourceCode !== $expectedCode) {
+                    throw new CsvImportException('La fuente contiene un código de bien que no se puede normalizar con seguridad.');
+                }
+
+                if (isset($seenIdentifiers[$ident])) {
+                    throw new CsvImportException('La fuente contiene identificadores repetidos; se canceló la importación para evitar actualizar el bien equivocado.');
+                }
+                $seenIdentifiers[$ident] = true;
+
+                $status = inventory_normalize_status((string) $sourceRow['estado']);
+                $description = trim((string) $sourceRow['denominacion']);
+                $description = inventory_append_description(
+                    $description,
+                    'CARACTERÍSTICAS',
+                    (string) $sourceRow['caracteristicas']
+                );
+                $description = inventory_append_description($description, 'MATERIAL', (string) $sourceRow['material']);
+                $description = inventory_append_description($description, 'COLOR', (string) $sourceRow['color']);
+
+                $rows[] = array(
+                    $group,
+                    $subgroup,
+                    $section,
+                    $ident,
+                    $description,
+                    trim((string) $sourceRow['marca']),
+                    trim((string) $sourceRow['modelo']),
+                    trim((string) $sourceRow['serial1']),
+                    trim((string) $sourceRow['material']),
+                    trim((string) $sourceRow['color']),
+                    $status,
+                );
             }
-            $seenIdentifiers[$ident] = true;
-
-            $status = inventory_normalize_status((string) $sourceRow['estado']);
-            $description = trim((string) $sourceRow['denominacion']);
-            $description = inventory_append_description(
-                $description,
-                'CARACTERÍSTICAS',
-                (string) $sourceRow['caracteristicas']
-            );
-            $description = inventory_append_description($description, 'MATERIAL', (string) $sourceRow['material']);
-            $description = inventory_append_description($description, 'COLOR', (string) $sourceRow['color']);
-
-            $rows[] = array(
-                $group,
-                $subgroup,
-                $section,
-                $ident,
-                $description,
-                trim((string) $sourceRow['marca']),
-                trim((string) $sourceRow['modelo']),
-                trim((string) $sourceRow['serial1']),
-                trim((string) $sourceRow['material']),
-                trim((string) $sourceRow['color']),
-                $status,
-            );
         }
 
+        $adscriptions = legacy_postgres_property_adscriptions($pdo, $propertyIdentifiers);
         $pdo->commit();
-        return $rows;
+        return array(
+            'rows' => $rows,
+            'adscriptions' => $adscriptions,
+        );
     } catch (CsvImportException $e) {
         if ($pdo instanceof PDO && $pdo->inTransaction()) {
             $pdo->rollBack();
@@ -185,6 +197,200 @@ function legacy_postgres_inventory_rows(): array
         error_log('Error de lectura de inventario PostgreSQL: ' . $e->getMessage());
         throw new CsvImportException('No fue posible consultar el inventario PostgreSQL en modo de solo lectura.');
     }
+}
+
+function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers, int $ttlSeconds = 300): array
+{
+    $identifiers = array();
+    foreach ($propertyIdentifiers as $identifier) {
+        $identifier = trim((string) $identifier);
+        if ($identifier !== '') {
+            $normalized = str_pad($identifier, 4, '0', STR_PAD_LEFT);
+            $identifiers[$normalized] = $normalized;
+        }
+    }
+    $identifiers = array_values($identifiers);
+    sort($identifiers, SORT_STRING);
+    if (!$identifiers) {
+        return array('adscriptions' => array(), 'cached_at' => time(), 'stale' => false);
+    }
+
+    $cacheDirectory = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
+    if (!is_dir($cacheDirectory) && !mkdir($cacheDirectory, 0750, true) && !is_dir($cacheDirectory)) {
+        error_log('No se pudo crear el directorio de cache de adscripciones.');
+        return legacy_postgres_inventory_snapshot($identifiers, false) + array(
+            'cached_at' => time(),
+            'stale' => false,
+        );
+    }
+
+    $cachePath = $cacheDirectory . DIRECTORY_SEPARATOR
+        . 'inventory-adscriptions-' . hash('sha256', implode("\n", $identifiers)) . '.json';
+    $lock = fopen($cachePath . '.lock', 'c');
+    if ($lock === false) {
+        error_log('No se pudo abrir el lock del cache de adscripciones.');
+        return legacy_postgres_inventory_snapshot($identifiers, false) + array(
+            'cached_at' => time(),
+            'stale' => false,
+        );
+    }
+
+    try {
+        if (!flock($lock, LOCK_EX)) {
+            throw new RuntimeException('No se pudo bloquear el cache de adscripciones.');
+        }
+        $cached = null;
+        if (is_file($cachePath)) {
+            $contents = file_get_contents($cachePath);
+            $decoded = $contents === false ? null : json_decode($contents, true);
+            if (is_array($decoded)
+                && isset($decoded['cached_at'], $decoded['adscriptions'])
+                && is_numeric($decoded['cached_at'])
+                && is_array($decoded['adscriptions'])) {
+                $cached = $decoded;
+                if (time() - (int) $cached['cached_at'] <= max(0, $ttlSeconds)) {
+                    return array(
+                        'adscriptions' => $cached['adscriptions'],
+                        'cached_at' => (int) $cached['cached_at'],
+                        'stale' => false,
+                    );
+                }
+            }
+        }
+
+        try {
+            $snapshot = legacy_postgres_inventory_snapshot($identifiers, false);
+            $snapshot['cached_at'] = time();
+            $snapshot['stale'] = false;
+            $encoded = json_encode(
+                $snapshot,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+            );
+            if ($encoded === false) {
+                throw new RuntimeException('No se pudo codificar el cache de adscripciones.');
+            }
+            $temporaryPath = tempnam($cacheDirectory, 'inventory-adscriptions-');
+            if ($temporaryPath === false
+                || file_put_contents($temporaryPath, $encoded, LOCK_EX) === false
+                || !rename($temporaryPath, $cachePath)) {
+                if (isset($temporaryPath) && is_file($temporaryPath)) {
+                    unlink($temporaryPath);
+                }
+                error_log('No se pudo guardar el cache de adscripciones.');
+            }
+            return $snapshot;
+        } catch (Throwable $e) {
+            if ($cached !== null) {
+                error_log('Se usará un cache de adscripciones vencido: ' . $e->getMessage());
+                return array(
+                    'adscriptions' => $cached['adscriptions'],
+                    'cached_at' => (int) $cached['cached_at'],
+                    'stale' => true,
+                );
+            }
+            throw $e;
+        }
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function legacy_postgres_property_adscriptions(PDO $pdo, array $propertyIdentifiers): array
+{
+    $identifiers = array();
+    foreach ($propertyIdentifiers as $identifier) {
+        if (is_string($identifier) || is_int($identifier)) {
+            $identifier = trim((string) $identifier);
+            if ($identifier !== '') {
+                $normalizedIdentifier = str_pad($identifier, 4, '0', STR_PAD_LEFT);
+                $identifiers[$normalizedIdentifier] = $normalizedIdentifier;
+            }
+        }
+    }
+
+    $adscriptions = array();
+    foreach (array_chunk(array_values($identifiers), 500) as $identifierBatch) {
+        $parameters = array();
+        $placeholders = array();
+        foreach ($identifierBatch as $index => $identifier) {
+            $placeholder = ':ident' . $index;
+            $placeholders[] = $placeholder;
+            $parameters[$placeholder] = $identifier;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT
+                b.num_bien AS ident,
+                b.cod_dependencia,
+                ref_dependency.denominacion_dep AS dependency_name,
+                b.cod_direccion,
+                ref_direction.denominacion_dir AS direction_name,
+                b.cod_departamento,
+                ref_department.denominacion_dep AS department_name
+             FROM public.bien015 b
+             LEFT JOIN public.bien001 ref_dependency
+                ON ref_dependency.cod_dependencia = b.cod_dependencia
+             LEFT JOIN public.bien005 ref_direction
+                ON ref_direction.cod_dependencia = b.cod_dependencia
+                AND ref_direction.cod_direccion = b.cod_direccion
+             LEFT JOIN public.bien006 ref_department
+                ON ref_department.cod_dependencia = b.cod_dependencia
+                AND ref_department.cod_direccion = b.cod_direccion
+                AND ref_department.cod_departamento = b.cod_departamento
+             WHERE LPAD(TRIM(b.num_bien), 4, \'0\') IN (' . implode(', ', $placeholders) . ')
+             ORDER BY b.num_bien'
+        );
+        foreach ($parameters as $placeholder => $value) {
+            $statement->bindValue($placeholder, $value, PDO::PARAM_STR);
+        }
+        $statement->execute();
+
+        foreach ($statement->fetchAll() as $sourceRow) {
+            $ident = trim((string) $sourceRow['ident']);
+            $normalizedIdent = str_pad($ident, 4, '0', STR_PAD_LEFT);
+            if (isset($adscriptions[$normalizedIdent])) {
+                throw new CsvImportException(
+                    'La fuente contiene identificadores repetidos; no se puede determinar la adscripción del bien.'
+                );
+            }
+            $adscriptions[$normalizedIdent] = inventory_adscription($sourceRow);
+        }
+    }
+
+    return $adscriptions;
+}
+
+function inventory_adscription(array $sourceRow): array
+{
+    $dependencyCode = trim((string) ($sourceRow['cod_dependencia'] ?? ''));
+    $directionCode = trim((string) ($sourceRow['cod_direccion'] ?? ''));
+    $departmentCode = trim((string) ($sourceRow['cod_departamento'] ?? ''));
+    $directionLabel = trim((string) ($sourceRow['direction_name'] ?? ''));
+    $label = trim((string) ($sourceRow['department_name'] ?? ''));
+
+    if ($label === '') {
+        $label = $directionLabel;
+    }
+    $dependencyLabel = trim((string) ($sourceRow['dependency_name'] ?? ''));
+    if ($label === '') {
+        $label = $dependencyLabel;
+    }
+
+    $key = implode('/', array($dependencyCode, $directionCode, $departmentCode));
+    if ($dependencyCode === '' && $directionCode === '' && $departmentCode === '' && $label !== '') {
+        $key = 'local:' . hash('sha256', mb_strtolower($label));
+    }
+    $directionKey = $dependencyCode !== '' && $directionCode !== ''
+        ? $dependencyCode . '/' . $directionCode
+        : '__unassigned_direction__';
+
+    return array(
+        'key' => $key,
+        'label' => $label,
+        'direction_key' => $directionKey,
+        'direction_label' => $directionLabel !== '' ? $directionLabel : 'Sin dirección asignada',
+    );
 }
 
 function inventory_report_rows(string $filename): array

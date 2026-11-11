@@ -9,6 +9,10 @@ $db = db();
 
 $properties = $db->index('properties', array(), '*', 'id ASC');
 $completedMaintenanceCount = $db->countRows('maintenances', array('status' => 'finalizado'));
+$canViewTickets = auth_has_role(array('admin', 'operador', 'tecnico'));
+$ticketCount = $canViewTickets
+    ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
+    : 0;
 $maintenanceCountsByProperty = $db->maintenanceCountsByProperty();
 $propertyCount = count($properties);
 $goodPropertyCount = 0;
@@ -25,10 +29,30 @@ foreach ($properties as $property) {
 }
 
 $canImportInventory = auth_has_role(array('admin', 'operador'));
+$maintenanceFeedback = isset($_SESSION['dashboard_maintenance_feedback'])
+    && is_array($_SESSION['dashboard_maintenance_feedback'])
+        ? $_SESSION['dashboard_maintenance_feedback']
+        : null;
+unset($_SESSION['dashboard_maintenance_feedback']);
+$maintenanceFormValues = isset($maintenanceFeedback['values']) && is_array($maintenanceFeedback['values'])
+    ? $maintenanceFeedback['values']
+    : array();
+$maintenanceFormPropertyId = isset($maintenanceFormValues['property_id'])
+    ? (int) $maintenanceFormValues['property_id']
+    : '';
+$maintenanceFormPropertyCode = '';
+foreach ($properties as $property) {
+    if ((int) $property['id'] === $maintenanceFormPropertyId) {
+        $maintenanceFormPropertyCode = property_code($property);
+        break;
+    }
+}
 $legacySyncAvailable = false;
 $legacySyncPendingCount = 0;
 $legacySyncSourceCount = 0;
+$legacySyncCheckedAt = date('d/m/Y H:i');
 $localPropertiesByIdent = array();
+$legacyAdscriptionsByIdent = array();
 
 foreach ($properties as $property) {
     $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
@@ -38,7 +62,12 @@ foreach ($properties as $property) {
 }
 
 try {
-    $legacyRows = legacy_postgres_inventory_rows();
+    $localPropertyIdentifiers = array_map(function ($property) {
+        return trim((string) $property['ident']);
+    }, $properties);
+    $legacySnapshot = legacy_postgres_inventory_snapshot($localPropertyIdentifiers);
+    $legacyRows = $legacySnapshot['rows'];
+    $legacyAdscriptionsByIdent = $legacySnapshot['adscriptions'];
     $legacySyncSourceCount = count($legacyRows);
     foreach ($legacyRows as $row) {
         $ident = str_pad(trim((string) $row[3]), 4, '0', STR_PAD_LEFT);
@@ -50,6 +79,27 @@ try {
 } catch (Throwable $e) {
     error_log('Dashboard no pudo verificar la sincronización con PostgreSQL legacy: ' . $e->getMessage());
 }
+
+$adscriptionsByPropertyId = array();
+$adscriptionOptions = array();
+foreach ($properties as $property) {
+    $propertyId = (int) $property['id'];
+    $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
+    $adscription = $legacyAdscriptionsByIdent[$ident] ?? null;
+    if (!is_array($adscription) || trim((string) ($adscription['label'] ?? '')) === '') {
+        $localAdscription = trim((string) ($property['adscription'] ?? ''));
+        $adscription = $localAdscription === ''
+            ? array('key' => '__unassigned__', 'label' => 'Sin adscripción')
+            : array(
+                'key' => 'local:' . hash('sha256', mb_strtolower($localAdscription)),
+                'label' => $localAdscription,
+            );
+    }
+
+    $adscriptionsByPropertyId[$propertyId] = $adscription;
+    $adscriptionOptions[$adscription['key']] = $adscription['label'];
+}
+asort($adscriptionOptions, SORT_NATURAL | SORT_FLAG_CASE);
 
 $legacySyncCardClass = $legacySyncAvailable
     ? ($legacySyncPendingCount === 0 ? 'success' : 'warning')
@@ -65,7 +115,15 @@ ob_start(); ?>
         <h2 class="">Dashboard</h2>
         <p class="">Bienvenido!</p>
 
-        <section class="row g-3 mb-4" aria-label="Indicadores del inventario">
+        <?php if ($maintenanceFeedback !== null) : ?>
+            <div class="alert alert-<?= e($maintenanceFeedback['type'] ?? 'info') ?> alert-dismissible fade show text-start"
+                 role="<?= ($maintenanceFeedback['type'] ?? '') === 'danger' ? 'alert' : 'status' ?>">
+                <?= e($maintenanceFeedback['message'] ?? '') ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+            </div>
+        <?php endif; ?>
+
+        <section class="row g-3 mb-4" aria-label="Indicadores del inventario y tickets">
             <div class="col-12 col-sm-6 col-xl">
                 <button type="button"
                         class="card h-100 w-100 border-start border-4 border-primary shadow-sm text-start text-body js-inventory-indicator"
@@ -126,6 +184,24 @@ ob_start(); ?>
                     </div>
                 </article>
             </div>
+            <?php if ($canViewTickets) : ?>
+                <div class="col-12 col-sm-6 col-xl">
+                    <article class="card h-100 border-start border-4 border-primary shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <span class="rounded-circle bg-primary-subtle text-primary p-3" aria-hidden="true">
+                                <i class="bi bi-ticket-detailed fs-4"></i>
+                            </span>
+                            <div>
+                                <p class="small text-muted mb-1">Tickets registrados</p>
+                                <p class="h3 mb-1"><?= e($ticketCount) ?></p>
+                                <a class="small fw-semibold" href="<?= e(url('tickets.php')) ?>">
+                                    Consultar tickets <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            <?php endif; ?>
             <div class="col-12 col-sm-6 col-xl">
                 <article class="card h-100 border-start border-4 border-<?= e($legacySyncCardClass) ?> shadow-sm">
                     <div class="card-body d-flex align-items-center gap-3">
@@ -136,17 +212,26 @@ ob_start(); ?>
                             <p class="small text-muted mb-1">Sincronización con legacy</p>
                             <?php if (!$legacySyncAvailable) : ?>
                                 <p class="h5 mb-1">No disponible</p>
-                                <p class="small text-muted mb-2">No se pudo verificar la conexión con PostgreSQL.</p>
-                            <?php elseif ($legacySyncPendingCount === 0) : ?>
-                                <p class="h5 mb-1">Sincronizada</p>
                                 <p class="small text-muted mb-2">
-                                    <?= e($legacySyncSourceCount) ?> bienes registrados; los estados locales se conservan.
+                                    No se pudo consultar PostgreSQL. Último intento: <?= e($legacySyncCheckedAt) ?>.
+                                    <a href="<?= e(url('dashboard.php')) ?>">Volver a comprobar</a>.
+                                </p>
+                            <?php elseif ($legacySyncPendingCount === 0) : ?>
+                                <p class="h5 mb-1">Sin faltantes por identificador</p>
+                                <p class="small text-muted mb-2">
+                                    Los <?= e($legacySyncSourceCount) ?> bienes del origen ya existen en SysTec.
+                                    Esta comprobación solo compara identificadores; los estados locales se conservan.
+                                    Verificado: <?= e($legacySyncCheckedAt) ?>.
                                 </p>
                             <?php else : ?>
-                                <p class="h5 mb-1">Pendiente</p>
+                                <p class="h5 mb-1">Faltan bienes en SysTec</p>
                                 <p class="small text-muted mb-2">
-                                    <?= e($legacySyncPendingCount) ?> bienes legacy aún no registrados en SysTec.
+                                    <?= e($legacySyncPendingCount) ?> identificadores del origen aún no están registrados.
+                                    Verificado: <?= e($legacySyncCheckedAt) ?>.
                                 </p>
+                            <?php endif; ?>
+                            <?php if ($legacySyncAvailable && $legacySyncPendingCount > 0 && !$canImportInventory) : ?>
+                                <p class="small text-muted mb-0">Solicita a un administrador u operador que importe los bienes pendientes.</p>
                             <?php endif; ?>
                             <?php if ($canImportInventory) : ?>
                                 <a class="small fw-semibold" href="<?= e(url('updates.php')) ?>">
@@ -181,6 +266,15 @@ ob_start(); ?>
                             <option value="REGULAR">Regular</option>
                             <option value="MALO">Malo</option>
                             <option value="MUY MALO">Muy malo</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label fw-semibold" for="filterAdscription">Adscripción / unidad operativa</label>
+                        <select class="form-select" id="filterAdscription">
+                            <option value="">Todas las unidades</option>
+                            <?php foreach ($adscriptionOptions as $key => $label) : ?>
+                                <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="col-12 col-md-4">
@@ -246,12 +340,17 @@ ob_start(); ?>
             <div class="modal-content text-start">
                 <form class="maintenance-modal-form" action="<?= e(url('maintenances/register.php')) ?>" method="POST">
                     <?= csrf_field() ?>
-                    <input type="hidden" name="property_id" id="maintenancePropertyId">
+                    <input type="hidden" name="property_id" id="maintenancePropertyId"
+                           value="<?= e($maintenanceFormPropertyId) ?>">
                     <input type="hidden" name="return_to" value="dashboard">
+                    <input type="hidden" name="return_category" value="">
+                    <input type="hidden" name="return_status" value="">
+                    <input type="hidden" name="return_adscription" value="">
+                    <input type="hidden" name="return_search" value="">
                     <div class="modal-header">
                         <div>
                             <h3 class="modal-title fs-5" id="registerMaintenanceModalTitle">Registrar mantenimiento</h3>
-                            <p class="small text-muted mb-0">Bien: <span id="maintenancePropertyCode"></span></p>
+                            <p class="small text-muted mb-0">Bien: <span id="maintenancePropertyCode"><?= e($maintenanceFormPropertyCode) ?></span></p>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
@@ -261,7 +360,7 @@ ob_start(); ?>
                             <select class="form-select" name="type" id="dashboardMaintenanceType" required>
                                 <option value="">Seleccione</option>
                                 <?php foreach ($db->getListMaintenanceType() as $key => $value) : ?>
-                                    <option value="<?= e($key) ?>"><?= e($value) ?></option>
+                                    <option value="<?= e($key) ?>"<?= ($maintenanceFormValues['type'] ?? '') === (string) $key ? ' selected' : '' ?>><?= e($value) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -270,31 +369,33 @@ ob_start(); ?>
                             <select class="form-select" name="technician" id="dashboardMaintenanceTechnician" required>
                                 <option value="">Seleccione</option>
                                 <?php foreach ($db->getListMaintenanceTechnician() as $key => $value) : ?>
-                                    <option value="<?= e($key) ?>"><?= e($value) ?></option>
+                                    <option value="<?= e($key) ?>"<?= ($maintenanceFormValues['technician'] ?? '') === (string) $key ? ' selected' : '' ?>><?= e($value) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="dashboardMaintenanceDate">Fecha de inicio</label>
                             <input class="form-control" type="datetime-local" name="date" id="dashboardMaintenanceDate"
-                                   value="<?= e(date('Y-m-d\TH:i')) ?>" required>
+                                   value="<?= e($maintenanceFormValues['date'] ?? date('Y-m-d\TH:i')) ?>" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="dashboardMaintenanceReason">Razón del mantenimiento</label>
-                            <input class="form-control" type="text" name="failure_reason" id="dashboardMaintenanceReason" required>
+                            <input class="form-control" type="text" name="failure_reason" id="dashboardMaintenanceReason"
+                                   value="<?= e($maintenanceFormValues['failure_reason'] ?? '') ?>" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="dashboardMaintenanceDescription">Descripción</label>
                             <textarea class="form-control" name="description" id="dashboardMaintenanceDescription"
-                                      rows="4" required></textarea>
+                                      rows="4" required><?= e($maintenanceFormValues['description'] ?? '') ?></textarea>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="dashboardMaintenanceNotes">Notas</label>
-                            <textarea class="form-control" name="notes" id="dashboardMaintenanceNotes" rows="3"></textarea>
+                            <textarea class="form-control" name="notes" id="dashboardMaintenanceNotes" rows="3"><?= e($maintenanceFormValues['notes'] ?? '') ?></textarea>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="dashboardNextMaintenanceDate">Siguiente mantenimiento</label>
-                            <input class="form-control" type="date" name="next_maintenance_date" id="dashboardNextMaintenanceDate">
+                            <input class="form-control" type="date" name="next_maintenance_date" id="dashboardNextMaintenanceDate"
+                                   value="<?= e($maintenanceFormValues['next_maintenance_date'] ?? '') ?>">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -313,8 +414,10 @@ ob_start(); ?>
         const dashboardParams = new URLSearchParams(window.location.search);
         const categoryFilter = document.getElementById('filterCategory');
         const statusFilter = document.getElementById('filterStatus');
+        const adscriptionFilter = document.getElementById('filterAdscription');
         categoryFilter.value = dashboardParams.get('category') ?? '';
         statusFilter.value = dashboardParams.get('status') ?? '';
+        adscriptionFilter.value = dashboardParams.get('adscription') ?? '';
 
         const table = new DataTable('#myTable', {
             search: {
@@ -348,6 +451,12 @@ ob_start(); ?>
                     label: `Estado: ${statusFilter.selectedOptions[0].textContent}`
                 });
             }
+            if (adscriptionFilter.value) {
+                activeFilters.push({
+                    key: 'adscription',
+                    label: `Adscripción: ${adscriptionFilter.selectedOptions[0].textContent}`
+                });
+            }
             if (table.search().trim()) {
                 activeFilters.push({
                     key: 'search',
@@ -376,6 +485,7 @@ ob_start(); ?>
 
             if (chip.dataset.filterKey === 'category') categoryFilter.value = '';
             if (chip.dataset.filterKey === 'status') statusFilter.value = '';
+            if (chip.dataset.filterKey === 'adscription') adscriptionFilter.value = '';
             if (chip.dataset.filterKey === 'search') table.search('');
 
             table.draw();
@@ -388,6 +498,7 @@ ob_start(); ?>
             const filters = {
                 category: categoryFilter.value,
                 status: statusFilter.value,
+                adscription: adscriptionFilter.value,
                 search: table.search().trim()
             };
 
@@ -406,7 +517,7 @@ ob_start(); ?>
             inventoryIndicators.forEach((indicator) => {
                 const status = indicator.dataset.filterStatus;
                 const isActive = status === ''
-                    ? !categoryFilter.value && !statusFilter.value && !table.search().trim()
+                    ? !categoryFilter.value && !statusFilter.value && !adscriptionFilter.value && !table.search().trim()
                     : statusFilter.value === status;
                 indicator.setAttribute('aria-pressed', String(isActive));
             });
@@ -421,16 +532,18 @@ ob_start(); ?>
             if (!row) return true;
 
             const categoryMatches = !categoryFilter.value || row.dataset.category === categoryFilter.value;
-            const rowStatus = row.cells[7].textContent.trim().toUpperCase();
+            const adscriptionMatches = !adscriptionFilter.value
+                || row.dataset.adscription === adscriptionFilter.value;
+            const rowStatus = row.dataset.status;
             const statusMatches = !statusFilter.value
                 || (statusFilter.value === '__attention__'
                     ? rowStatus === 'MALO' || rowStatus === 'MUY MALO'
                     : rowStatus === statusFilter.value);
 
-            return categoryMatches && statusMatches;
+            return categoryMatches && statusMatches && adscriptionMatches;
         });
 
-        [categoryFilter, statusFilter].forEach((filter) => {
+        [categoryFilter, statusFilter, adscriptionFilter].forEach((filter) => {
             filter.addEventListener('change', () => {
                 table.draw();
                 syncInventoryUrl();
@@ -444,6 +557,7 @@ ob_start(); ?>
                 if (status === '') {
                     categoryFilter.value = '';
                     statusFilter.value = '';
+                    adscriptionFilter.value = '';
                     table.search('');
                 } else {
                     statusFilter.value = (statusFilter.value === status) ? '' : status;
@@ -462,6 +576,7 @@ ob_start(); ?>
         document.getElementById('resetInventoryFilters').addEventListener('click', () => {
             categoryFilter.value = '';
             statusFilter.value = '';
+            adscriptionFilter.value = '';
             table.search('');
             table.draw();
             syncInventoryUrl();
@@ -470,9 +585,23 @@ ob_start(); ?>
 
         document.getElementById('registerMaintenanceModal').addEventListener('show.bs.modal', (event) => {
             const button = event.relatedTarget;
-            document.getElementById('maintenancePropertyId').value = button.dataset.propertyId;
-            document.getElementById('maintenancePropertyCode').textContent = button.dataset.propertyCode;
+            if (button) {
+                document.getElementById('maintenancePropertyId').value = button.dataset.propertyId;
+                document.getElementById('maintenancePropertyCode').textContent = button.dataset.propertyCode;
+            }
         });
+
+        const maintenanceForm = document.querySelector('.maintenance-modal-form');
+        maintenanceForm.addEventListener('submit', () => {
+            const params = new URLSearchParams(window.location.search);
+            ['category', 'status', 'adscription', 'search'].forEach((key) => {
+                maintenanceForm.elements[`return_${key}`].value = params.get(key) ?? '';
+            });
+        });
+
+        if (<?= js(($maintenanceFeedback['type'] ?? '') === 'danger') ?>) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('registerMaintenanceModal')).show();
+        }
 
         const historyModal = document.getElementById('propertyHistoryModal');
         if (historyModal) {

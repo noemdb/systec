@@ -1,4 +1,5 @@
 <div class="modal fade" id="personalTicketDetailsModal" tabindex="-1"
+     data-details-url="<?= e(url('personal/actions/details.php')) ?>"
      aria-labelledby="personalTicketDetailsTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable personal-ticket-modal-dialog">
         <div class="modal-content text-start">
@@ -11,6 +12,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
+                <p id="personalTicketDetailsFeedback" class="small text-body-secondary" role="status" aria-live="polite"></p>
                 <div class="row g-4">
                     <div class="col-12 col-xl-8">
                         <section class="mb-4" aria-labelledby="personalTicketDescriptionTitle">
@@ -26,7 +28,7 @@
                                 <h3 class="h6 mb-0" id="personalTicketHistoryTitle">Historial</h3>
                                 <span class="small text-body-secondary" id="personalTicketHistoryCount"></span>
                             </div>
-                            <div class="d-flex flex-column gap-3" id="personalTicketHistory"></div>
+                            <div class="d-flex flex-column gap-3" id="personalTicketHistory" aria-live="polite"></div>
                         </section>
                     </div>
                     <aside class="col-12 col-xl-4" aria-label="Datos del ticket">
@@ -75,23 +77,25 @@
 </div>
 <script nonce="<?= e(systec_csp_nonce()) ?>">
     const personalTicketDetailsModal = document.getElementById('personalTicketDetailsModal');
-    personalTicketDetailsModal.addEventListener('show.bs.modal', (event) => {
-        const ticket = JSON.parse(event.relatedTarget.dataset.ticket);
+    let personalTicketDetailsRequest = null;
+    const renderPersonalTicketDetails = (ticket) => {
         document.getElementById('personalTicketDetailsTitle').textContent = `Ticket #${ticket.id}`;
         document.getElementById('personalTicketDetailsSubtitle').textContent = ticket.title;
-        document.getElementById('personalTicketDetailsStatus').textContent = ticket.status;
-        document.getElementById('personalTicketProperty').textContent = ticket.property;
-        document.getElementById('personalTicketPropertyCode').textContent = ticket.property_code;
+        document.getElementById('personalTicketDetailsStatus').textContent = ticket.status_name || 'Sin estado';
+        document.getElementById('personalTicketProperty').textContent = ticket.property_description || 'Bien desconocido';
+        document.getElementById('personalTicketPropertyCode').textContent = ticket.property_ident || 'Sin código';
         document.getElementById('personalTicketPropertyStatus').textContent = ticket.property_status || 'No disponible';
         const categories = { informatica: 'Informática', redes: 'Redes y telecomunicaciones', otros: 'Otros bienes' };
-        document.getElementById('personalTicketPropertyCategory').textContent = categories[ticket.property_category] || 'Otros bienes';
-        document.getElementById('personalTicketStatusValue').textContent = ticket.status;
+        document.getElementById('personalTicketPropertyCategory').textContent =
+            categories[ticket.property_category] || 'Otros bienes';
+        document.getElementById('personalTicketStatusValue').textContent = ticket.status_name || 'Sin estado';
         document.getElementById('personalTicketCreatedAt').textContent = ticket.created_at || 'No disponible';
         document.getElementById('personalTicketUpdatedAt').textContent = ticket.updated_at || 'No disponible';
         document.getElementById('personalTicketClosedAt').textContent = ticket.closed_at || 'No cerrado';
         document.getElementById('personalTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('personalTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
         document.getElementById('personalTicketFollowupId').value = String(ticket.id);
+        document.getElementById('personalTicketDetailsFeedback').textContent = '';
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';
@@ -159,9 +163,52 @@
             }
             history.appendChild(article);
         });
+    };
+
+    personalTicketDetailsModal.addEventListener('show.bs.modal', async (event) => {
+        const ticketId = event.relatedTarget?.dataset.ticketId;
+        const feedback = document.getElementById('personalTicketDetailsFeedback');
+        const history = document.getElementById('personalTicketHistory');
+        if (!ticketId) {
+            feedback.className = 'small text-danger';
+            feedback.textContent = 'No se pudo identificar el ticket.';
+            return;
+        }
+
+        personalTicketDetailsRequest?.abort();
+        personalTicketDetailsRequest = new AbortController();
+        document.getElementById('personalTicketDetailsTitle').textContent = `Ticket #${ticketId}`;
+        document.getElementById('personalTicketDetailsStatus').textContent = 'Cargando…';
+        feedback.className = 'small text-body-secondary';
+        feedback.textContent = 'Cargando detalle e historial…';
+        history.replaceChildren();
+
+        try {
+            const endpoint = new URL(personalTicketDetailsModal.dataset.detailsUrl, window.location.href);
+            endpoint.searchParams.set('ticket_id', ticketId);
+            const response = await fetch(endpoint, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+                signal: personalTicketDetailsRequest.signal
+            });
+            let ticket;
+            try {
+                ticket = await response.json();
+            } catch (error) {
+                throw new Error('El servidor devolvió una respuesta inválida al cargar el detalle.');
+            }
+            if (!response.ok) throw new Error(ticket.error || 'No se pudo cargar el ticket.');
+            if (document.getElementById('personalTicketDetailsTitle').textContent !== `Ticket #${ticketId}`) return;
+            renderPersonalTicketDetails(ticket);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            feedback.className = 'small text-danger';
+            feedback.textContent = `${error.message} Cierra el detalle e inténtalo de nuevo.`;
+        }
     });
 
     personalTicketDetailsModal.addEventListener('hide.bs.modal', () => {
+        personalTicketDetailsRequest?.abort();
         if (personalTicketDetailsModal.contains(document.activeElement)) document.activeElement.blur();
     });
 </script>

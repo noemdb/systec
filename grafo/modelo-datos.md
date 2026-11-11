@@ -121,6 +121,8 @@ Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican 
 | `serial` | STRING | Sí | Texto libre | 321/617 vacíos |
 | `status` | STRING | Sí | `BUENO` 392, `MALO` 187, `REGULAR` 33, `MUY MALO` 5 | Trigger de catálogo; 2 `MUY BUENO` se mapearon a `BUENO` |
 
+`adscription` sigue vacío en SQLite; el dashboard lo resuelve en vivo desde las unidades organizativas legacy.
+
 ### 3.2 `maintenances` — mantenimiento
 
 | Columna | Tipo | Nulo | Dominio observado | Regla |

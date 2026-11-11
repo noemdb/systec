@@ -17,7 +17,7 @@
 | Fechas | Normalizadas a `YYYY-MM-DD HH:MM:SS`; ausencias como `NULL` | Formato consistente tras F2 |
 | Identificadores | `INTEGER PRIMARY KEY AUTOINCREMENT` | Sin UUID ni claves naturales |
 | Nombres | `snake_case`, plural (`properties`, `maintenances`, `users`) | Convención de facto |
-| Borrado | No hay borrado desde la app | Los datos se corrigen por SQL manual |
+| Borrado | Tickets con baja lógica; otros datos no se eliminan desde la app | El historial del ticket se conserva para trazabilidad |
 | Auditoría | No existe | Sin `created_at`, `updated_at`, `created_by` en datos |
 | Backups | Manuales en `storage/backups/` | Sin retención ni restore periódico probado |
 | Concurrencia | SQLite con conexiones por request y `busyTimeout(5000)` | Escrituras concurrentes pueden bloquear |
@@ -120,6 +120,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican normalizaciones, triggers e índices. El runner `bin/migrate.php` registra los archivos en `schema_migrations`.
 
+La migración `004_soft_delete_tickets.sql` agrega `tickets.deleted_at` e índice para ocultar tickets dados de baja sin borrar sus registros ni su historial. La migración `005_personal_ticket_lookup.sql` agrega un índice compuesto para la bandeja personal, filtrando tickets activos por creador y ordenando por actualización. Ambas se aplican con `php bin/migrate.php --backup=RUTA_A_BACKUP_VERIFICADO`.
+
 **Nota:** SQLite no aplica longitudes de `VARCHAR` ni tipos estrictos. `STRING` es aceptado por compatibilidad y se comporta como `TEXT`.
 
 ---
@@ -135,7 +137,7 @@ Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican 
 | `subgrupo` | STRING | Sí | `1`, `10` | Relleno a 4 al importar |
 | `seccion` | STRING | Sí | `4`, `102` | Relleno a 3 al importar y 4 al mostrar |
 | `ident` | STRING | Sí | `76`, `205` | Clave de búsqueda de importación |
-| `adscription` | STRING | Sí | vacío en 617/617 | Previsto para ubicación; sin uso |
+| `adscription` | STRING | Sí | vacío en 617/617 | No se persiste; el dashboard obtiene la unidad operativa en vivo desde PostgreSQL SIA |
 | `description` | STRING | Sí | `ARCHIVADOR, MATERIAL: FORMICA...` | Texto libre; se muestra sin escape |
 | `model` | STRING | Sí | `DP - SPLIT`, `PANASONIC` | Puede ser marca, modelo o combinación |
 | `color` | STRING | Sí | `BEIGE`, `NEGRO` | Texto libre |
@@ -143,6 +145,8 @@ Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican 
 | `status` | STRING | Sí | `BUENO`, `REGULAR`, `MALO`, `MUY MALO` | Trigger SQLite valida catálogo; dos `MUY BUENO` se mapearon a `BUENO` |
 
 **Índices:** PK y `idx_properties_ident`.
+
+El servicio `legacy_postgres_inventory_snapshot()` resuelve la adscripción sin modificar SQLite: enlaza `BIEN015.cod_dependencia`, `cod_direccion` y `cod_departamento` con `BIEN001`, `BIEN005` y `BIEN006`. El filtro usa el código jerárquico; la etiqueta visible es el nombre del departamento (con fallback a dirección y dependencia). El campo `properties.adscription` permanece disponible para una futura decisión de persistencia.
 
 ### 4.2 `maintenances` — mantenimiento
 
@@ -277,7 +281,7 @@ SELECT DISTINCT technician FROM maintenances;
 | D-04 | Técnico `ndomiguez` (typo) | ✅ 153 registros normalizados a `ndominguez` |
 | D-05 | Fechas en formatos mixtos | ✅ Normalizadas a formato ISO |
 | D-06 | Fechas futuras (2026) | ✅ No se encontraron fechas futuras |
-| D-07 | `adscription` nunca poblado | Poblar o eliminar del modelo |
+| D-07 | `adscription` vacío en SQLite | El dashboard resuelve la unidad operativa en vivo; decidir si se persiste |
 | D-08 | `time_taken` histórico no verificable | Se conservaron los valores y 15 nulos; no hay fechas para recalcular |
 | D-09 | `code` snapshot puede desactualizarse | Recalcular en lectura o sincronizar |
 | D-10 | 450 bienes sin mantenimiento | Validar si es esperado |

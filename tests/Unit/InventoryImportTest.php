@@ -40,4 +40,41 @@ class InventoryImportTest extends TestCase
             inventory_append_description('Computador, Material: plástico', 'MATERIAL', 'plástico')
         );
     }
+
+    public function testInventoryAdscriptionUsesDepartmentAndHierarchicalCodes(): void
+    {
+        self::assertSame(
+            array(
+                'key' => '0001/0002/00000003',
+                'label' => 'UNIDAD OPERATIVA',
+                'direction_key' => '0001/0002',
+                'direction_label' => 'DIRECCIÓN',
+            ),
+            inventory_adscription(array(
+                'cod_dependencia' => '0001',
+                'dependency_name' => 'DEPENDENCIA',
+                'cod_direccion' => '0002',
+                'direction_name' => 'DIRECCIÓN',
+                'cod_departamento' => '00000003',
+                'department_name' => 'UNIDAD OPERATIVA',
+            ))
+        );
+    }
+
+    public function testInventoryAdscriptionFallsBackToDirectionName(): void
+    {
+        self::assertSame(
+            array(
+                'key' => '0001/0002/',
+                'label' => 'DIRECCIÓN',
+                'direction_key' => '0001/0002',
+                'direction_label' => 'DIRECCIÓN',
+            ),
+            inventory_adscription(array(
+                'cod_dependencia' => '0001',
+                'direction_name' => 'DIRECCIÓN',
+                'cod_direccion' => '0002',
+            ))
+        );
+    }
 }

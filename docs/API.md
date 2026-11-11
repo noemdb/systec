@@ -55,17 +55,20 @@
 | 2 | POST | `/login.php` | `login.php` | Público + CSRF | Autentica y redirige | `302` |
 | 3 | POST | `/logout.php` | `logout.php` | Sesión + CSRF | Cierra sesión | `302` |
 | 4 | GET | `/index.php` o `/` | `index.php` | Sesión | Portada | HTML |
-| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja de tickets del usuario personal | HTML |
+| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja paginada; acepta `q`, `status`, `date_from`, `date_to` y `page` | HTML |
 | 4b | GET | `/personal/register.php` | `personal/register.php` | `personal` | Formulario de alta de ticket del ámbito personal | HTML |
-| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket del ámbito personal | `302` |
+| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket del ámbito personal o vuelve al formulario con errores | `302` / `303` |
 | 4d | GET | `/personal/detail.php?id={id}` | `personal/detail.php` | `personal` + propietario | Detalle y historial del ticket personal | HTML |
 | 4e | POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + CSRF | Agrega seguimiento a un ticket propio | `302` |
+| 4f | GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | Devuelve detalle e historial del ticket | JSON |
+| 4g | GET | `/personal/actions/properties.php` | `personal/actions/properties.php` | `personal` | Devuelve bienes y direcciones para el selector | JSON |
 | 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search` | HTML |
 | 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Avanza el estado de un bien | `302` |
 | 7 | GET | `/maintenances.php` | `maintenances.php` | Sesión | Lista, alta o edición según parámetros | HTML |
 | 8 | POST | `/maintenances/register.php` | `maintenances/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea mantenimiento | `302` |
 | 9 | POST | `/maintenances/update.php` | `maintenances/update.php` | `admin`, `operador`, `tecnico` + CSRF | Actualiza mantenimiento | `302` |
 | 10 | POST | `/maintenances/actions/status.php` | `maintenances/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y calcula horas | `302` |
+| 10a | POST | `/tickets/actions/delete.php` | `tickets/actions/delete.php` | `admin`, `operador` + CSRF | Oculta ticket y registra eliminación en su historial | `302` |
 | 11 | GET | `/historials.php` | `historials.php` | Sesión | Historial de un bien | HTML |
 | 12 | GET | `/report.php` | `report.php` | Sesión | Reporte de bienes dañados | HTML imprimible |
 | 13 | GET | `/batch.php` | `batch.php` | Sesión | Dos historiales en una página | HTML imprimible |
@@ -123,8 +126,15 @@
 | Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
 | `search` | string | No | Texto inicial para DataTables; se serializa con `js()` |
+| `category` | string | No | Categoría de bien: `informatica`, `redes` u `otros` |
+| `status` | string | No | Estado del bien o `__attention__` |
+| `adscription` | string | No | Código jerárquico `cod_dependencia/cod_direccion/cod_departamento`, `local:<sha256>` o `__unassigned__`; permite filtrar por unidad operativa |
 
-- **Efecto:** lee `properties` y, por cada bien, cuenta sus mantenimientos.
+- **Efecto:** lee `properties`, resuelve adscripciones con `legacy_postgres_inventory_snapshot()` en la transacción PostgreSQL de solo lectura, cuenta mantenimientos por bien y muestra el total de tickets a `admin`, `operador` y `tecnico`.
+- **Etiqueta de adscripción:** usa el nombre del departamento de `BIEN006`; si falta, el nombre de dirección (`BIEN005`) y luego el de dependencia (`BIEN001`). Los bienes sin asignación reciben el filtro `__unassigned__`.
+- **Disponibilidad:** si PostgreSQL no responde, usa `properties.adscription` local cuando exista; de lo contrario, muestra “Sin adscripción”.
+- **Alcance de la consulta:** busca en SIA todos los identificadores locales, incluso bienes desincorporados que permanecen en SysTec; la comprobación/importación legacy sigue limitada a `desincorporado = 'N'`.
+- **Permisos PostgreSQL:** el usuario de solo lectura requiere acceso a `BIEN015`, `BIEN001`, `BIEN005` y `BIEN006` para resolver la adscripción; la importación también usa `BIEN004`.
 - **Respuesta:** HTML con tabla, badges, conteo y acciones.
 - **Acciones por fila:**
   - **Mantenimiento:** enlace a `maintenances.php?modeCreate=true&property_id={id}`.
@@ -222,7 +232,46 @@
 - **Casos límite:** si el bien no existe o el ID no es entero, muestra “No se encontró el bien solicitado”.
 - **Uso:** imprimible desde el navegador; no genera PDF en servidor.
 
-### 3.6 Reportes
+### 3.6 Tickets
+
+#### `GET /personal/index.php`
+
+- **Auth:** rol `personal`.
+- **Filtros:** `q`, `status`, `category` (`informatica`, `redes`, `otros`), `date_from`, `date_to` y `adscription`.
+- **Paginación:** 25 resultados por página mediante `page`; las tarjetas de estado aplican el filtro correspondiente.
+- **Adscripción:** se resuelve desde el snapshot de SIA cacheado; si la fuente y el cache no están disponibles, el filtro falla cerrado y muestra un aviso.
+
+#### `GET /personal/actions/details.php?ticket_id={id}`
+
+- **Auth:** rol `personal`; solo devuelve tickets activos creados por la sesión.
+- **Efecto:** consulta bajo demanda el ticket, bien asociado y su historial.
+- **Respuesta:** JSON privado/no almacenable; `404` si el ticket no pertenece al usuario o ya no está disponible.
+
+#### `GET /personal/actions/properties.php`
+
+- **Auth:** rol `personal`.
+- **Efecto:** devuelve los bienes locales, dirección de dependencia y unidades de adscripción; la página carga las unidades en segundo plano y el selector solicita los bienes al abrirse.
+- **Cache:** las adscripciones de SIA se guardan por cinco minutos; si la fuente falla se informa si se está usando un cache vencido. Sin datos disponibles, devuelve `503`.
+
+#### `GET /tickets.php`
+
+- **Auth:** `admin`, `operador` o `tecnico`.
+- **Efecto:** muestra los tickets activos; los tickets con `deleted_at` dejan de aparecer.
+- **Acción Eliminar:** disponible para `admin` y `operador`; solicita confirmación en un modal.
+
+#### `POST /tickets/actions/delete.php`
+
+| Campo | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `csrf_token` | string | Sí | Token de sesión |
+| `ticket_id` | int | Sí | ID del ticket |
+
+- **Auth:** `admin` u `operador`.
+- **Efecto:** eliminación lógica transaccional, registra al actor en `ticket_histories` y conserva el historial previo.
+- **Respuesta:** `302` a `/tickets.php` con confirmación.
+- **Errores:** `403` rol no permitido; `404` ticket inexistente/eliminado; `419` CSRF; `422` ID inválido; `500` error de base de datos.
+
+### 3.7 Reportes
 
 #### `GET /report.php`
 
@@ -243,7 +292,7 @@
 - **Efecto:** renderiza dos historiales lado a lado.
 - **Casos límite:** si falta un parámetro o el bien no existe, muestra “Bien no encontrado”.
 
-### 3.7 Importación
+### 3.8 Importación
 
 #### `GET /imports.php` / `POST /imports.php`
 
@@ -275,7 +324,7 @@
 - **Límites de archivos:** 5 MB y 5000 bienes; los errores de datos por fila se reportan y omiten. Un XLS sin encabezados requeridos o con un código no válido se rechaza antes de iniciar la transacción. Un fallo no capturado durante el procesamiento revierte la operación.
 - **Errores:** `419` CSRF; `403` rol no permitido.
 
-### 3.8 Archivos estáticos y datos
+### 3.9 Archivos estáticos y datos
 
 | Ruta | Contenido | Acceso |
 |---|---|---|

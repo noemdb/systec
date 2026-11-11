@@ -25,7 +25,10 @@ if ($ticket_id === false || $ticket_id === null || $description === '') {
     exit('La nota del seguimiento es obligatoria.');
 }
 
-$ticket = $db->getFirstForId('tickets', $ticket_id);
+$ticket = $db->getFirstForConditions(
+    'tickets',
+    array(array('id', '=', (int) $ticket_id), array('deleted_at', 'IS', null))
+);
 if (!$ticket) {
     http_response_code(404);
     exit('Ticket no encontrado.');

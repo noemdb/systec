@@ -40,4 +40,45 @@ class TicketHistoryTest extends TestCase
             $db->close();
         }
     }
+
+    public function testSoftDeletingTicketPreservesHistoryAndHidesTicketFromActiveList(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            self::assertTrue($db->exec('ALTER TABLE tickets ADD COLUMN deleted_at DATETIME'));
+            $userId = $db->create('users', array(
+                'username' => 'operador',
+                'password_hash' => 'hash',
+                'role' => 'operador',
+            ));
+            $propertyId = $db->create('properties', array('ident' => '0002'));
+            $status = $db->getTicketStatusByCode('iniciado');
+            $ticketId = $db->create('tickets', array(
+                'property_id' => $propertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Falla',
+                'description' => 'No enciende',
+                'created_by' => $userId,
+            ));
+            $db->create('ticket_histories', array(
+                'ticket_id' => $ticketId,
+                'actor_user_id' => $userId,
+                'action_type' => 'created',
+                'description' => 'Ticket registrado.',
+            ));
+
+            self::assertTrue($db->softDeleteTicket($ticketId, $userId, '2099-11-11 12:00:00'));
+            self::assertFalse($db->softDeleteTicket($ticketId, $userId, '2099-11-11 12:01:00'));
+            self::assertSame(
+                array(),
+                $db->index('tickets', array(array('deleted_at', 'IS', null)))
+            );
+            self::assertSame(2, $db->countRows('ticket_histories', array('ticket_id' => $ticketId)));
+            $history = $db->ticketHistoryWithActors($ticketId);
+            self::assertSame('deleted', $history[1]['action_type']);
+        } finally {
+            $db->close();
+        }
+    }
 }

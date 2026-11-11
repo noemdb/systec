@@ -1,20 +1,17 @@
 <?php
 
-if (empty($property_id)) {
-    die("Error: El código es obligatorio. ir atrás para corregir.");
-}
-if (empty($type) || !array_key_exists($type, $db->getListMaintenanceType())) {
-    die("Error: El tipo es obligatorio. ir atrás para corregir.");
-}
-if (empty($technician) || !array_key_exists($technician, $db->getListMaintenanceTechnician())) {
-    die("Error: El técnico es obligatorio. ir atrás para corregir.");
-}
-if (empty($date)) {
-    die("Error: la fecha es obligatoria. ir atrás para corregir.");
-}
-if (empty($failure_reason)) {
-    die("Error: La Razón del mantenimiento es obligatoria. ir atrás para corregir.");
-}
-if (empty($description)) {
-    die("Error: La descripción es obligatorio. ir atrás para corregir.");
+$validationError = null;
+
+if ($property_id === false || $property_id === null || $property_id < 1) {
+    $validationError = 'Selecciona un bien válido.';
+} elseif ($type === '' || !array_key_exists($type, $db->getListMaintenanceType())) {
+    $validationError = 'Selecciona un tipo de mantenimiento válido.';
+} elseif ($technician === '' || !array_key_exists($technician, $db->getListMaintenanceTechnician())) {
+    $validationError = 'Selecciona un técnico válido.';
+} elseif ($date === '') {
+    $validationError = 'La fecha de inicio es obligatoria.';
+} elseif ($failure_reason === '') {
+    $validationError = 'La razón del mantenimiento es obligatoria.';
+} elseif ($description === '') {
+    $validationError = 'La descripción es obligatoria.';
 }

@@ -3,6 +3,7 @@ storage/*.db
 storage/*.db-*
 storage/*.csv
 storage/backups/
+storage/cache/
 storage/logs/
 storage/initial-admin-password.txt
 .env

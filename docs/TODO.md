@@ -104,7 +104,7 @@
 | P3-04 | Multi-institución | Solo si el sistema se comparte |
 | P3-05 | App móvil / PWA | Solo si la operación lo exige |
 | P3-06 | Dashboard de indicadores | Tendencias, cumplimiento, costos |
-| P3-07 | Eliminar `adscription` o poblarlo | Decisión de modelo |
+| P3-07 | Decidir persistencia de `adscription` | Dashboard ya resuelve la unidad operativa desde SIA en tiempo real; la columna SQLite permanece vacía |
 
 ## 4. Bloqueos de definición
 

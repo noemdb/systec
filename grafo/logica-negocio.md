@@ -140,6 +140,7 @@ Reglas observadas:
 - La identidad del bien para la búsqueda en SysTec es `ident` (columna 3 del formato normalizado); la fuente se cancela si contiene identificadores duplicados.
 - Si el bien no existe, se crea con los campos del CSV. `adscription` **nunca** se carga.
 - Si el bien existe, **solo se actualiza `status`**; el resto de los campos se ignora silenciosamente.
+- El dashboard resuelve en tiempo de consulta la unidad operativa desde `BIEN015` y los catálogos `BIEN001`, `BIEN005` y `BIEN006`; esta lectura no persiste `adscription` en SQLite.
 - `subgrupo` y `seccion` se rellenan con `str_pad` a 4 y 3 dígitos respectivamente al insertar.
 - En el XLS, `CODIGO` debe tener cuatro segmentos numéricos; `MUY BUENO` se normaliza como `BUENO`. `MATERIAL` y `COLOR` se preservan en la descripción; `VALOR INCORP.` no se almacena porque no existe un campo equivalente.
 - Desde PostgreSQL también se incorpora `caracteristicas` en la descripción y se lee el estado desde el catálogo `BIEN004`; para bienes ya existentes se conserva la regla de actualizar solo el estado.

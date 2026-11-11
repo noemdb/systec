@@ -12,24 +12,46 @@ $title = isset($_POST['title']) ? trim((string) $_POST['title']) : '';
 $description = isset($_POST['description']) ? trim((string) $_POST['description']) : '';
 $observation = isset($_POST['observation']) ? trim((string) $_POST['observation']) : '';
 
-if ($property_id === false || $property_id === null || $title === '' || $description === '') {
-    http_response_code(422);
-    exit('Los datos del ticket son incompletos.');
+$returnFormError = function (string $message) use ($property_id, $title, $description, $observation): void {
+    $_SESSION['personal_ticket_form'] = array(
+        'error' => $message,
+        'values' => array(
+            'property_id' => $property_id === false || $property_id === null ? '' : (string) $property_id,
+            'title' => $title,
+            'description' => $description,
+            'observation' => $observation,
+        ),
+    );
+    header('Location: ' . url('personal/index.php'), true, 303);
+    exit();
+};
+
+if ($property_id === false || $property_id === null || $property_id < 1 || $title === '' || $description === '') {
+    $returnFormError('Completa el título, la descripción y selecciona un bien.');
+}
+if (mb_strlen($title, 'UTF-8') > 255
+    || mb_strlen($description, 'UTF-8') > 5000
+    || mb_strlen($observation, 'UTF-8') > 5000) {
+    $returnFormError('Revisa la longitud de los campos: el título admite 255 caracteres y las descripciones hasta 5000.');
 }
 
 $property = $db->getFirstForId('properties', $property_id);
 if (!$property) {
-    http_response_code(422);
-    exit('El bien seleccionado no existe.');
+    $returnFormError('El bien seleccionado ya no existe. Selecciona otro bien.');
 }
 
 $initialStatus = $db->getTicketStatusByCode('iniciado');
 if (!$initialStatus) {
-    http_response_code(500);
-    exit('No existe el estado inicial del ticket.');
+    $returnFormError('No se puede registrar el ticket porque no está disponible el estado inicial.');
 }
 
+$transactionStarted = false;
 try {
+    if (!$db->exec('BEGIN IMMEDIATE')) {
+        throw new RuntimeException('No se pudo iniciar la transacción: ' . $db->lastErrorMsg());
+    }
+    $transactionStarted = true;
+    $createdAt = date('Y-m-d H:i:s');
     $ticketId = $db->create('tickets', array(
         'property_id' => $property_id,
         'status_id' => (int) $initialStatus['id'],
@@ -38,8 +60,8 @@ try {
         'observation' => $observation !== '' ? $observation : null,
         'created_by' => (int) $user['id'],
         'assigned_to' => null,
-        'created_at' => date('Y-m-d H:i:s'),
-        'updated_at' => date('Y-m-d H:i:s'),
+        'created_at' => $createdAt,
+        'updated_at' => $createdAt,
         'closed_at' => null,
     ));
 
@@ -51,13 +73,19 @@ try {
         'observation' => $observation !== '' ? $observation : null,
         'from_status_id' => null,
         'to_status_id' => (int) $initialStatus['id'],
-        'created_at' => date('Y-m-d H:i:s'),
+        'created_at' => $createdAt,
     ));
 
+    if (!$db->exec('COMMIT')) {
+        throw new RuntimeException('No se pudo confirmar la transacción: ' . $db->lastErrorMsg());
+    }
+    $transactionStarted = false;
     header('Location: ' . url('personal/detail.php?id=' . (int) $ticketId));
     exit();
 } catch (Throwable $e) {
+    if ($transactionStarted) {
+        $db->exec('ROLLBACK');
+    }
     error_log('Error creando ticket personal: ' . $e->getMessage());
-    http_response_code(500);
-    exit('No se pudo registrar el ticket.');
+    $returnFormError('No se pudo registrar el ticket. Tus datos se conservaron; intenta nuevamente.');
 }

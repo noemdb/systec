@@ -22,7 +22,10 @@ if ($id === false || $id === null) {
     exit('Ticket no encontrado.');
 }
 
-$ticket = $db->getFirstForId('tickets', $id);
+$ticket = $db->getFirstForConditions(
+    'tickets',
+    array(array('id', '=', (int) $id), array('deleted_at', 'IS', null))
+);
 if (!$ticket) {
     http_response_code(404);
     exit('Ticket no encontrado.');
