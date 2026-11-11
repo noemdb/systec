@@ -69,6 +69,17 @@ body {
     padding: .5rem .75rem !important;
 }
 
+.app-toast-container {
+    z-index: 1090;
+    width: min(28rem, 100vw);
+    pointer-events: none;
+}
+
+.app-toast-container .app-toast {
+    width: 100%;
+    pointer-events: auto;
+}
+
 .app-main .container,
 .app-main .container-fluid,
 .app-main .row,
@@ -432,6 +443,83 @@ table.table.table-striped.table-sm,
 
 .property-picker-option {
     overflow-wrap: anywhere;
+}
+
+.ticket-register-modal .modal-content > form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.personal-ticket-wizard-progress {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .5rem;
+}
+
+.personal-ticket-wizard-progress li {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    color: var(--bs-secondary-color);
+    font-size: .8125rem;
+    line-height: 1.2;
+}
+
+.personal-ticket-wizard-progress li.is-active {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
+
+.personal-ticket-wizard-progress li.is-complete {
+    color: var(--bs-success);
+}
+
+.personal-ticket-wizard-number {
+    display: inline-grid;
+    flex: 0 0 1.75rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 50%;
+    background: var(--bs-body-bg);
+    font-size: .875rem;
+    font-weight: 600;
+}
+
+.personal-ticket-wizard-progress li.is-active .personal-ticket-wizard-number,
+.personal-ticket-wizard-progress li.is-complete .personal-ticket-wizard-number {
+    border-color: transparent;
+    color: #fff;
+}
+
+.personal-ticket-wizard-progress li.is-active .personal-ticket-wizard-number {
+    background: var(--bs-primary);
+}
+
+.personal-ticket-wizard-progress li.is-complete .personal-ticket-wizard-number {
+    background: var(--bs-success);
+}
+
+.ticket-register-modal .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.personal-ticket-wizard-summary dd {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 575.98px) {
+    .personal-ticket-wizard-progress li {
+        align-items: flex-start;
+        flex-direction: column;
+    }
 }
 
 @media (min-width: 768px) {

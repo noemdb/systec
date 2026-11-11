@@ -67,7 +67,7 @@
                                     <dt class="col-5">Estado del bien</dt>
                                     <dd class="col-7 text-end" id="personalTicketPropertyStatus"></dd>
                                     <dt class="col-5">Categoría</dt>
-                                    <dd class="col-7 text-end" id="personalTicketPropertyCategory"></dd>
+                                    <dd class="col-7 text-end" id="personalTicketDetailsPropertyCategory"></dd>
                                     <dt class="col-5">Estado del ticket</dt>
                                     <dd class="col-7 text-end" id="personalTicketStatusValue"></dd>
                                     <dt class="col-5">Creado</dt>
@@ -109,7 +109,7 @@
         document.getElementById('personalTicketPropertyCode').textContent = ticket.property_ident || 'Sin código';
         document.getElementById('personalTicketPropertyStatus').textContent = ticket.property_status || 'No disponible';
         const categories = { informatica: 'Informática', redes: 'Redes y telecomunicaciones', otros: 'Otros bienes' };
-        document.getElementById('personalTicketPropertyCategory').textContent =
+        document.getElementById('personalTicketDetailsPropertyCategory').textContent =
             categories[ticket.property_category] || 'Otros bienes';
         document.getElementById('personalTicketStatusValue').textContent = ticket.status_name || 'Sin estado';
         document.getElementById('personalTicketCreatedAt').textContent = ticket.created_at || 'No disponible';

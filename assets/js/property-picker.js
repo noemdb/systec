@@ -29,13 +29,14 @@
 
         const filterOptions = () => {
             const query = normalize(search.value);
+            const selectedCategory = normalize(categoryFilter.value);
             let matches = 0;
 
             options.forEach((option) => {
                 const searchMatches = !query
                     || normalizedSearchText.get(option).includes(query);
-                const categoryMatches = !categoryFilter.value
-                    || option.dataset.category === categoryFilter.value;
+                const categoryMatches = !selectedCategory
+                    || normalize(option.dataset.category) === selectedCategory;
                 const directionMatches = !directionFilter || !directionFilter.value
                     || option.dataset.direction === directionFilter.value;
                 const match = searchMatches && categoryMatches && directionMatches;
@@ -74,6 +75,7 @@
             global.clearTimeout(searchTimer);
             searchTimer = global.setTimeout(filterOptions, 120);
         });
+        categoryFilter.addEventListener('input', filterOptions);
         categoryFilter.addEventListener('change', filterOptions);
         directionFilter?.addEventListener('change', filterOptions);
         picker.addEventListener('change', (event) => {

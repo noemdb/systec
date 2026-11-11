@@ -30,6 +30,7 @@ if (auth_check() && auth_has_role(array('personal')) && !auth_is_personal_area()
 <body class="d-flex text-center shadow-none">
 
     <?php include(__DIR__ . '/script.php'); ?>
+    <?php include(__DIR__ . '/toasts.php'); ?>
 
     <div class="app-shell d-flex w-100 mx-auto flex-column">
 

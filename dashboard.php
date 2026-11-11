@@ -34,6 +34,20 @@ $maintenanceFeedback = isset($_SESSION['dashboard_maintenance_feedback'])
         ? $_SESSION['dashboard_maintenance_feedback']
         : null;
 unset($_SESSION['dashboard_maintenance_feedback']);
+$maintenanceFeedbackType = isset($maintenanceFeedback['type']) && is_string($maintenanceFeedback['type'])
+    ? $maintenanceFeedback['type']
+    : 'info';
+if (!in_array($maintenanceFeedbackType, array('success', 'info', 'warning', 'danger'), true)) {
+    $maintenanceFeedbackType = 'info';
+}
+$notifications = $maintenanceFeedback !== null
+    ? array(toast_notification(
+        $maintenanceFeedbackType,
+        isset($maintenanceFeedback['message']) && is_string($maintenanceFeedback['message'])
+            ? $maintenanceFeedback['message']
+            : ''
+    ))
+    : array();
 $maintenanceFormValues = isset($maintenanceFeedback['values']) && is_array($maintenanceFeedback['values'])
     ? $maintenanceFeedback['values']
     : array();
@@ -114,14 +128,6 @@ ob_start(); ?>
 
         <h2 class="">Dashboard</h2>
         <p class="">Bienvenido!</p>
-
-        <?php if ($maintenanceFeedback !== null) : ?>
-            <div class="alert alert-<?= e($maintenanceFeedback['type'] ?? 'info') ?> alert-dismissible fade show text-start"
-                 role="<?= ($maintenanceFeedback['type'] ?? '') === 'danger' ? 'alert' : 'status' ?>">
-                <?= e($maintenanceFeedback['message'] ?? '') ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-            </div>
-        <?php endif; ?>
 
         <section class="row g-3 mb-4" aria-label="Indicadores del inventario y tickets">
             <div class="col-12 col-sm-6 col-xl">

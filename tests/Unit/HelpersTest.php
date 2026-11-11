@@ -11,6 +11,23 @@ class HelpersTest extends TestCase
         self::assertSame('&lt;script&gt;&quot;x&quot;&lt;/script&gt;', e('<script>"x"</script>'));
     }
 
+    public function testToastNotificationSupportsAllTypes(): void
+    {
+        foreach (array('success', 'info', 'warning', 'danger') as $type) {
+            self::assertSame(
+                array('type' => $type, 'message' => 'Aviso'),
+                toast_notification($type, 'Aviso')
+            );
+        }
+    }
+
+    public function testToastNotificationRejectsUnsupportedType(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        toast_notification('unknown', 'Aviso');
+    }
+
     public function testMaintenanceStatusTransitionRules(): void
     {
         self::assertTrue(maintenance_transition_allowed(' iniciado ', 'revision'));

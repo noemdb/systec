@@ -21,6 +21,16 @@ function js($value): string
     );
 }
 
+/** Crea una notificación toast para el componente compartido. */
+function toast_notification(string $type, string $message): array
+{
+    if (!in_array($type, array('success', 'info', 'warning', 'danger'), true)) {
+        throw new InvalidArgumentException('Tipo de notificación toast no admitido.');
+    }
+
+    return array('type' => $type, 'message' => $message);
+}
+
 /** Badges de tablas en pill redondeado sutil */
 function sat_badge(string $classKey, string $texto): string
 {

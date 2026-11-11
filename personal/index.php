@@ -5,6 +5,9 @@ require_personal_scope();
 
 $followupSaved = !empty($_SESSION['personal_ticket_followup_saved']);
 unset($_SESSION['personal_ticket_followup_saved']);
+$notifications = $followupSaved
+    ? array(toast_notification('success', 'El seguimiento se registró correctamente.'))
+    : array();
 
 $db = db();
 $user = auth_user();
@@ -165,18 +168,10 @@ ob_start();
             <h1 class="h3 mb-1">Mi área de tickets</h1>
             <p class="text-muted mb-0">Seguimiento y registro de incidencias del personal.</p>
         </div>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registerPersonalTicketModal">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Nuevo ticket
         </button>
     </div>
-
-    <?php if ($followupSaved) : ?>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2" role="status">
-            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
-            <span>El seguimiento se registró correctamente.</span>
-            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-        </div>
-    <?php endif; ?>
 
     <section class="row g-3 mb-4" aria-label="Indicadores del área personal">
         <div class="col-6 col-md-4 col-xl">
@@ -342,7 +337,7 @@ ob_start();
                     <?php else : ?>
                         <h3 class="h6 mb-1">Aún no tienes tickets</h3>
                         <p class="text-body-secondary mb-3">Cuando registres una incidencia, podrás seguir su estado desde aquí.</p>
-                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#registerPersonalTicketModal">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
                             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Registrar incidencia
                         </button>
                     <?php endif; ?>
@@ -461,111 +456,17 @@ ob_start();
 <?php include __DIR__ . '/../include/personal_ticket_details_modal.php'; ?>
 <?php include __DIR__ . '/../include/personal_ticket_followup_modal.php'; ?>
 
-<div class="modal fade" id="registerPersonalTicketModal" tabindex="-1"
-     data-properties-url="<?= e(url('personal/actions/properties.php')) ?>"
-     data-selected-property-id="<?= e($selectedPropertyId) ?>"
-     data-open-after-redirect="<?= $formError !== '' ? 'true' : 'false' ?>"
-     aria-labelledby="registerPersonalTicketTitle" aria-describedby="registerPersonalTicketHelp" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content text-start">
-            <form method="post" action="<?= e(url('personal/actions/register.php')) ?>">
-                <?= csrf_field() ?>
-                <div class="modal-header">
-                    <div>
-                        <h2 class="modal-title fs-5" id="registerPersonalTicketTitle">Registrar ticket</h2>
-                        <p class="small text-body-secondary mb-0" id="registerPersonalTicketHelp">Describe la incidencia y selecciona el bien afectado.</p>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <?php if ($formError !== '') : ?>
-                        <div class="alert alert-danger" role="alert"><?= e($formError) ?></div>
-                    <?php endif; ?>
-                    <section class="mb-4 property-picker" aria-labelledby="personalTicketPropertyLabel">
-                        <div class="d-flex flex-column flex-md-row justify-content-between gap-1 mb-3">
-                            <div>
-                                <h3 class="h6 mb-1" id="personalTicketPropertyLabel">
-                                    Bien asociado <span class="text-danger" aria-hidden="true">*</span>
-                                </h3>
-                                <p class="form-text mb-0">Filtra el inventario y selecciona el bien donde ocurre la incidencia.</p>
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-12 col-md-6">
-                                <label for="personalTicketPropertyDirection" class="form-label fw-semibold small">Dirección de dependencia</label>
-                                <select id="personalTicketPropertyDirection" class="form-select form-select-sm"
-                                        data-property-picker-direction>
-                                    <option value="">Todas las direcciones</option>
-                                </select>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="personalTicketPropertyCategory" class="form-label fw-semibold small">Categoría del bien</label>
-                                <select id="personalTicketPropertyCategory" class="form-select form-select-sm"
-                                        data-property-picker-category>
-                                    <option value="">Todas las categorías</option>
-                                    <option value="informatica">Informática</option>
-                                    <option value="redes">Redes y telecomunicaciones</option>
-                                    <option value="otros">Otros bienes</option>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label for="personalTicketPropertySearch" class="form-label fw-semibold small">Buscar bien por código o descripción</label>
-                                <input type="search" class="form-control form-control-sm"
-                                       id="personalTicketPropertySearch" data-property-picker-search="personalTicketPropertyId"
-                                       placeholder="Ej.: 2-0101, laptop, impresora" autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="form-text mb-2" id="personalTicketPropertyMatches" role="status" aria-live="polite" aria-atomic="true">
-                            Los bienes se cargarán al abrir este selector.
-                        </div>
-                        <div id="personalTicketPropertySourceNotice" class="small mb-2" role="status" aria-live="polite"></div>
-                        <div class="alert alert-info py-2 d-none" id="personalTicketPropertySelection" role="status" aria-live="polite">
-                            <span id="personalTicketPropertySelectionText"></span>
-                            <button type="button" class="btn btn-sm btn-link p-0 ms-2" id="personalTicketPropertyClear">Cambiar bien</button>
-                        </div>
-
-                        <fieldset class="border-0 p-0 m-0">
-                            <div class="list-group property-picker-results" id="personalTicketPropertyId"
-                                 role="radiogroup" aria-labelledby="personalTicketPropertyLabel"
-                                 data-property-picker data-search-input="personalTicketPropertySearch"
-                                 data-result-count="personalTicketPropertyMatches"
-                                 data-category-filter="personalTicketPropertyCategory"
-                                 data-direction-filter="personalTicketPropertyDirection"
-                                 data-preserve-selection
-                                 data-validation-message="personalTicketPropertyError">
-                            </div>
-                            <div class="invalid-feedback" id="personalTicketPropertyError" role="alert">
-                                Selecciona un bien de la lista para registrar el ticket.
-                            </div>
-                        </fieldset>
-                    </section>
-                    <div class="mb-3">
-                        <label for="personalTicketTitle" class="form-label fw-semibold">Título</label>
-                        <input type="text" class="form-control" id="personalTicketTitle" name="title"
-                               maxlength="255" value="<?= e((string) ($formValues['title'] ?? '')) ?>" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="personalTicketDescription" class="form-label fw-semibold">Descripción</label>
-                        <textarea class="form-control" id="personalTicketDescription" name="description" rows="4"
-                                  maxlength="5000" required><?= e((string) ($formValues['description'] ?? '')) ?></textarea>
-                    </div>
-                    <div>
-                        <label for="personalTicketObservation" class="form-label fw-semibold">Observación <span class="text-body-secondary fw-normal">(opcional)</span></label>
-                        <textarea class="form-control" id="personalTicketObservation" name="observation" rows="3"
-                                  maxlength="5000"><?= e((string) ($formValues['observation'] ?? '')) ?></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Registrar ticket
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<script src="<?= e(url('assets/js/property-picker.js')) ?>"></script>
+<?php
+$ticketRegisterOptions = array(
+    'properties_url' => 'personal/actions/properties.php',
+    'form_action' => 'personal/actions/register.php',
+    'selected_property_id' => $selectedPropertyId,
+    'error' => $formError,
+    'values' => $formValues,
+);
+include __DIR__ . '/../include/ticket_register_modal.php';
+unset($ticketRegisterOptions);
+?>
 <script nonce="<?= e(systec_csp_nonce()) ?>">
     const filterAdscription = document.getElementById('filterAdscription');
     const filterAdscriptionStatus = document.getElementById('filterAdscriptionStatus');
@@ -625,157 +526,6 @@ ob_start();
         });
     }
 
-    const registerPersonalTicketModal = document.getElementById('registerPersonalTicketModal');
-    const propertyPicker = document.getElementById('personalTicketPropertyId');
-    const propertyForm = propertyPicker.closest('form');
-    const propertySearch = document.getElementById('personalTicketPropertySearch');
-    const propertyDirection = document.getElementById('personalTicketPropertyDirection');
-    const propertyMatches = document.getElementById('personalTicketPropertyMatches');
-    const propertySourceNotice = document.getElementById('personalTicketPropertySourceNotice');
-    const propertySelection = document.getElementById('personalTicketPropertySelection');
-    const propertySelectionText = document.getElementById('personalTicketPropertySelectionText');
-    const propertyError = document.getElementById('personalTicketPropertyError');
-    let propertyLoadPromise = null;
-    let propertyOptionsLoaded = false;
-
-    const showPropertyLoadError = (message) => {
-        propertySourceNotice.className = 'small text-danger mb-2';
-        propertySourceNotice.textContent = message;
-        propertyMatches.textContent = '';
-    };
-
-    const updatePropertySelection = () => {
-        const selected = propertyPicker.querySelector('input[type="radio"]:checked');
-        if (!selected) {
-            propertySelection.classList.add('d-none');
-            propertySelectionText.textContent = '';
-            return;
-        }
-        const option = selected.closest('[data-property-picker-option]');
-        const code = option.querySelector('[data-property-code]').textContent;
-        const description = option.querySelector('[data-property-description]').textContent;
-        const direction = option.querySelector('[data-property-direction-label]').textContent;
-        const hiddenByFilters = option.classList.contains('d-none');
-        propertySelectionText.textContent = `Bien seleccionado: ${code} — ${description}. Dirección: ${direction}.${hiddenByFilters ? ' No coincide con los filtros actuales.' : ''}`;
-        propertySelection.classList.remove('d-none');
-    };
-
-    const loadPropertyOptions = () => {
-        if (propertyOptionsLoaded) return Promise.resolve();
-        if (propertyLoadPromise) return propertyLoadPromise;
-
-        propertyMatches.textContent = 'Cargando bienes y direcciones…';
-        propertyLoadPromise = fetch(registerPersonalTicketModal.dataset.propertiesUrl, {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' }
-        }).then(async (response) => {
-            let data;
-            try {
-                data = await response.json();
-            } catch (error) {
-                throw new Error('El servidor devolvió una respuesta inválida al cargar los bienes.');
-            }
-            if (!response.ok) throw new Error(data.error || 'No se pudo cargar el inventario.');
-
-            propertyPicker.replaceChildren();
-            propertyDirection.replaceChildren(new Option('Todas las direcciones', ''));
-            Object.entries(data.directions).forEach(([key, label]) => {
-                propertyDirection.add(new Option(label, key));
-            });
-
-            data.properties.forEach((property) => {
-                const option = document.createElement('label');
-                option.className = 'list-group-item list-group-item-action d-flex align-items-start gap-2 property-picker-option';
-                option.dataset.propertyPickerOption = '';
-                option.dataset.category = property.category;
-                option.dataset.direction = property.direction_key;
-                option.dataset.search = [
-                    property.code,
-                    property.description,
-                    property.status,
-                    property.direction_label,
-                    property.id
-                ].join(' ');
-
-                const input = document.createElement('input');
-                input.className = 'form-check-input flex-shrink-0 mt-1';
-                input.type = 'radio';
-                input.name = 'property_id';
-                input.value = String(property.id);
-                input.required = true;
-                input.checked = String(property.id) === registerPersonalTicketModal.dataset.selectedPropertyId;
-
-                const content = document.createElement('span');
-                content.className = 'd-flex flex-column text-break';
-                const code = document.createElement('span');
-                code.className = 'fw-semibold';
-                code.dataset.propertyCode = '';
-                code.textContent = property.code;
-                const description = document.createElement('span');
-                description.dataset.propertyDescription = '';
-                description.textContent = property.description;
-                const direction = document.createElement('span');
-                direction.className = 'small text-body-secondary';
-                direction.dataset.propertyDirectionLabel = '';
-                direction.textContent = `Dirección: ${property.direction_label}`;
-                const status = document.createElement('span');
-                status.className = 'small text-body-secondary';
-                status.textContent = `Estado: ${property.status}`;
-                content.append(code, description, direction, status);
-                option.append(input, content);
-                propertyPicker.appendChild(option);
-            });
-
-            if (data.stale) {
-                propertySourceNotice.className = 'small text-warning-emphasis mb-2';
-                propertySourceNotice.textContent = `La fuente de direcciones no responde; se muestran datos guardados al ${new Intl.DateTimeFormat('es-VE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.cached_at))}.`;
-            } else {
-                propertySourceNotice.className = 'small text-body-secondary mb-2';
-                propertySourceNotice.textContent = `Direcciones verificadas: ${new Intl.DateTimeFormat('es-VE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.cached_at))}.`;
-            }
-            window.Systec.initPropertyPicker(propertyPicker);
-            propertyPicker.addEventListener('change', updatePropertySelection);
-            propertySearch.addEventListener('input', updatePropertySelection);
-            propertyDirection.addEventListener('change', updatePropertySelection);
-            document.getElementById('personalTicketPropertyCategory').addEventListener('change', updatePropertySelection);
-            document.getElementById('personalTicketPropertyClear').addEventListener('click', () => {
-                const selected = propertyPicker.querySelector('input[type="radio"]:checked');
-                if (selected) {
-                    selected.checked = false;
-                    selected.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                propertyError.classList.remove('d-block');
-                updatePropertySelection();
-                propertySearch.focus();
-            });
-            propertyOptionsLoaded = true;
-            updatePropertySelection();
-            if (registerPersonalTicketModal.classList.contains('show') && !propertyPicker.querySelector('input[type="radio"]:checked')) {
-                propertySearch.focus();
-            }
-        }).catch((error) => {
-            showPropertyLoadError(`${error.message} Puedes volver a intentarlo.`);
-            propertyLoadPromise = null;
-        });
-        return propertyLoadPromise;
-    };
-
-    registerPersonalTicketModal.addEventListener('show.bs.modal', loadPropertyOptions);
-    propertyForm.addEventListener('submit', (event) => {
-        if (propertyPicker.querySelector('input[type="radio"]:checked')) return;
-        event.preventDefault();
-        propertyError.classList.add('d-block');
-        if (!propertyOptionsLoaded) loadPropertyOptions();
-        propertySearch.focus();
-    });
-    if (registerPersonalTicketModal.dataset.openAfterRedirect === 'true') {
-        bootstrap.Modal.getOrCreateInstance(registerPersonalTicketModal).show();
-    }
-    registerPersonalTicketModal.addEventListener('hide.bs.modal', () => {
-        if (registerPersonalTicketModal.contains(document.activeElement)) {
-            document.activeElement.blur();
-        }
-    });
 </script>
 <?php
 $main = ob_get_clean();

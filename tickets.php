@@ -70,24 +70,22 @@ $ticketNotice = isset($_SESSION['ticket_notice']) && is_string($_SESSION['ticket
     ? $_SESSION['ticket_notice']
     : '';
 unset($_SESSION['ticket_notice']);
+$notifications = $ticketNotice !== ''
+    ? array(toast_notification('success', $ticketNotice))
+    : array();
 ob_start();
 ?>
 <div class="container-fluid">
-    <?php if ($ticketNotice !== '') : ?>
-        <div class="alert alert-success alert-dismissible fade show text-start" role="status">
-            <?= e($ticketNotice) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-        </div>
-    <?php endif; ?>
     <section class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3"
              aria-labelledby="tickets-page-title">
         <div>
             <h1 class="h3 mb-1" id="tickets-page-title">Tickets</h1>
             <p class="text-body-secondary mb-0">Registro y seguimiento de incidencias por bien.</p>
         </div>
-        <a href="<?= e(url('tickets/register.php')) ?>" class="btn btn-primary align-self-md-start flex-shrink-0">
+        <button type="button" class="btn btn-primary align-self-md-start flex-shrink-0"
+                data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Nuevo ticket
-        </a>
+        </button>
     </section>
 
     <section class="row g-3 mb-4" aria-label="Indicadores de tickets">
@@ -285,6 +283,17 @@ ob_start();
 <?php include __DIR__ . '/include/support_ticket_details_modal.php'; ?>
 <?php include __DIR__ . '/include/support_ticket_followup_modal.php'; ?>
 <?php include __DIR__ . '/include/support_ticket_status_modal.php'; ?>
+<?php
+$ticketRegisterOptions = array(
+    'properties_url' => 'tickets/actions/properties.php',
+    'form_action' => 'tickets/actions/register.php',
+    'selected_property_id' => '',
+    'error' => '',
+    'values' => array(),
+);
+include __DIR__ . '/include/ticket_register_modal.php';
+unset($ticketRegisterOptions);
+?>
 <?php if (auth_has_role(array('admin', 'operador'))) : ?>
     <div class="modal fade" id="deleteTicketModal" tabindex="-1"
          aria-labelledby="deleteTicketModalTitle" aria-describedby="deleteTicketModalHelp" aria-hidden="true">
