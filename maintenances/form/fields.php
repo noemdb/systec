@@ -4,23 +4,30 @@ $fieldId = function (string $id) use ($maintenanceFieldPrefix): string {
     return ($maintenanceFieldPrefix !== '' ? $maintenanceFieldPrefix . '_' : '') . $id;
 };
 
+$isMaintenanceCreate = $maintenanceFieldPrefix === 'create';
+$selectedMaintenance = $isMaintenanceCreate || !isset($itemArrSeleted) || !is_array($itemArrSeleted)
+    ? array()
+    : $itemArrSeleted;
+
 $property_id = null;
 
-if (!empty($itemArrSeleted) && isset($itemArrSeleted['property_id'])) {
-    $property_id = $itemArrSeleted['property_id'];
+if (!$isMaintenanceCreate && isset($selectedMaintenance['property_id'])) {
+    $property_id = $selectedMaintenance['property_id'];
 }
 
-if ($property) {
+if (!$isMaintenanceCreate && isset($property['id'])) {
     $property_id = $property['id'];
 }
 
-$selectedType = isset($itemArrSeleted['type']) ? $itemArrSeleted['type'] : '';
-$selectedTechnician = isset($itemArrSeleted['technician']) ? $itemArrSeleted['technician'] : '';
-$selectedDate = isset($itemArrSeleted['date']) ? $itemArrSeleted['date'] : date('Y-m-d\TH:i');
-$selectedReason = isset($itemArrSeleted['failure_reason']) ? $itemArrSeleted['failure_reason'] : '';
-$selectedDescription = isset($itemArrSeleted['description']) ? $itemArrSeleted['description'] : '';
-$selectedNotes = isset($itemArrSeleted['notes']) ? $itemArrSeleted['notes'] : '';
-$selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSeleted['next_maintenance_date'] : '';
+$selectedType = isset($selectedMaintenance['type']) ? $selectedMaintenance['type'] : '';
+$selectedTechnician = isset($selectedMaintenance['technician']) ? $selectedMaintenance['technician'] : '';
+$selectedDate = $isMaintenanceCreate
+    ? ''
+    : (isset($selectedMaintenance['date']) ? $selectedMaintenance['date'] : date('Y-m-d\TH:i'));
+$selectedReason = isset($selectedMaintenance['failure_reason']) ? $selectedMaintenance['failure_reason'] : '';
+$selectedDescription = isset($selectedMaintenance['description']) ? $selectedMaintenance['description'] : '';
+$selectedNotes = isset($selectedMaintenance['notes']) ? $selectedMaintenance['notes'] : '';
+$selectedNext = isset($selectedMaintenance['next_maintenance_date']) ? $selectedMaintenance['next_maintenance_date'] : '';
 ?>
 
 <div class="card-body">
@@ -47,7 +54,7 @@ $selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSelete
                autocomplete="off">
         <div class="form-text mb-2" id="<?= e($fieldId('property_matches')) ?>"
              aria-live="polite" aria-atomic="true"></div>
-        <label for="<?= e($fieldId('property_id')) ?>" class="form-label fw-semibold small">Bien asociado <span class="text-danger">*</span></label>
+        <label for="<?= e($fieldId('property_id')) ?>" class="form-label fw-semibold small">Bien asociado <span class="text-danger" aria-hidden="true">*</span></label>
         <select class="form-select" name="property_id" id="<?= e($fieldId('property_id')) ?>"
                 data-property-picker data-search-input="<?= e($fieldId('property_search')) ?>"
                 data-result-count="<?= e($fieldId('property_matches')) ?>"
@@ -78,7 +85,7 @@ $selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSelete
     </div>
 
     <div class="mb-2">
-        <label for="<?= e($fieldId('type')) ?>" class="form-label fw-semibold small">Tipo de mantenimiento</label>
+        <label for="<?= e($fieldId('type')) ?>" class="form-label fw-semibold small">Tipo de mantenimiento <span class="text-danger" aria-hidden="true">*</span></label>
         <select class="form-select" name="type" id="<?= e($fieldId('type')) ?>" required>
             <option value="">Seleccione</option>
             <?php foreach ($db->getListMaintenanceType() as $key => $value) : ?>
@@ -90,7 +97,7 @@ $selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSelete
     </div>
 
     <div class="mb-2">
-        <label for="<?= e($fieldId('technician')) ?>" class="form-label fw-semibold small">Técnico</label>
+        <label for="<?= e($fieldId('technician')) ?>" class="form-label fw-semibold small">Técnico <span class="text-danger" aria-hidden="true">*</span></label>
         <select class="form-select" name="technician" id="<?= e($fieldId('technician')) ?>" required>
             <option value="">Seleccione</option>
             <?php foreach ($db->getListMaintenanceTechnician() as $key => $value) : ?>
@@ -102,19 +109,19 @@ $selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSelete
     </div>
 
     <div class="mb-2">
-        <label for="<?= e($fieldId('date')) ?>" class="form-label fw-semibold small">Fecha de inicio</label>
+        <label for="<?= e($fieldId('date')) ?>" class="form-label fw-semibold small">Fecha de inicio <span class="text-danger" aria-hidden="true">*</span></label>
         <input required type="datetime-local" name="date" id="<?= e($fieldId('date')) ?>" class="form-control"
                value="<?= e($selectedDate) ?>">
     </div>
 
     <div class="mb-2">
-        <label for="<?= e($fieldId('failure_reason')) ?>" class="form-label fw-semibold small">Razón del mantenimiento</label>
-        <input type="text" name="failure_reason" id="<?= e($fieldId('failure_reason')) ?>" class="form-control"
-               value="<?= e($selectedReason) ?>" required>
+        <label for="<?= e($fieldId('failure_reason')) ?>" class="form-label fw-semibold small">Razón del mantenimiento <span class="text-danger" aria-hidden="true">*</span></label>
+        <textarea name="failure_reason" id="<?= e($fieldId('failure_reason')) ?>" rows="2"
+                  class="form-control no-resize" required><?= e($selectedReason) ?></textarea>
     </div>
 
     <div class="mb-2">
-        <label for="<?= e($fieldId('description')) ?>" class="form-label fw-semibold small">Descripción</label>
+        <label for="<?= e($fieldId('description')) ?>" class="form-label fw-semibold small">Descripción <span class="text-danger" aria-hidden="true">*</span></label>
         <textarea name="description" id="<?= e($fieldId('description')) ?>" rows="3" class="form-control no-resize" required><?= e($selectedDescription) ?></textarea>
     </div>
 
@@ -122,6 +129,19 @@ $selectedNext = isset($itemArrSeleted['next_maintenance_date']) ? $itemArrSelete
         <label for="<?= e($fieldId('notes')) ?>" class="form-label fw-semibold small">Notas</label>
         <textarea name="notes" id="<?= e($fieldId('notes')) ?>" rows="3" class="form-control no-resize"><?= e($selectedNotes) ?></textarea>
     </div>
+
+    <?php if ($isMaintenanceCreate) : ?>
+        <div class="mb-3 d-flex flex-column gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm align-self-start"
+                    id="createImproveMaintenanceNarrative">
+                <i class="bi bi-magic me-1" id="createImproveMaintenanceNarrativeIcon" aria-hidden="true"></i>
+                <span id="createImproveMaintenanceNarrativeLabel">Mejorar con IA</span>
+            </button>
+            <span class="form-text" id="createImproveMaintenanceNarrativeStatus" role="status" aria-live="polite">
+                Mejora razón, descripción y notas con contenido; no se guarda hasta registrar el mantenimiento.
+            </span>
+        </div>
+    <?php endif; ?>
 
     <div>
         <label for="<?= e($fieldId('next_maintenance_date')) ?>" class="form-label fw-semibold small">

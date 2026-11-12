@@ -48,7 +48,7 @@ function badge_clase_bien(string $status): string
         case 'MALO':
             return 'text-bg-danger';
         case 'MUY MALO':
-            return 'text-bg-danger-emphasis';
+            return 'text-bg-danger';
         default:
             return 'text-bg-secondary';
     }
@@ -170,6 +170,30 @@ function property_category(array $property): string
     }
 
     return 'otros';
+}
+
+/** Adscripción de un bien, priorizando la fuente institucional y usando el dato local como respaldo. */
+function property_adscription_assignment(array $property, array $legacyAdscriptionsByIdent = array()): array
+{
+    $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
+    $assignment = $legacyAdscriptionsByIdent[$ident] ?? null;
+    if (is_array($assignment)
+        && isset($assignment['key'], $assignment['label'])
+        && is_string($assignment['key'])
+        && is_string($assignment['label'])
+        && trim($assignment['label']) !== '') {
+        return array('key' => $assignment['key'], 'label' => $assignment['label']);
+    }
+
+    $localAdscription = trim((string) ($property['adscription'] ?? ''));
+    if ($localAdscription === '') {
+        return array('key' => '__unassigned__', 'label' => 'Sin adscripción');
+    }
+
+    return array(
+        'key' => 'local:' . hash('sha256', mb_strtolower($localAdscription)),
+        'label' => $localAdscription,
+    );
 }
 
 /** Código legible de un bien, con el mismo formato en todas las vistas. */

@@ -78,7 +78,7 @@ function legacy_postgres_inventory_snapshot(array $propertyIdentifiers = array()
     $pdo = null;
     try {
         $pdo = new PDO(
-            'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $database,
+            'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $database . ';connect_timeout=5',
             $username,
             $password,
             array(
@@ -258,6 +258,22 @@ function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers
             }
         }
 
+        // Con FastCGI la respuesta sale antes del refresco; la caché vencida se sirve al instante.
+        if ($cached !== null && function_exists('fastcgi_finish_request')) {
+            legacy_postgres_schedule_adscription_cache_refresh(
+                $cachePath,
+                $cacheDirectory,
+                $identifiers,
+                $ttlSeconds
+            );
+            return array(
+                'adscriptions' => $cached['adscriptions'],
+                'cached_at' => (int) $cached['cached_at'],
+                'stale' => false,
+                'background_refresh' => true,
+            );
+        }
+
         try {
             $snapshot = legacy_postgres_inventory_snapshot($identifiers, false);
             $snapshot['cached_at'] = time();
@@ -290,6 +306,81 @@ function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers
             }
             throw $e;
         }
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function legacy_postgres_schedule_adscription_cache_refresh(
+    string $cachePath,
+    string $cacheDirectory,
+    array $identifiers,
+    int $ttlSeconds
+): void {
+    static $scheduled = array();
+    if (isset($scheduled[$cachePath])) {
+        return;
+    }
+    $scheduled[$cachePath] = true;
+
+    register_shutdown_function(static function () use ($cachePath, $cacheDirectory, $identifiers, $ttlSeconds): void {
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        legacy_postgres_refresh_adscription_cache($cachePath, $cacheDirectory, $identifiers, $ttlSeconds);
+    });
+}
+
+function legacy_postgres_refresh_adscription_cache(
+    string $cachePath,
+    string $cacheDirectory,
+    array $identifiers,
+    int $ttlSeconds
+): void {
+    $lock = @fopen($cachePath . '.lock', 'c');
+    if ($lock === false) {
+        return;
+    }
+
+    try {
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            return;
+        }
+
+        if (is_file($cachePath)) {
+            $contents = file_get_contents($cachePath);
+            $decoded = $contents === false ? null : json_decode($contents, true);
+            if (is_array($decoded)
+                && isset($decoded['cached_at'])
+                && is_numeric($decoded['cached_at'])
+                && time() - (int) $decoded['cached_at'] <= max(0, $ttlSeconds)) {
+                return;
+            }
+        }
+
+        $snapshot = legacy_postgres_inventory_snapshot($identifiers, false);
+        $snapshot['cached_at'] = time();
+        $snapshot['stale'] = false;
+        $encoded = json_encode(
+            $snapshot,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($encoded === false) {
+            throw new RuntimeException('No se pudo codificar el cache de adscripciones.');
+        }
+
+        $temporaryPath = tempnam($cacheDirectory, 'inventory-adscriptions-');
+        if ($temporaryPath === false
+            || file_put_contents($temporaryPath, $encoded, LOCK_EX) === false
+            || !rename($temporaryPath, $cachePath)) {
+            if (isset($temporaryPath) && is_file($temporaryPath)) {
+                unlink($temporaryPath);
+            }
+            throw new RuntimeException('No se pudo guardar el cache de adscripciones.');
+        }
+    } catch (Throwable $e) {
+        error_log('No se pudo refrescar el cache de adscripciones en segundo plano: ' . $e->getMessage());
     } finally {
         flock($lock, LOCK_UN);
         fclose($lock);

@@ -1,8 +1,40 @@
 # CHANGELOG docs/ — SysTec GMB
 
-> **Nota:** el proyecto no tiene historial git ni bitácora previa. Este changelog arranca con la documentación baseline del **2026-11-09**. Las cifras son snapshots de su fecha; el estado vigente vive en `TODO.md` y `db.db`.
+> **Nota:** antes del baseline del **2026-11-09** no había bitácora de cambios. Las cifras son snapshots de su fecha; el estado vigente vive en `TODO.md` y `DATABASE.md`.
 >
 > Convención: cada entrada lleva fecha, alcance y evidencia. No se reescriben entradas pasadas; se agrega una nueva.
+
+---
+
+## 2026-11-11 — Mejora narrativa asistida con NVIDIA Build
+
+- `bin/improve-maintenance-narrative.php` propone mejoras en descripción, motivo de falla y observaciones mediante la API de NVIDIA Build y el modelo `nvidia/nemotron-3.5-lightning-30b-a3b`.
+- `API_KEY_NVIDIA_BUILD` se carga desde el entorno o `.env`; solo se transmiten los tres campos narrativos, sin IDs, bien, fecha, código, técnico ni estado.
+- El modo de vista previa no modifica la base; `--execute` guarda las propuestas en una transacción. Se pueden limitar los registros con `--id`, `--property-id` o `--limit`.
+- Las solicitudes están sujetas a la disponibilidad y cuota de prueba del servicio NVIDIA.
+- **Verificación:** `composer test` (40 pruebas), lint PHP y una solicitud de prueba al modelo con texto sintético; no se enviaron registros de la base de datos.
+
+---
+
+## 2026-11-11 — Limpieza controlada de mantenimientos duplicados
+
+- Se agregó `bin/deduplicate-maintenances.php`: detecta mantenimientos del mismo bien con igual fecha, tipo, descripción, técnico, estado y observación, conservando el ID menor. Diferencias en duración, código importado, causa de falla o próxima fecha no mantienen duplicados visibles.
+- Por defecto solo presenta una vista previa. La eliminación requiere `--execute` y se ejecuta en una transacción; eventos con observaciones o fechas distintas se conservan.
+- **Verificación:** prueba de integración para vista previa, campos no visibles, conservación de fechas/observaciones distintas y eliminación confirmada.
+
+---
+
+## 2026-11-11 — Wizard de tickets, toast reutilizables y documentación
+
+**Alcance:** se consolidó el registro reutilizable de tickets en el área personal y en la bandeja de soporte.
+
+- `include/ticket_register_modal.php` y `assets/js/ticket-register-modal.js` comparten el formulario modal de tres pasos: selección de bien, detalles y resumen. Se conserva el registro independiente por ruta.
+- El selector carga bienes/direcciones al abrirse, filtra por categoría y dirección, y permite buscar por código/descripción.
+- Los endpoints JSON de personal y soporte (`personal/actions/properties.php`, `tickets/actions/properties.php`) conservan permisos por ámbito y comparten `include/property_picker_api.php`; soporte ya no usa el endpoint restringido al rol personal.
+- `toast_notification()` y `include/toasts.php` ofrecen avisos reutilizables de tipo `success`, `info`, `warning` y `danger`.
+- La navegación del rol `personal` deja una sola entrada «Tickets» hacia `/personal/index.php`.
+- Se sincronizaron `README`, `PROJECT`, `ARCHITECTURE`, `DOMAIN`, `DATABASE`, `API`, `SECURITY`, `CONVENTIONS` y `TODO` con las rutas, roles, datos y componentes vigentes. Los anexos de baseline y `templatesOthersApp/` se mantienen como referencias históricas/externas.
+- **Verificación:** PHPUnit, 34 pruebas y 69 aserciones. La verificación visual del flujo en el navegador local no forma parte de esta actualización documental.
 
 ---
 

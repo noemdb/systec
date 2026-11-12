@@ -1,6 +1,6 @@
 # API.md — SysTec GMB
 
-> **Estado:** v1.2 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (registro reutilizable de tickets) · **Actualizado:** 2026-11-11.
 > **No existe una API pública.** El sistema expone una superficie HTTP de páginas y formularios que devuelven HTML y redirecciones. Este documento describe esa superficie real, no un contrato REST ideal.
 
 ---
@@ -14,7 +14,7 @@
 | Formato de respuesta | HTML completo, redirección `Location` o texto plano de error |
 | Formato de error | Texto plano con código HTTP explícito |
 | Autenticación | Sesión PHP (`systec_session`), `password_hash`/`password_verify` |
-| Autorización | `require_login()` y `require_role()`; roles `admin`, `operador`, `tecnico`, `consulta` |
+| Autorización | `require_login()` y `require_role()`; roles `admin`, `operador`, `tecnico`, `consulta`, `personal` |
 | CSRF | Token por sesión en todos los POST (`csrf_field()` / `verify_csrf()`) |
 | Idempotencia | Las lecturas sí; las mutaciones no (cada POST crea o cambia) |
 | Validación | `maintenances/validations/register.php` y `update.php`; validación adicional en cada acción |
@@ -24,6 +24,7 @@
 ### 1.1 Patrón de respuesta
 
 - **Éxito en página:** HTML completo con layout.
+- **Avisos:** las páginas pueden definir `$notifications` como lista de `toast_notification($tipo, $mensaje)`; el layout muestra toast temporales, no una respuesta HTTP aparte.
 - **Éxito en acción:** `header('Location: ...')` + `exit()` (PRG).
 - **Error de validación:** `422` con texto plano.
 - **Error de autenticación:** `302` a `login.php`.
@@ -39,10 +40,11 @@
 | `302` | Redirección tras login, logout o mutación |
 | `400` | Parámetros incompletos o inválidos |
 | `403` | Rol sin permiso o acceso directo denegado |
-| `404` | Bien o mantenimiento inexistente |
+| `404` | Recurso inexistente o ticket fuera de alcance |
 | `405` | Método distinto de POST en una acción de mutación |
 | `419` | Token CSRF ausente o inválido |
 | `422` | Validación de negocio (fecha, estado, transición, bien) |
+| `503` | Fuente o datos necesarios no disponibles para una lectura JSON |
 | `500` | Error interno controlado |
 
 ---
@@ -55,9 +57,9 @@
 | 2 | POST | `/login.php` | `login.php` | Público + CSRF | Autentica y redirige | `302` |
 | 3 | POST | `/logout.php` | `logout.php` | Sesión + CSRF | Cierra sesión | `302` |
 | 4 | GET | `/index.php` o `/` | `index.php` | Sesión | Portada | HTML |
-| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja paginada; acepta `q`, `status`, `date_from`, `date_to` y `page` | HTML |
+| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja paginada; acepta `q`, `status`, `category`, `date_from`, `date_to`, `adscription` y `page` | HTML |
 | 4b | GET | `/personal/register.php` | `personal/register.php` | `personal` | Formulario de alta de ticket del ámbito personal | HTML |
-| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket del ámbito personal o vuelve al formulario con errores | `302` / `303` |
+| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket propio o vuelve a la bandeja con el modal y los valores conservados | `302` / `303` |
 | 4d | GET | `/personal/detail.php?id={id}` | `personal/detail.php` | `personal` + propietario | Detalle y historial del ticket personal | HTML |
 | 4e | POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + CSRF | Agrega seguimiento a un ticket propio | `302` |
 | 4f | GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | Devuelve detalle e historial del ticket | JSON |
@@ -69,6 +71,13 @@
 | 9 | POST | `/maintenances/update.php` | `maintenances/update.php` | `admin`, `operador`, `tecnico` + CSRF | Actualiza mantenimiento | `302` |
 | 10 | POST | `/maintenances/actions/status.php` | `maintenances/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y calcula horas | `302` |
 | 10a | POST | `/tickets/actions/delete.php` | `tickets/actions/delete.php` | `admin`, `operador` + CSRF | Oculta ticket y registra eliminación en su historial | `302` |
+| 10b | GET | `/tickets.php` | `tickets.php` | `admin`, `operador`, `tecnico` | Bandeja de soporte y modal de alta | HTML |
+| 10c | GET | `/tickets/register.php` | `tickets/register.php` | `personal`, `admin`, `operador`, `tecnico` | Formulario de alta independiente, conservado junto al modal | HTML |
+| 10d | POST | `/tickets/actions/register.php` | `tickets/actions/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea ticket y su evento inicial | `302` |
+| 10e | GET | `/tickets/actions/properties.php` | `tickets/actions/properties.php` | `admin`, `operador`, `tecnico` | Devuelve bienes y direcciones para el selector | JSON |
+| 10f | GET | `/tickets/detail.php?id={id}` | `tickets/detail.php` | `admin`, `operador`, `tecnico` | Detalle, historial y formularios autorizados | HTML |
+| 10g | POST | `/tickets/actions/history.php` | `tickets/actions/history.php` | `admin`, `operador`, `tecnico` + CSRF | Agrega seguimiento a ticket activo | `302` |
+| 10h | POST | `/tickets/actions/status.php` | `tickets/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y agrega evento | `302` |
 | 11 | GET | `/historials.php` | `historials.php` | Sesión | Historial de un bien | HTML |
 | 12 | GET | `/report.php` | `report.php` | Sesión | Reporte de bienes dañados | HTML imprimible |
 | 13 | GET | `/batch.php` | `batch.php` | Sesión | Dos historiales en una página | HTML imprimible |
@@ -240,6 +249,27 @@
 - **Filtros:** `q`, `status`, `category` (`informatica`, `redes`, `otros`), `date_from`, `date_to` y `adscription`.
 - **Paginación:** 25 resultados por página mediante `page`; las tarjetas de estado aplican el filtro correspondiente.
 - **Adscripción:** se resuelve desde el snapshot de SIA cacheado; si la fuente y el cache no están disponibles, el filtro falla cerrado y muestra un aviso.
+- **Alta:** abre el wizard compartido en un modal; el selector carga los bienes al abrirse y ofrece categoría, dirección y búsqueda.
+
+#### `GET /personal/register.php`
+
+- **Auth:** rol `personal`.
+- **Uso:** formulario de alta independiente que se conserva como ruta directa; la bandeja usa el wizard modal.
+
+#### `POST /personal/actions/register.php`
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `csrf_token` | string | Sí | Token de sesión |
+| `property_id` | int | Sí | Bien existente |
+| `title` | string | Sí | Máximo 255 caracteres |
+| `description` | string | Sí | Máximo 5000 caracteres |
+| `observation` | string | No | Máximo 5000 caracteres |
+
+- **Auth:** rol `personal`; el creador del ticket es la sesión y no se acepta desde el formulario.
+- **Efecto:** crea el ticket y el evento inicial dentro de una transacción; si falla, conserva los valores y vuelve a `/personal/index.php` con el modal abierto.
+- **Respuesta:** `302` al detalle del ticket o `303` a la bandeja al volver con error.
+- **Límites:** el título admite 255 caracteres; descripción y observación, 5000 cada una.
 
 #### `GET /personal/actions/details.php?ticket_id={id}`
 
@@ -252,12 +282,68 @@
 - **Auth:** rol `personal`.
 - **Efecto:** devuelve los bienes locales, dirección de dependencia y unidades de adscripción; la página carga las unidades en segundo plano y el selector solicita los bienes al abrirse.
 - **Cache:** las adscripciones de SIA se guardan por cinco minutos; si la fuente falla se informa si se está usando un cache vencido. Sin datos disponibles, devuelve `503`.
+- **Respuesta JSON:** `properties`, `directions`, `adscriptions`, `stale` y `cached_at`; usa `Cache-Control: private, no-store`.
 
 #### `GET /tickets.php`
 
 - **Auth:** `admin`, `operador` o `tecnico`.
-- **Efecto:** muestra los tickets activos; los tickets con `deleted_at` dejan de aparecer.
-- **Acción Eliminar:** disponible para `admin` y `operador`; solicita confirmación en un modal.
+- **Efecto:** lista tickets activos y ofrece alta en el wizard compartido. `admin` y `operador` pueden además solicitar la baja lógica.
+
+#### `GET /tickets/register.php`
+
+- **Auth:** `personal`, `admin`, `operador` o `tecnico`.
+- **Uso:** formulario independiente de alta que se conserva como alternativa al wizard modal.
+
+#### `POST /tickets/actions/register.php`
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `csrf_token` | string | Sí | Token de sesión |
+| `property_id` | int | Sí | Bien existente |
+| `title` | string | Sí | No vacío |
+| `description` | string | Sí | No vacía |
+| `observation` | string | No | — |
+
+- **Auth:** `admin`, `operador` o `tecnico`; si la sesión es `personal`, redirige al flujo del área personal.
+- **Efecto:** crea el ticket en estado inicial `iniciado`, registra evento `created` y redirige al detalle.
+- **Errores:** `403` rol no permitido; `419` CSRF; `422` campos incompletos o bien inexistente; `500` error de base de datos.
+
+#### `GET /tickets/actions/properties.php`
+
+- **Auth:** `admin`, `operador` o `tecnico`.
+- **Efecto:** comparte el contrato de carga de bienes/direcciones con el endpoint personal mediante `include/property_picker_api.php`.
+- **Respuesta JSON:** `properties`, `directions`, `adscriptions`, `stale` y `cached_at`; los datos no se cachean en el navegador.
+- **Errores:** `503` si no se pueden obtener los bienes o direcciones.
+
+#### `GET /tickets/detail.php?id={id}`
+
+- **Auth:** `admin`, `operador` o `tecnico`; solo muestra tickets activos. El rol `personal` se redirige al detalle personal.
+- **Efecto:** presenta los datos del ticket y su historial; el soporte puede registrar seguimiento y cambiar el estado.
+
+#### `POST /tickets/actions/history.php`
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `csrf_token` | string | Sí | Token de sesión |
+| `ticket_id` | int | Sí | Ticket activo |
+| `description` | string | Sí | Nota de seguimiento no vacía |
+
+- **Auth:** `admin`, `operador` o `tecnico`.
+- **Efecto:** agrega evento `comment` y actualiza `updated_at`.
+- **Respuesta:** `302` al detalle del ticket.
+
+#### `POST /tickets/actions/status.php`
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `csrf_token` | string | Sí | Token de sesión |
+| `ticket_id` | int | Sí | Ticket activo |
+| `status_id` | int | Sí | Estado existente |
+
+- **Auth:** `admin`, `operador` o `tecnico`.
+- **Efecto:** actualiza el estado, registra `status_change` y actualiza `closed_at` cuando el estado es `finalizado`.
+- **Respuesta:** `302` a `/tickets.php`.
+- **Errores:** `403` rol no permitido; `419` CSRF; `422` parámetros/estado inválidos; `404` ticket inexistente o dado de baja.
 
 #### `POST /tickets/actions/delete.php`
 

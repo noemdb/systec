@@ -125,6 +125,7 @@ if (isset($_POST['register'])) {
             exit();
         }
 
+        $_SESSION['maintenance_notice'] = 'Mantenimiento registrado correctamente.';
         header('Location: ' . url('maintenances.php'));
         exit();
     } catch (Exception $e) {

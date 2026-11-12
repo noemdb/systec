@@ -6,7 +6,6 @@ $currentPage = basename(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME']
 
 if (auth_has_role(array('personal'))) {
     $navigation = array(
-        array('label' => 'Inicio', 'page' => 'personal/index.php', 'icon' => 'bi-house-door'),
         array('label' => 'Tickets', 'page' => 'personal/index.php', 'icon' => 'bi-ticket-detailed'),
     );
 } else {
@@ -26,9 +25,8 @@ $importPageActive = in_array($currentPage, array('updates.php', 'imports.php'), 
     <nav class="navbar navbar-expand-xl p-0" aria-label="Navegación principal">
         <a class="d-inline-flex align-items-center gap-2 text-decoration-none text-body flex-shrink-0"
            href="<?= e(url('index.php')) ?>" aria-label="SysTec, inicio">
-            <span class="d-inline-flex align-items-center justify-content-center rounded-3 bg-primary text-white p-2">
-                <i class="bi bi-tools fs-5" aria-hidden="true"></i>
-            </span>
+            <img src="<?= e(url('favicon.svg')) ?>" width="36" height="36"
+                 class="flex-shrink-0" alt="" aria-hidden="true">
             <span class="fw-bold fs-5 lh-1">SysTec</span>
         </a>
 

@@ -1,6 +1,6 @@
 # TODO.md — SysTec GMB
 
-> **Estado:** v1.3 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (F2 y módulo de tickets) · **Actualizado:** 2026-11-11.
 > Fuente de verdad del estado técnico y documental. Un ítem es ✅ solo cuando cumple su criterio de aceptación y está verificado. Las prioridades son `P0` (bloqueante de seguridad), `P1` (calidad/operación), `P2` (mejora), `P3` (futuro).
 
 ## Leyenda
@@ -19,9 +19,9 @@
 | `API.md` | ✅ | Superficie HTTP real |
 | `SECURITY.md` | ✅ | Hallazgos P0–P3 y checklist |
 | `CONVENTIONS.md` | ✅ | Estilo y patrones |
-| `DECISIONS.md` | ✅ | ADR-001–017 |
+| `DECISIONS.md` | ✅ | ADR-001–018 |
 | `TODO.md` | ✅ | Este archivo |
-| `CHANGELOG.md` | ✅ | Baseline |
+| `CHANGELOG.md` | ✅ | Entradas de cambios hasta 2026-11-11 |
 | `anexos/inventario-tecnico.md` | ✅ | Análisis archivo por archivo |
 | `anexos/matriz-trazabilidad.md` | ✅ | Hallazgo → código → doc → tarea |
 | `anexos/plan-documentacion.md` | ✅ | Snapshot inicial; plan vigente en `spec/documentations/plan-documentacion.md` |
@@ -36,9 +36,10 @@
 | Historial | ✅ Operativo | `historials.php` | Bien inexistente controlado |
 | Reporte de dañados | ✅ F2 | `report.php` | Deduplicado por consulta |
 | Importación | ✅ F2 | `updates.php`, `imports.php` | POST, confirmación, transacción y límite |
+| Tickets | ✅ Operativo | `tickets.php`, `personal/index.php`, `tickets/`, `personal/` | Roles separados, historial funcional y baja lógica; componentes de registro compartidos |
 | Persistencia | 🧪 F2 | `storage/db.db`, `migrations/`, `BACKUP.md` | Migraciones e índices; política de backup definida parcialmente, destino/cifrado/crontab pendientes; FK pendiente |
 | Seguridad | 🧪 F1 | `SECURITY.md` | Controles de aplicación implementados; HTTPS/HSTS, rate limiting y auditoría pendientes |
-| Pruebas | ⚠️ Manuales | `php -l` + curl | Sin suite automatizada |
+| Pruebas | 🧪 Parciales | `composer test`, `tests/Unit/` | Suite PHPUnit básica; cobertura integral, pruebas E2E y CI pendientes |
 | Documentación | ✅ Actualizada | `docs/` | Debe mantenerse viva |
 
 ## 3. Backlog priorizado
@@ -85,7 +86,7 @@
 | P2-03 | Auditoría de cambios | Tabla `audit_events`; escritura en la misma transacción | P0-01 | 🔲 F3 |
 | P2-04 | Separar capa de datos | `src/Database.php` + repositorios; páginas sin SQL | P0-03 | 🔲 F3 |
 | P2-05 | Validación centralizada | Un validador por contexto (`create`/`update`/`transition`) | P1-12 | 🔲 F3 |
-| P2-06 | Pruebas unitarias e integración | PHPUnit o runner propio; CI local | P2-04 | 🔲 F3 |
+| P2-06 | Ampliar pruebas unitarias e integración | Cubrir reglas críticas y flujos HTTP con PHPUnit; agregar CI local | P2-04 | 🧪 F3 (suite básica ya existe) |
 | P2-07 | Logs sin PII | Archivo fuera del webroot; niveles y rotación | P0-07 | 🧪 F1 (archivo); 🔲 rotación |
 | P2-08 | Búsqueda y filtros del dashboard | Búsqueda por código/descripción/serial; filtros persistentes | — | 🔲 F3 |
 | P2-09 | Exportación CSV/PDF de reportes | Botón de exportación; PDF generado o impresión guiada | P1-08 | 🔲 F4 |
@@ -99,12 +100,12 @@
 | ID | Tarea | Nota |
 |---|---|---|
 | P3-01 | Adjuntos/fotos por mantenimiento | Evidencia visual |
-| P3-02 | Notificaciones de vencimiento | Correo o panel |
-| P3-03 | API JSON | Solo si se integra con otro sistema |
+| P3-02 | Avisos programados de vencimiento | Correo/panel persistente; los toast actuales son mensajes temporales de resultado |
+| P3-03 | API pública JSON | Solo si se integra con otro sistema; ya hay endpoints JSON privados de uso interno |
 | P3-04 | Multi-institución | Solo si el sistema se comparte |
 | P3-05 | App móvil / PWA | Solo si la operación lo exige |
 | P3-06 | Dashboard de indicadores | Tendencias, cumplimiento, costos |
-| P3-07 | Decidir persistencia de `adscription` | Dashboard ya resuelve la unidad operativa desde SIA en tiempo real; la columna SQLite permanece vacía |
+| P3-07 | Decidir persistencia de `adscription` | Dashboard y selector de tickets resuelven unidades operativas desde SIA; la columna SQLite permanece vacía |
 
 ## 4. Bloqueos de definición
 
@@ -147,7 +148,7 @@
 - [x] Reporte de dañados sin duplicados.
 - [x] Corregir `time_taken` (horas totales; valores históricos preservados).
 - [x] Corregir `update.php` y `batch.php`.
-- [ ] Reporte de dañados sin duplicados.
+- [x] Reporte de dañados sin duplicados.
 - [x] Resolver compatibilidad PHP 7.4 y verificar DataTables/jQuery.
 - [x] Backup/restore de trabajo probado; falta calendario y cifrado.
 
@@ -163,7 +164,7 @@
 ### F4 — Producto (P3)
 
 - [ ] Exportaciones.
-- [ ] Notificaciones.
+- [ ] Avisos programados de vencimiento (no cubiertos por los toast de resultado existentes).
 - [ ] API (si aplica).
 - [ ] Indicadores.
 
@@ -191,10 +192,10 @@
 | Datos sensibles bajo webroot | 4 rutas | 0 | 0 |
 | Estados/tipos fuera de catálogo | 2 (`FINALIZADO`, `MUY BUENO`) + `evaluativo` | 0 | 0 |
 | Registros con técnico typo | 153 | 0 | 0 |
-| Migraciones registradas | 0 | 2 | Cada cambio de esquema/datos versionado |
+| Migraciones registradas | 0 | 5 | Cada cambio de esquema/datos versionado |
 | Duraciones históricas verificables | 15 nulos + valores legacy no reconstruibles | Se conservan; no se recalculan sin fuente | Sin valores inventados |
 | Filas de importación omitidas sin reporte | Todas | 0 (reporte por fila) | 0 |
-| Cobertura de pruebas | 0 % | Manual | ≥ 60 % en reglas críticas |
+| Cobertura de pruebas | Sin baseline | Suite PHPUnit básica + manual | Medir y cubrir ≥ 60 % en reglas críticas |
 | Backups con restore probado | 0 | 1 (F2) | 1 por trimestre |
 
 ---

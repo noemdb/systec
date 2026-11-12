@@ -1,6 +1,6 @@
 # DOMAIN.md — SysTec GMB
 
-> **Estado:** v1.1 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (tickets y flujos compartidos) · **Actualizado:** 2026-11-11.
 > Este es el **idioma ubicuo** del sistema: los términos y reglas que deben usarse igual en código, UI, reportes y documentación. Si un término no está aquí, no existe para efectos de diseño.
 >
 > **Fuente de verdad:** el código actual, los datos de `db.db` y las decisiones aprobadas por el dueño. Las normalizaciones aplicadas se registran en ADR y migraciones.
@@ -78,6 +78,15 @@
 | **Rol** | Perfil de autorización (`admin`, `operador`, `tecnico`, `consulta`). | "perfil" |
 | **CSRF** | Token de sesión exigido en toda mutación por POST. | "token" (válido) |
 
+### 1.5 Tickets
+
+| Término | Definición | Sinónimos a evitar |
+|---|---|---|
+| **Ticket** | Registro de una incidencia asociada a un bien, con estado e historial de seguimiento. | "mantenimiento" (son entidades distintas) |
+| **Seguimiento** | Nota añadida al historial de un ticket por un usuario autorizado. | "auditoría" (el historial de tickets no es una auditoría general) |
+| **Baja lógica** | Marca `deleted_at` que oculta el ticket sin borrar su fila ni su historial. | "borrado permanente" |
+| **Wizard de ticket** | Formulario en tres pasos: bien, detalles y revisión del resumen antes de guardar. | — |
+
 ---
 
 ## 2. Entidades principales
@@ -126,16 +135,22 @@
 - **Atributos:** `id`, `username`, `password_hash`, `role`, `active`, `created_at`.
 - **Reglas:**
   - `username` es único; la contraseña se guarda con `password_hash`.
-  - Roles: `admin`, `operador`, `tecnico`, `consulta`.
+  - Roles: `admin`, `operador`, `tecnico`, `consulta`, `personal`.
   - `active=0` impide el login; no hay UI de baja.
   - La gestión es por CLI (`bin/create-user.php`).
 - **Relaciones:** no se relaciona con mantenimientos; el técnico sigue siendo texto.
 
 ### 2.3.2 Ticket (`tickets`)
 
-- **Eliminación:** solo `admin` y `operador` pueden dar de baja un ticket desde el listado de soporte.
-- **Baja lógica:** `deleted_at` oculta el ticket de las listas y bloquea su edición/seguimiento; la fila y el historial se conservan.
-- **Trazabilidad:** la operación agrega un evento `deleted` al historial con actor y fecha. No existe restauración desde la interfaz.
+- **Atributos clave:** `id`, `property_id`, `status_id`, `title`, `description`, `observation`, `created_by`, `assigned_to`, `created_at`, `updated_at`, `closed_at`, `deleted_at`.
+- **Relaciones lógicas:** cada ticket corresponde a un bien y a un usuario creador; puede tener un usuario asignado, estado y múltiples eventos en `ticket_histories`. Las tablas no declaran claves foráneas físicas.
+- **Registro:** se exige un bien existente, título y descripción no vacíos; la observación es opcional. Se inicia con estado `iniciado` y se escribe un evento `created`.
+- **Wizard compartido:** tanto `/tickets.php` como `/personal/index.php` muestran el modal reutilizable de tres pasos. El selector consulta bienes y direcciones, permite filtrar por categoría/dirección y buscar por código/descripción.
+- **Acceso:** `admin`, `operador` y `tecnico` acceden a la bandeja de soporte; `personal` registra y consulta únicamente tickets propios dentro de `/personal/`.
+- **Baja lógica:** solo `admin` y `operador` pueden dar de baja desde soporte. `deleted_at` oculta el ticket y bloquea su seguimiento; la fila y el historial se conservan.
+- **Trazabilidad:** el alta, los seguimientos, cambios de estado y baja agregan eventos en `ticket_histories`; no es una auditoría general de cambios de la aplicación.
+- **Estados:** `iniciado`, `en_progreso`, `con_retraso`, `en_espera` y `finalizado`; este último está marcado como terminal en `ticket_status`.
+- **Restauración:** no existe una acción de restauración desde la interfaz.
 
 ### 2.4 Reporte (derivado)
 
@@ -162,6 +177,8 @@
 10. **Hay identidad y autorización, pero no auditoría.** Toda mutación exige sesión, rol y CSRF; no queda bitácora de cambios.
 11. **La fecha de negocio se interpreta en `America/Caracas`.** El cálculo de horas usa timestamps absolutos.
 12. **Los reportes se generan desde datos vivos.** No hay reproducibilidad histórica.
+13. **Los tickets están vinculados a un bien.** La selección visual no reemplaza la validación del bien en el servidor.
+14. **El historial del ticket conserva eventos funcionales.** No sustituye una auditoría global de cambios.
 
 ---
 

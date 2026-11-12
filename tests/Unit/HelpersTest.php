@@ -85,6 +85,33 @@ class HelpersTest extends TestCase
         );
     }
 
+    public function testPropertyAdscriptionPrefersInstitutionalAssignment(): void
+    {
+        self::assertSame(
+            array('key' => 'dependency:12', 'label' => 'Unidad de Informática'),
+            property_adscription_assignment(
+                array('ident' => '8', 'adscription' => 'Unidad local'),
+                array('0008' => array('key' => 'dependency:12', 'label' => 'Unidad de Informática'))
+            )
+        );
+    }
+
+    public function testPropertyAdscriptionFallsBackToLocalValueOrUnassigned(): void
+    {
+        $localAdscription = 'Unidad de Informática';
+        self::assertSame(
+            array(
+                'key' => 'local:' . hash('sha256', mb_strtolower($localAdscription)),
+                'label' => $localAdscription,
+            ),
+            property_adscription_assignment(array('ident' => '8', 'adscription' => $localAdscription))
+        );
+        self::assertSame(
+            array('key' => '__unassigned__', 'label' => 'Sin adscripción'),
+            property_adscription_assignment(array('ident' => '8'))
+        );
+    }
+
     public function testPropertyStatusLabelsAreConsistent(): void
     {
         self::assertSame('Muy malo', property_status_label(' muy malo '));

@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — SysTec GMB
 
-> **Estado:** v1.2 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (tickets y componentes compartidos) · **Actualizado:** 2026-11-11.
 > Describe cómo se conectan las piezas del sistema actual. El detalle de rutas y parámetros vive en `API.md`; el esquema y los datos, en `DATABASE.md`; los riesgos, en `SECURITY.md`.
 
 ## Principio rector
@@ -19,7 +19,7 @@ La simplicidad es deliberada: el sistema debe funcionar en un servidor PHP bási
 
 | Capa | Tecnología | Versión / evidencia | Motivo / consecuencia |
 |---|---|---|---|
-| Lenguaje | PHP | 7.4.33 en el entorno analizado | Disponibilidad en hosting institucional |
+| Lenguaje | PHP | Compatibilidad objetivo 7.4 (baseline 7.4.33) | Disponibilidad en hosting institucional |
 | Persistencia | SQLite 3 | `storage/db.db`, extensión `sqlite3` | Cero administración; archivo único |
 | Servidor | PHP built-in server + `router.php` | `make dev` → `php -S localhost:5050 router.php` | Desarrollo simple; denegaciones locales |
 | Autenticación | Sesión PHP + `password_hash` | `include/auth.php`, `login.php` | Roles y CSRF sin framework |
@@ -29,7 +29,7 @@ La simplicidad es deliberada: el sistema debe funcionar en un servidor PHP bási
 | Iconos | Bootstrap Icons | Incluido en `vendor/bootstrap/5.3.2/icon/` | Badges y acciones |
 | Plantillas | PHP + output buffering | `include/layout.php` | Layout reutilizable sin motor de plantillas |
 | Dependencias | Vendorizadas | `vendor/` (17 MB) | Sin Composer ni red en ejecución |
-| Pruebas | Sin suite persistente | Verificaciones aisladas de F2 | Verificación manual; regresión automatizada pendiente |
+| Pruebas | PHPUnit 9.6 | `composer test`, `tests/`, `phpunit.xml.dist` | Suite existente; cobertura y CI aún parciales |
 | Migraciones | Runner CLI + SQL versionado | `bin/migrate.php`, `migrations/`, `schema_migrations` | Cada migración requiere backup verificado y usa transacción |
 
 ## Diagrama de componentes
@@ -42,6 +42,7 @@ graph TD
 
     subgraph PHP["Aplicación PHP (docroot del proyecto)"]
         PAGES[Páginas y acciones<br/>index, dashboard, maintenances,<br/>historials, report, batch, imports, updates]
+        TICKETS[Rutas de tickets<br/>tickets/* + personal/*]
         AUTH[include/auth.php<br/>sesión, roles y CSRF]
         LAYOUT[include/layout.php<br/>head + header + main + footer]
         HELPERS[include/helpers.php<br/>escape, badges y transiciones]
@@ -49,6 +50,7 @@ graph TD
         SECURITY[include/security.php<br/>headers, errores y logs]
         DBLAYER[conn.php · clase DB<br/>SQLite3 + prepared statements]
         FORMS[Formularios y validaciones<br/>maintenances/form, validations]
+        UICOMP[Componentes compartidos<br/>ticket_register_modal, toasts]
         CSV[Importadores CSV y XLS HTML<br/>properties/table, maintenances/table]
         INVENTORY[include/inventory_import.php<br/>archivos + inventario/adscripción SIA]
         CSVTX[include/csv_import.php<br/>límites + transacción]
@@ -68,6 +70,8 @@ graph TD
     PAGES --> AUTH
     PAGES --> LAYOUT
     PAGES --> FORMS
+    PAGES --> TICKETS
+    PAGES --> UICOMP
     PAGES --> CSV
     PAGES --> INVENTORY
     PAGES --> CSVTX
@@ -101,13 +105,18 @@ systec/
 ├── batch.php                     # Lote de dos historiales
 ├── imports.php                   # Importación de maintenances.csv (GET muestra / POST importa)
 ├── updates.php                   # Importación desde archivo o PostgreSQL legacy
+├── tickets.php                   # Bandeja de soporte, seguimiento y alta de tickets
+├── personal/                     # Bandeja y acciones de tickets propios
+├── tickets/                      # Acciones y vistas de soporte de tickets
 ├── conn.php                      # Clase DB + conexión + catálogos + esquema
 ├── router.php                    # Router y denegaciones del servidor embebido
 ├── .htaccess                     # Denegaciones para Apache
 ├── Makefile                      # make dev
 ├── bin/
 │   ├── create-user.php           # Alta/actualización de usuarios por CLI
-│   └── migrate.php               # Aplicación de migraciones con backup requerido
+│   ├── migrate.php               # Aplicación de migraciones con backup requerido
+│   ├── deduplicate-maintenances.php # Duplicados visibles en el reporte de mantenimientos
+│   └── improve-maintenance-narrative.php # Revisión narrativa con NVIDIA Build
 ├── migrations/                   # SQL versionado, transaccional
 ├── include/
 │   ├── config.php                # Rutas, storage y url()
@@ -119,8 +128,13 @@ systec/
 │   ├── footer.php                # Pie institucional
 │   ├── script.php                # Bootstrap bundle
 │   ├── helpers.php               # Escape, badges y transiciones
+│   ├── ticket_register_modal.php # Wizard reutilizable de alta de tickets
+│   ├── toasts.php                # Renderizado del componente toast
+│   └── property_picker_api.php   # Respuesta JSON común del selector de bienes
 │   ├── inventory_import.php      # CSV, XLS HTML, snapshot PostgreSQL y adscripción SIA
 │   └── csv_import.php            # Límites y transacción de importaciones CSV
+├── assets/js/                    # Toast, selector de bienes y wizard de tickets
+├── tests/                        # Suite PHPUnit
 ├── dashboard/
 │   ├── table/index.php           # Tabla de bienes y acciones
 │   └── actions/status.php        # POST cambio de estado del bien
@@ -189,6 +203,7 @@ sequenceDiagram
 | Historial | Historial cronológico por bien | `historials.php`, `historials/*` | Solo lectura |
 | Reportes | Reporte de dañados y lote imprimible | `report.php`, `batch.php` | Solo lectura |
 | Importación | Carga de CSV legacy | `updates.php`, `imports.php`, `*/table/*Csv.php`, `*/table/import.php` | Escritura masiva |
+| Tickets | Registro, bandejas, estados e historial de incidencias | `tickets.php`, `tickets/*`, `personal/*` | Tickets activos vinculados a bienes; permisos por rol |
 | Presentación | Layout, badges, navegación | `include/*` | Transversal |
 | Persistencia | Conexión, SQL, catálogos | `conn.php` | Transversal |
 
@@ -214,7 +229,10 @@ El esquema base se crea desde `conn.php`; los cambios versionados se aplican exp
 - `include/layout.php` espera `$title`, `$main`, opcionales `$no_footer`, `$header_file`, `$main_class`.
 - `include/head.php` carga CSS/JS con rutas relativas (`./vendor/...`), lo que exige que la app se sirva desde la raíz del docroot.
 - `include/header.php` muestra navegación (Inicio, Dashboard, Mantenimientos, Dañados), usuario/rol y logout por POST.
-- `include/helpers.php` centraliza escape (`e()`, `js()`), badges, etiquetas y transiciones; es la capa de presentación pura.
+- Para el rol `personal`, la navegación muestra una sola entrada «Tickets» hacia `/personal/index.php`; no duplica el enlace «Inicio».
+- `include/helpers.php` centraliza escape (`e()`, `js()`), badges, etiquetas, transiciones y `toast_notification()`.
+- `include/toasts.php` + `assets/js/toasts.js` muestran avisos Bootstrap reutilizables (`success`, `info`, `warning`, `danger`) con cierre automático y roles accesibles.
+- `include/ticket_register_modal.php` y `assets/js/ticket-register-modal.js` implementan el wizard reutilizable de tres pasos: bien, detalles y resumen. El selector usa endpoints JSON separados por ámbito, que comparten `include/property_picker_api.php`.
 - `include/security.php` aplica cabeceras y logging; `include/config.php` resuelve rutas y `url()`.
 - Las vistas escapan todos los datos de usuario; los formularios incluyen `csrf_field()`.
 
@@ -241,7 +259,7 @@ graph LR
 | Garantía | Estado | Mecanismo |
 |---|---|---|
 | Sintaxis PHP | Manual | `php -l` limpio; no automatizado |
-| Reglas de negocio | Manual | Sin tests automatizados |
+| Reglas de negocio | Parcialmente automatizadas | PHPUnit; faltan cobertura integral y CI |
 | Importación CSV | Verificación aislada F2 | Límites y rollback/commit verificados; sin suite persistente |
 | Regresión visual | Manual | Navegación e impresión |
 | Seguridad | Parcial | Controles F1 + pruebas manuales; ver `SECURITY.md` |
@@ -249,7 +267,7 @@ graph LR
 ## Deudas arquitectónicas principales
 
 1. **Seguridad de despliegue pendiente:** HTTPS/HSTS, rate limiting y auditoría (F1 dejó auth, CSRF, escape y SQL parametrizado).
-2. **Persistencia parcial:** hay migraciones, triggers e índices; aún no hay FK ni suite automatizada (H-13).
+2. **Persistencia parcial:** hay migraciones, triggers, índices y pruebas PHPUnit; aún no hay FK ni cobertura integral (H-13).
 3. **Lógica duplicada:** cálculo de vencimiento en vista, cálculo de código en `conn.php`, validaciones parciales.
 4. **Catálogo de técnicos libre:** valores conocidos se normalizaron, pero no existe catálogo relacional.
 5. **Reportes con supuestos:** reporte deduplicado; el criterio textual de desincorporación sigue siendo literal.

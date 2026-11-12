@@ -26,6 +26,7 @@ if (!function_exists('systec_load_env_file')) {
             'SYSTEC_LEGACY_PG_DATABASE',
             'SYSTEC_LEGACY_PG_USER',
             'SYSTEC_LEGACY_PG_PASSWORD',
+            'API_KEY_NVIDIA_BUILD',
         );
 
         $lines = file($filename, FILE_IGNORE_NEW_LINES);

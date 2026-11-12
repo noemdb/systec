@@ -1,6 +1,6 @@
 # DATABASE.md — SysTec GMB
 
-> **Estado:** v1.2 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (esquema de tickets documentado) · **Actualizado:** 2026-11-11.
 > **Motor:** SQLite 3, archivo `storage/db.db`.
 > **Regla de oro:** migraciones versionadas aplican normalización, triggers e índices. Aún no existe `FOREIGN KEY`; `users.username` es `UNIQUE`.
 
@@ -16,7 +16,7 @@
 | Tipos | `INTEGER`, `STRING`, `DATETIME`, `VARCHAR(255)`, `TEXT` | Afinidad dinámica de SQLite; sin validación estricta |
 | Fechas | Normalizadas a `YYYY-MM-DD HH:MM:SS`; ausencias como `NULL` | Formato consistente tras F2 |
 | Identificadores | `INTEGER PRIMARY KEY AUTOINCREMENT` | Sin UUID ni claves naturales |
-| Nombres | `snake_case`, plural (`properties`, `maintenances`, `users`) | Convención de facto |
+| Nombres | `snake_case`, plural (`properties`, `maintenances`, `users`, `tickets`) | Convención de facto |
 | Borrado | Tickets con baja lógica; otros datos no se eliminan desde la app | El historial del ticket se conserva para trazabilidad |
 | Auditoría | No existe | Sin `created_at`, `updated_at`, `created_by` en datos |
 | Backups | Manuales en `storage/backups/` | Sin retención ni restore periódico probado |
@@ -32,6 +32,11 @@
 ```mermaid
 erDiagram
     PROPERTIES ||--o{ MAINTENANCES : "property_id (lógica, sin FK)"
+    PROPERTIES ||--o{ TICKETS : "property_id (lógica, sin FK)"
+    USERS ||--o{ TICKETS : "created_by / assigned_to (lógica)"
+    TICKET_STATUS ||--o{ TICKETS : "status_id (lógica, sin FK)"
+    TICKETS ||--o{ TICKET_HISTORIES : "ticket_id (lógica, sin FK)"
+    USERS ||--o{ TICKET_HISTORIES : "actor_user_id (lógica, sin FK)"
 
     PROPERTIES {
         integer id PK
@@ -68,6 +73,42 @@ erDiagram
         string password_hash
         string role
         integer active
+        datetime created_at
+    }
+
+    TICKET_STATUS {
+        integer id PK
+        string code UK
+        string name
+        integer sort_order
+        integer is_terminal
+        integer active
+    }
+
+    TICKETS {
+        integer id PK
+        integer property_id
+        integer status_id
+        string title
+        text description
+        text observation
+        integer created_by
+        integer assigned_to
+        datetime created_at
+        datetime updated_at
+        datetime closed_at
+        datetime deleted_at
+    }
+
+    TICKET_HISTORIES {
+        integer id PK
+        integer ticket_id
+        integer actor_user_id
+        string action_type
+        text description
+        text observation
+        integer from_status_id
+        integer to_status_id
         datetime created_at
     }
 ```
@@ -116,11 +157,46 @@ CREATE TABLE IF NOT EXISTS users (
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ticket_status (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    is_terminal INTEGER NOT NULL DEFAULT 0,
+    active      INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS tickets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER NOT NULL,
+    status_id   INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL,
+    observation TEXT,
+    created_by  INTEGER NOT NULL,
+    assigned_to INTEGER,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at   DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS ticket_histories (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id      INTEGER NOT NULL,
+    actor_user_id  INTEGER NOT NULL,
+    action_type    TEXT NOT NULL,
+    description    TEXT NOT NULL,
+    observation    TEXT,
+    from_status_id INTEGER,
+    to_status_id   INTEGER,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican normalizaciones, triggers e índices. El runner `bin/migrate.php` registra los archivos en `schema_migrations`.
+La migración `003_add_ticket_support.sql` crea estas tres tablas, incorpora los estados iniciales e índices para bandejas e historial. La migración `004_soft_delete_tickets.sql` agrega `tickets.deleted_at` y su índice; `005_personal_ticket_lookup.sql` agrega el índice compuesto de tickets activos por creador. El fragmento DDL anterior es la definición base; `deleted_at` existe tras aplicar la migración 004.
 
-La migración `004_soft_delete_tickets.sql` agrega `tickets.deleted_at` e índice para ocultar tickets dados de baja sin borrar sus registros ni su historial. La migración `005_personal_ticket_lookup.sql` agrega un índice compuesto para la bandeja personal, filtrando tickets activos por creador y ordenando por actualización. Ambas se aplican con `php bin/migrate.php --backup=RUTA_A_BACKUP_VERIFICADO`.
+Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican normalizaciones, triggers e índices de inventario/mantenimientos. El runner `bin/migrate.php` registra los archivos en `schema_migrations`; en una base existente se aplican con `php bin/migrate.php --backup=RUTA_A_BACKUP_VERIFICADO`.
 
 **Nota:** SQLite no aplica longitudes de `VARCHAR` ni tipos estrictos. `STRING` es aceptado por compatibilidad y se comporta como `TEXT`.
 
@@ -138,7 +214,7 @@ La migración `004_soft_delete_tickets.sql` agrega `tickets.deleted_at` e índic
 | `seccion` | STRING | Sí | `4`, `102` | Relleno a 3 al importar y 4 al mostrar |
 | `ident` | STRING | Sí | `76`, `205` | Clave de búsqueda de importación |
 | `adscription` | STRING | Sí | vacío en 617/617 | No se persiste; el dashboard obtiene la unidad operativa en vivo desde PostgreSQL SIA |
-| `description` | STRING | Sí | `ARCHIVADOR, MATERIAL: FORMICA...` | Texto libre; se muestra sin escape |
+| `description` | STRING | Sí | `ARCHIVADOR, MATERIAL: FORMICA...` | Texto libre; se escapa al renderizar HTML |
 | `model` | STRING | Sí | `DP - SPLIT`, `PANASONIC` | Puede ser marca, modelo o combinación |
 | `color` | STRING | Sí | `BEIGE`, `NEGRO` | Texto libre |
 | `serial` | STRING | Sí | `0224`, `RR-US395` | Texto libre; 321 vacíos |
@@ -156,7 +232,7 @@ El servicio `legacy_postgres_inventory_snapshot()` resuelve la adscripción sin 
 | `property_id` | INTEGER | Sí | 1…617 | Debe existir en `properties.id`; sin FK |
 | `code` | STRING | Sí | `2-0001-0102-0008` | Snapshot del código del bien |
 | `type` | STRING | Sí | `correctivo`, `preventivo`, `evaluativo` | Trigger SQLite valida catálogo; `evaluativo` está aprobado |
-| `description` | STRING | Sí | Texto libre | Se muestra sin escape |
+| `description` | STRING | Sí | Texto libre | Se escapa al renderizar HTML |
 | `date` | DATETIME | Sí | ISO 8601 normalizado | Fecha del mantenimiento; 0 fechas no interpretables |
 | `time_taken` | INTEGER | Sí | 15 nulos | Horas totales; valores históricos existentes se conservaron |
 | `technician` | VARCHAR(255) | Sí | `ndominguez` | Texto libre; sin catálogo formal |
@@ -174,11 +250,59 @@ El servicio `legacy_postgres_inventory_snapshot()` resuelve la adscripción sin 
 | `id` | INTEGER | No | 1…N | PK autoincremental |
 | `username` | TEXT | No | `admin`, `operador` | `UNIQUE`; 3–64 caracteres `[a-zA-Z0-9._-]` |
 | `password_hash` | TEXT | No | `$2y$...` | Generado con `password_hash(PASSWORD_DEFAULT)` |
-| `role` | TEXT | No | `admin`, `operador`, `tecnico`, `consulta` | Default `consulta`; autorización en servidor |
+| `role` | TEXT | No | `admin`, `operador`, `tecnico`, `consulta`, `personal` | Default `consulta`; autorización en servidor |
 | `active` | INTEGER | No | `1` / `0` | `0` impide login; no hay UI de baja |
 | `created_at` | DATETIME | No | `CURRENT_TIMESTAMP` | Auditoría mínima de alta |
 
 **Índices:** PK + `UNIQUE(username)`. La tabla se crea en `conn.php` y se gestiona por CLI (`bin/create-user.php`).
+
+### 4.4 `ticket_status` — catálogo de estados de ticket
+
+| Columna | Tipo | Nulo | Dominio / ejemplo | Regla de negocio |
+|---|---|---|---|---|
+| `id` | INTEGER | No | PK | Identificador interno |
+| `code` | TEXT | No | `iniciado`, `en_progreso`, `con_retraso`, `en_espera`, `finalizado` | Único; código estable usado por la aplicación |
+| `name` | TEXT | No | `En progreso` | Etiqueta visible |
+| `sort_order` | INTEGER | No | `1`…`5` | Orden de presentación |
+| `is_terminal` | INTEGER | No | `0` / `1` | `finalizado` es terminal |
+| `active` | INTEGER | No | `0` / `1` | Indica disponibilidad del estado |
+
+**Índices:** PK + `UNIQUE(code)`. Los cinco estados iniciales se insertan con `INSERT OR IGNORE` desde `conn.php` y la migración 003.
+
+### 4.5 `tickets` — incidencias
+
+| Columna | Tipo | Nulo | Dominio / ejemplo | Regla de negocio |
+|---|---|---|---|---|
+| `id` | INTEGER | No | PK | Identificador del ticket |
+| `property_id` | INTEGER | No | ID de `properties` | Bien relacionado por lógica; sin FK física |
+| `status_id` | INTEGER | No | ID de `ticket_status` | Estado actual; relación lógica |
+| `title` | TEXT | No | Texto libre | Requerido en el alta |
+| `description` | TEXT | No | Texto libre | Requerida en el alta |
+| `observation` | TEXT | Sí | Texto libre | Opcional |
+| `created_by` | INTEGER | No | ID de `users` | Usuario creador; relación lógica |
+| `assigned_to` | INTEGER | Sí | ID de `users` | Asignación lógica; puede quedar vacía |
+| `created_at` | DATETIME | No | Fecha/hora local | Momento de creación |
+| `updated_at` | DATETIME | No | Fecha/hora local | Se usa para ordenar actividad |
+| `closed_at` | DATETIME | Sí | Fecha/hora local | Cierre; puede ser nulo |
+| `deleted_at` | DATETIME | Sí | Fecha/hora local | Baja lógica añadida por migración 004 |
+
+**Índices:** `idx_tickets_status_updated`, `idx_tickets_created_by_updated`, `idx_tickets_property_created`, `idx_tickets_deleted_updated` y `idx_tickets_personal_active_updated`.
+
+### 4.6 `ticket_histories` — historial de actividad
+
+| Columna | Tipo | Nulo | Dominio / ejemplo | Regla de negocio |
+|---|---|---|---|---|
+| `id` | INTEGER | No | PK | Identificador del evento |
+| `ticket_id` | INTEGER | No | ID de `tickets` | Relación lógica; sin FK física |
+| `actor_user_id` | INTEGER | No | ID de `users` | Usuario que generó el evento |
+| `action_type` | TEXT | No | `created`, `comment`, `status_change`, `deleted` | Tipo funcional del evento |
+| `description` | TEXT | No | Texto libre | Detalle del evento |
+| `observation` | TEXT | Sí | Texto libre | Observación asociada |
+| `from_status_id` | INTEGER | Sí | ID de `ticket_status` | Estado anterior, si aplica |
+| `to_status_id` | INTEGER | Sí | ID de `ticket_status` | Estado nuevo, si aplica |
+| `created_at` | DATETIME | No | Fecha/hora local | Orden cronológico del historial |
+
+**Índices:** `idx_ticket_histories_ticket_created` ordena los eventos por ticket, fecha e ID.
 
 ---
 
@@ -187,6 +311,11 @@ El servicio `legacy_postgres_inventory_snapshot()` resuelve la adscripción sin 
 | Relación | Cardinalidad | Implementación | Integridad |
 |---|---|---|---|
 | `properties.id → maintenances.property_id` | 1:N | Lógica en código | Sin FK; 0 huérfanos en el snapshot actual |
+| `properties.id → tickets.property_id` | 1:N | Lógica en código | Sin FK física |
+| `ticket_status.id → tickets.status_id` | 1:N | Lógica en código | Sin FK física |
+| `users.id → tickets.created_by / assigned_to` | 1:N | Lógica en código | Sin FK física |
+| `tickets.id → ticket_histories.ticket_id` | 1:N | Lógica en código | Sin FK física; el historial se conserva al dar de baja |
+| `users.id → ticket_histories.actor_user_id` | 1:N | Lógica en código | Sin FK física |
 | `properties.ident → importación` | 1:1 lógica | Búsqueda por `ident` | Sin `UNIQUE`; sin duplicados actuales |
 | `maintenances.code → properties` | Snapshot | Copia al registrar/editar | Puede quedar obsoleto |
 | `maintenances.technician → catálogo` | N:1 lógica | Texto libre | Sin FK; variantes con typo |

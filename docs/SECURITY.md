@@ -1,6 +1,6 @@
 # SECURITY.md — SysTec GMB
 
-> **Estado:** v1.2 (F2 en ejecución) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (ámbito y rutas de tickets actualizados) · **Actualizado:** 2026-11-11.
 > **Resumen ejecutivo:** F1 implementó autenticación, roles, CSRF, escape, SQL parametrizado y protección de `storage/`. F2 agregó transacciones y límites de importación, normalizó datos aprobados, aplicó triggers e índices. Siguen pendientes HTTPS/HSTS en el servidor real, rate limiting, auditoría, calendario/cifrado de backups y pruebas automatizadas. No exponer fuera de la red de confianza hasta cerrar el checklist de despliegue.
 
 ---
@@ -18,6 +18,11 @@
 | CSV legacy | `storage/properties.csv`, `storage/maintenances.csv` | Alta |
 | Logs de PHP | `storage/logs/php-error.log` | Media |
 | Código fuente | `*.php` | Media (revela lógica y rutas) |
+| Credencial NVIDIA Build | `.env` → `API_KEY_NVIDIA_BUILD` | Alta |
+
+### Redacción asistida por NVIDIA Build
+
+`bin/improve-maintenance-narrative.php` usa la API de NVIDIA Build con `nvidia/nemotron-3.5-lightning-30b-a3b`. Solo transmite `description`, `failure_reason` y `notes`; no envía IDs, códigos de bienes, fechas, técnicos ni estados. Los textos podrían contener datos sensibles por sí mismos. La vista previa también realiza una solicitud externa, aunque no persiste cambios. `API_KEY_NVIDIA_BUILD` se carga desde el entorno o `.env`, y se envía en el encabezado Bearer sin registrarse. El endpoint está sujeto a la cuota y disponibilidad del servicio de prueba de NVIDIA. La generación de todas las propuestas termina antes de iniciar la transacción; si la API falla, no se guardan cambios parciales.
 
 ---
 
@@ -50,6 +55,7 @@
 - **Implementación:** `include/auth.php` con `password_hash`/`password_verify`, sesión `HttpOnly`/`SameSite=Lax`, `require_login()`, `require_role()` y roles `admin`/`operador`/`tecnico`/`consulta`/`personal`. `login.php`, `logout.php` y `bin/create-user.php` completan el flujo.
 - **Evidencia de verificación:** `/` → 302 a `login.php`; `consulta` recibe 403 al intentar cambiar estado; el formulario de estado no se renderiza para ese rol; `personal` es redirigido al ámbito `/personal/*` y bloqueado fuera de ese prefijo.
 - **Ámbito personal:** el rol `personal` tiene un subespacio propio en `/personal/` con sus pantallas, acciones y permisos. Cualquier acceso a `/dashboard.php`, `/maintenances.php`, `/tickets.php` o cualquier ruta ajena al prefijo personal se redirige al área personal o al login, según la sesión.
+- **Tickets:** `admin`, `operador` y `tecnico` acceden a la bandeja y a los endpoints de registro/carga de bienes de soporte. `personal` usa endpoints bajo `/personal/`, con consultas limitadas a tickets propios. La baja lógica desde soporte se limita a `admin` y `operador`; todas las mutaciones requieren POST + CSRF.
 - **Pendiente:** auditoría de cambios (`audit_events`) y rate limiting de login (F3).
 
 #### H-02 · Inyección SQL por concatenación — ✅ Resuelto en F1
@@ -83,12 +89,13 @@
 - **Implementación F2:** normalización de `FINALIZADO`; triggers SQLite rechazan estados y transiciones inválidos.
 - **Evidencia:** triggers ejercitados en base temporal; pruebas automatizadas persistentes siguen pendientes (F3).
 
-#### H-13 · Sin migraciones ni pruebas automatizadas — 🧪 Parcial
+#### H-13 · Migraciones y pruebas automatizadas parciales — 🧪 Parcial
 
-- **Evidencia:** esquema base en `conn.php`; no hay `tests/`, `composer.json`, `phpunit.xml` ni CI.
-- **Impacto:** cambios de esquema sin rollback; regresiones no detectadas.
+- **Evidencia original:** esquema base en `conn.php`; no había `tests/`, `composer.json`, `phpunit.xml` ni CI.
+- **Implementación:** migraciones versionadas y suite PHPUnit básica en `tests/`, ejecutable con `composer test`.
+- **Impacto pendiente:** cobertura incompleta, sin CI y sin pruebas automatizadas de seguridad end-to-end.
 - **Implementación F2:** `bin/migrate.php`, `migrations/` y `schema_migrations`; las migraciones corren transaccionalmente y requieren backup verificado.
-- **Pendiente:** suite mínima automatizada ejecutable (F3).
+- **Pendiente:** ampliar la suite, automatizar pruebas de seguridad y configurar CI local (F3).
 
 #### H-15 · Importación sin transacción ni reporte — ✅ Resuelto en F2
 
@@ -142,14 +149,21 @@
 
 ### 4.2 Autorización
 
-| Acción | Admin | Operador | Técnico | Consulta |
-|---|---|---|---|---|
-| Ver dashboard/historial/reportes | ✅ | ✅ | ✅ | ✅ |
-| Cambiar estado de bien | ✅ | ✅ | — | — |
-| Registrar/editar mantenimiento | ✅ | ✅ | ✅ | — |
-| Cambiar estado de mantenimiento | ✅ | ✅ | ✅ | — |
-| Importar CSV | ✅ | ✅ | — | — |
-| Gestionar usuarios | ✅ | — | — | — |
+| Acción | Admin | Operador | Técnico | Consulta | Personal |
+|---|---|---|---|---|---|
+| Ver dashboard/historial/reportes | ✅ | ✅ | ✅ | ✅ | — |
+| Cambiar estado de bien | ✅ | ✅ | — | — | — |
+| Registrar/editar mantenimiento | ✅ | ✅ | ✅ | — | — |
+| Cambiar estado de mantenimiento | ✅ | ✅ | ✅ | — | — |
+| Importar CSV | ✅ | ✅ | — | — | — |
+| Ver bandeja global de tickets | ✅ | ✅ | ✅ | — | — |
+| Registrar ticket vinculado a bien | ✅ | ✅ | ✅ | — | ✅ (solo ámbito personal) |
+| Consultar/agregar seguimiento de ticket | ✅ | ✅ | ✅ | — | ✅ (solo tickets propios) |
+| Cambiar estado del ticket | ✅ | ✅ | ✅ | — | — |
+| Dar de baja ticket | ✅ | ✅ | — | — | — |
+| Gestionar usuarios | ✅ | — | — | — | — |
+
+**Nota:** `personal` no accede a `/tickets.php`; sus consultas y acciones personales validan el propietario del ticket. El endpoint de propiedades del wizard no cachea su respuesta en el navegador y exige el mismo rol que su área.
 
 ### 4.3 Validación y codificación
 

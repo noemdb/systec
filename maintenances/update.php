@@ -70,6 +70,7 @@ if (isset($_POST['update'])) {
         );
         $db->update($table, $id, $data);
 
+        $_SESSION['maintenance_notice'] = 'Mantenimiento actualizado correctamente.';
         header('Location: ' . url('maintenances.php?id=' . $id));
         exit();
     } catch (Exception $e) {

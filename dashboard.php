@@ -98,18 +98,7 @@ $adscriptionsByPropertyId = array();
 $adscriptionOptions = array();
 foreach ($properties as $property) {
     $propertyId = (int) $property['id'];
-    $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
-    $adscription = $legacyAdscriptionsByIdent[$ident] ?? null;
-    if (!is_array($adscription) || trim((string) ($adscription['label'] ?? '')) === '') {
-        $localAdscription = trim((string) ($property['adscription'] ?? ''));
-        $adscription = $localAdscription === ''
-            ? array('key' => '__unassigned__', 'label' => 'Sin adscripción')
-            : array(
-                'key' => 'local:' . hash('sha256', mb_strtolower($localAdscription)),
-                'label' => $localAdscription,
-            );
-    }
-
+    $adscription = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
     $adscriptionsByPropertyId[$propertyId] = $adscription;
     $adscriptionOptions[$adscription['key']] = $adscription['label'];
 }
@@ -432,7 +421,7 @@ ob_start(); ?>
             order: [4, 'asc'],
             language: {
                 search: 'Buscar bienes: _INPUT_',
-                searchPlaceholder: 'Código, descripción, serial...',
+                searchPlaceholder: 'Código, descripción, modelo, color, serial...',
                 emptyTable: 'No hay bienes registrados.',
                 zeroRecords: 'Ningún bien coincide con los filtros aplicados.'
             }
@@ -712,6 +701,9 @@ ob_start(); ?>
                     #historyLetterhead, #historyLetterhead * { visibility: visible !important; }
                     #historyLetterhead h5 { font-size: .9375rem; }
                     #historyLetterhead .small { font-size: .75rem; }
+                    #historyLetterhead dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 8px 0 0; }
+                    #historyLetterhead dt { color: #495057; font-size: 10px; text-transform: uppercase; }
+                    #historyLetterhead dd { margin: 0; }
                     table { border-collapse: collapse; width: 100%; }
                     th, td { border: 1px solid #adb5bd; padding: 6px; text-align: left; vertical-align: top; }
                     th { background: #e9ecef; }

@@ -1,6 +1,6 @@
 # CONVENTIONS.md — SysTec GMB
 
-> **Estado:** v1.1 (F1 implementada + reglas para cambios) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.4 (componentes compartidos y pruebas actuales) · **Actualizado:** 2026-11-11.
 > Consistencia para un equipo pequeño y agentes IA. Este documento se subordina a `DOMAIN.md` (idioma), `DATABASE.md` (persistencia), `API.md` (rutas) y `SECURITY.md` (controles).
 
 ---
@@ -15,12 +15,20 @@ systec/
 ├── conn.php                  # Capa de datos y catálogos
 ├── login.php / logout.php    # Autenticación
 ├── router.php / .htaccess    # Denegaciones del servidor
-├── bin/create-user.php       # Usuarios por CLI
+├── bin/                      # Comandos operativos CLI
+│   ├── create-user.php
+│   ├── migrate.php
+│   ├── deduplicate-maintenances.php
+│   └── improve-maintenance-narrative.php
 ├── include/                  # config, security, auth, layout y helpers
 ├── dashboard/                # Módulo inventario
 ├── maintenances/             # Módulo mantenimientos
+├── tickets/                   # Acciones y detalle de soporte
+├── personal/                  # Bandeja y acciones de tickets propios
 ├── properties/               # Importación de inventario
 ├── historials/               # Vistas de historial
+├── assets/js/                # Componentes de UI reutilizables
+├── tests/                    # PHPUnit
 ├── storage/                  # db.db, backups, CSV y logs (fuera del webroot)
 ├── vendor/                   # Dependencias vendorizadas
 ├── docs/                     # Documentación
@@ -136,10 +144,15 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 | POST + CSRF | Mutaciones | `maintenances/register.php` |
 | Parcial de tabla | Reutilización | `dashboard/table/index.php` |
 | Parcial de formulario | Alta/edición | `maintenances/form/fields.php` |
+| Componente PHP configurable | Wizard compartido entre áreas | `include/ticket_register_modal.php` |
+| Endpoint JSON con permisos del área | Datos del selector de bienes | `tickets/actions/properties.php`, `personal/actions/properties.php` |
 | Helper puro de presentación | Escape/badges | `include/helpers.php` |
+| Toast de resultado | Mensajes temporales por tipo | `toast_notification()` + `include/toasts.php` |
 | Consulta parametrizada en `DB` | Acceso a datos | `index()`, `getFirstForId()` |
 | Snapshot de código | Integridad histórica | `maintenances.code` |
 | Redirección tras POST | PRG | `register.php` |
+
+`toast_notification()` acepta `success`, `info`, `warning` o `danger`; rechaza tipos desconocidos con `InvalidArgumentException`. El layout consume `$notifications` y los toast se ocultan automáticamente después de seis segundos.
 
 ## 5. Patrones a evitar
 
@@ -175,13 +188,13 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 
 ## 7. Pruebas
 
-No existen pruebas automatizadas. F1 ejecutó pruebas manuales documentadas. Mínimo recomendado antes de tocar reglas:
+Existe una suite PHPUnit básica (`composer test`) y se mantienen las verificaciones manuales. La cobertura de reglas críticas, flujos HTTP y seguridad continúa incompleta.
 
 | Nivel | Herramienta | Qué cubrir |
 |---|---|---|
 | Sintaxis | `php -l` | Todos los archivos |
-| Unitario | PHPUnit o script propio | `getCodeId`, vencimiento, diferencias de fecha |
-| Integración | SQLite temporal | Importación, alta, edición, transición |
+| Unitario | PHPUnit 9.6 | Helpers, consultas y lógica de dominio cubierta en `tests/Unit/` |
+| Integración | PHPUnit + SQLite temporal | Importación, historial de tickets y consultas paginadas |
 | Humo | Navegador / curl | Login, dashboard, historial, reporte, importación |
 | Seguridad | curl + payloads | SQLi, XSS, CSRF, acceso directo a `storage/` |
 
@@ -192,6 +205,8 @@ No existen pruebas automatizadas. F1 ejecutó pruebas manuales documentadas. Mí
 ## 8. Documentación
 
 - Todo cambio de ruta o parámetro actualiza `API.md`.
+- Los componentes compartidos deben recibir configuración explícita, conservar autorización en cada endpoint consumidor y evitar IDs duplicados en el documento.
+- Las respuestas JSON internas deben declarar su tipo de contenido, evitar caché si contienen datos privados y devolver errores HTTP explícitos.
 - Todo cambio de esquema actualiza `DATABASE.md` y `grafo/modelo-datos.md`.
 - Toda regla nueva o cambiada actualiza `DOMAIN.md`.
 - Toda decisión con alternativas reales crea un ADR en `DECISIONS.md`.
@@ -202,7 +217,7 @@ No existen pruebas automatizadas. F1 ejecutó pruebas manuales documentadas. Mí
 
 ## 9. Commits y ramas
 
-Aunque el directorio no es un repositorio git, la convención recomendada es:
+El sistema está bajo control de versiones Git. Mantener la convención:
 
 - Conventional Commits: `feat(inventario): ...`, `fix(mantenimientos): ...`, `docs: ...`, `test: ...`, `chore: ...`.
 - Ramas: `main` protegida, `feat/*`, `fix/*`.

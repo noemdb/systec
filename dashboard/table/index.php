@@ -14,6 +14,8 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 <th scope="col">Ident.</th>
                 <th scope="col">Adscripción / unidad operativa</th>
                 <th scope="col">Descripción</th>
+                <th scope="col">Modelo</th>
+                <th scope="col">Color</th>
                 <th scope="col">Serial</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Mant.</th>
@@ -29,6 +31,8 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 $section = str_pad(trim((string) $property['seccion']), 3, '0', STR_PAD_LEFT);
                 $propertyCategory = property_category($property);
                 $propertyCode = property_code($property);
+                $propertyModel = trim((string) ($property['model'] ?? ''));
+                $propertyColor = trim((string) ($property['color'] ?? ''));
                 $propertyAdscription = $adscriptionsByPropertyId[(int) $property['id']]
                     ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
                 ?>
@@ -42,6 +46,12 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                     <td><?= e(str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT)) ?></td>
                     <td><?= e($propertyAdscription['label']) ?></td>
                     <td><?= e($property['description']) ?></td>
+                    <td class="text-break">
+                        <?= $propertyModel !== '' ? e($propertyModel) : '<span class="text-body-secondary">No registrado</span>' ?>
+                    </td>
+                    <td>
+                        <?= $propertyColor !== '' ? e($propertyColor) : '<span class="text-body-secondary">No registrado</span>' ?>
+                    </td>
                     <td><?= e($property['serial']) ?></td>
                     <td><?= sat_badge(badge_clase_bien((string) $property['status']), property_status_label((string) $property['status'])) ?></td>
                     <td><?= e($maintenanceCountsByProperty[(int) $property['id']] ?? 0) ?></td>
