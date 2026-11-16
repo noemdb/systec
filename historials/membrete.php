@@ -23,13 +23,13 @@ $letterheadFields = array(
         </p>
     </div>
 
-    <dl class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2 small mt-2 mb-0">
+    <dl class="row g-1 small mt-1 mb-0">
         <?php foreach ($letterheadFields as $letterheadLabel => $letterheadValue) : ?>
             <?php if ($letterheadLabel !== 'Código' && trim((string) $letterheadValue) === '') {
                 continue;
             } ?>
-            <div class="col">
-                <dt class="fw-semibold text-body-secondary text-uppercase"><?= e($letterheadLabel) ?></dt>
+            <div class="<?= e($letterheadLabel === 'Descripción' ? 'col-12' : 'col-6 col-xl-4') ?> d-flex align-items-baseline gap-1">
+                <dt class="mb-0 fw-semibold text-body-secondary text-nowrap"><?= e($letterheadLabel) ?>:</dt>
                 <dd class="mb-0 text-break">
                     <?= e(trim((string) $letterheadValue) === '' ? '—' : (string) $letterheadValue) ?>
                 </dd>

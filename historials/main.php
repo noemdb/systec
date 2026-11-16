@@ -42,8 +42,8 @@ $ticketActionLabels = array(
     </table>
 </div>
 
-<section class="container-fluid text-start mt-4" aria-labelledby="ticket-history-title">
-    <h2 class="h5 mb-3" id="ticket-history-title">
+<section class="container-fluid text-start mt-2" aria-labelledby="ticket-history-title">
+    <h2 class="h6 mb-1" id="ticket-history-title">
         <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>
         Tickets asociados al bien
         <span class="badge text-bg-light border text-body-secondary"><?= e((string) count($tickets)) ?></span>
@@ -51,15 +51,15 @@ $ticketActionLabels = array(
     <?php if ($tickets === array()) : ?>
         <p class="text-body-secondary mb-0">No hay tickets registrados para este bien.</p>
     <?php else : ?>
-        <div class="d-grid gap-2">
+        <div class="d-grid gap-1">
             <?php foreach ($tickets as $ticket) :
                 $ticketId = (int) $ticket['id'];
                 $ticketDetails = $ticketDetailsById[$ticketId];
                 $status = $ticketDetails['status'];
                 ?>
                 <article class="card shadow-sm">
-                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <div class="d-flex flex-wrap align-items-baseline gap-2">
+                    <div class="card-header py-1 px-2 d-flex flex-wrap align-items-center justify-content-between gap-1">
+                        <div class="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-0">
                             <span class="fw-semibold">Ticket #<?= e((string) $ticketId) ?></span>
                             <span class="small text-body-secondary"><?= e((string) $ticket['created_at']) ?></span>
                             <h3 class="h6 mb-0 text-break"><?= e((string) $ticket['title']) ?></h3>
@@ -73,38 +73,38 @@ $ticketActionLabels = array(
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="card-body py-2">
-                        <div class="d-flex flex-wrap column-gap-3 row-gap-1 small text-body-secondary mb-2">
-                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Registrado por: <?= e((string) $ticketDetails['creator']['username']) ?></span>
-                            <span><i class="bi bi-person-check me-1" aria-hidden="true"></i>Asignado a: <?= e((string) ($ticketDetails['assignee']['username'] ?? 'Sin asignar')) ?></span>
+                    <div class="card-body py-1 px-2">
+                        <div class="d-flex flex-wrap column-gap-3 row-gap-0 small text-body-secondary mb-1">
+                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Creado: <?= e((string) $ticketDetails['creator']['username']) ?></span>
+                            <span><i class="bi bi-person-check me-1" aria-hidden="true"></i>Asignado: <?= e((string) ($ticketDetails['assignee']['username'] ?? 'Sin asignar')) ?></span>
                             <?php if (!empty($ticket['closed_at'])) : ?>
-                                <span><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Finalizado: <?= e((string) $ticket['closed_at']) ?></span>
+                                <span><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Cerrado: <?= e((string) $ticket['closed_at']) ?></span>
                             <?php endif; ?>
                             <?php if (!empty($ticket['deleted_at'])) : ?>
                                 <span><i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminado: <?= e((string) $ticket['deleted_at']) ?></span>
                             <?php endif; ?>
                         </div>
-                        <div class="small mb-2 text-break">
-                            <p class="mb-1"><span class="text-body-secondary">Descripción:</span> <?= nl2br(e((string) $ticket['description'])) ?></p>
+                        <div class="d-flex flex-wrap column-gap-3 row-gap-0 small mb-1 text-break">
+                            <span><span class="text-body-secondary">Descripción:</span> <?= nl2br(e((string) $ticket['description'])) ?></span>
                             <?php if (!empty($ticket['observation'])) : ?>
-                                <p class="mb-0"><span class="text-body-secondary">Observación:</span> <?= nl2br(e((string) $ticket['observation'])) ?></p>
+                                <span><span class="text-body-secondary">Observación:</span> <?= nl2br(e((string) $ticket['observation'])) ?></span>
                             <?php endif; ?>
                         </div>
 
-                        <div class="border-top pt-2">
-                            <h4 class="small fw-semibold mb-2">Seguimiento</h4>
+                        <div class="border-top pt-1">
+                            <h4 class="small fw-semibold mb-1">Seguimiento</h4>
                             <?php if ($ticketDetails['history'] === array()) : ?>
                                 <p class="small text-body-secondary mb-0">Todavía no hay acciones registradas.</p>
                             <?php else : ?>
                                 <ol class="list-unstyled mb-0">
                                     <?php foreach ($ticketDetails['history'] as $entry) : ?>
-                                        <li class="border-start border-2 ps-2 mb-2">
-                                            <div class="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-1 small">
+                                        <li class="border-start border-2 ps-2 mb-1">
+                                            <div class="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-0 small text-break">
                                                 <span class="fw-semibold"><?= e((string) ($ticketActionLabels[$entry['action_type']] ?? $entry['action_type'])) ?></span>
                                                 <span class="text-body-secondary"><?= e((string) ($entry['actor_username'] ?? 'Usuario no disponible')) ?></span>
                                                 <time class="small text-body-secondary ms-sm-auto"><?= e((string) $entry['created_at']) ?></time>
+                                                <span class="text-break"><?= nl2br(e((string) $entry['description'])) ?></span>
                                             </div>
-                                            <div class="small text-break"><?= nl2br(e((string) $entry['description'])) ?></div>
                                             <?php if (!empty($entry['observation'])) : ?>
                                                 <div class="small text-body-secondary text-break">
                                                     <span class="fw-semibold">Observación:</span> <?= nl2br(e((string) $entry['observation'])) ?>

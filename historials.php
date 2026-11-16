@@ -54,7 +54,23 @@ $header_file = __DIR__ . '/historials/membrete.php';
 
 ob_start(); ?>
 
-    <section class="container-fluid" aria-labelledby="history-page-title">
+    <style nonce="<?= e(systec_csp_nonce()) ?>">
+        @media print {
+            .history-print-content {
+                break-after: avoid;
+                page-break-after: avoid;
+            }
+
+            .history-signature {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                break-before: avoid;
+                page-break-before: avoid;
+            }
+        }
+    </style>
+
+    <section class="container-fluid history-print-content" aria-labelledby="history-page-title">
         <h1 class="h3 mb-3" id="history-page-title">Historial de mantenimiento</h1>
         <?php if (!$property) : ?>
             <div class="alert alert-warning">No se encontró el bien solicitado.</div>
@@ -63,7 +79,7 @@ ob_start(); ?>
         <?php endif; ?>
     </section>
 
-    <div class="container-fluid text-center">
+    <div class="container-fluid text-center history-signature">
         <div class="my-0 py-0">____________________________________________</div>
         <div class="my-0 py-0">Realizado por: <span class="text-uppercase"><?= e($technician) ?></span></div>
         <div class="my-0 py-0"><?= e(date('d-m-Y H:i')) ?></div>
