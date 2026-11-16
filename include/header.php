@@ -19,7 +19,7 @@ if (auth_has_role(array('personal'))) {
 }
 
 $canImport = auth_has_role(array('admin', 'operador'));
-$importPageActive = in_array($currentPage, array('updates.php', 'imports.php'), true);
+$importPageActive = in_array($currentPage, array('updates.php', 'imports.php', 'sync-assignments.php'), true);
 ?>
 <div class="container-fluid px-0">
     <nav class="navbar navbar-expand-xl p-0" aria-label="Navegación principal">
@@ -69,6 +69,13 @@ $importPageActive = in_array($currentPage, array('updates.php', 'imports.php'), 
                                    href="<?= e(url('imports.php')) ?>"<?= $currentPage === 'imports.php' ? ' aria-current="page"' : '' ?>>
                                     <i class="bi bi-calendar2-plus me-2" aria-hidden="true"></i>
                                     Mantenimientos
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item<?= $currentPage === 'sync-assignments.php' ? ' active' : '' ?>"
+                                   href="<?= e(url('sync-assignments.php')) ?>"<?= $currentPage === 'sync-assignments.php' ? ' aria-current="page"' : '' ?>>
+                                    <i class="bi bi-people me-2" aria-hidden="true"></i>
+                                    Asignaciones de bienes
                                 </a>
                             </li>
                         </ul>

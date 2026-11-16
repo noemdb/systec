@@ -26,6 +26,22 @@ class NvidiaMaintenanceNarrativeTest extends TestCase
         );
     }
 
+    public function testRetryPolicyUsesIncreasingBoundedDelays(): void
+    {
+        self::assertSame(1, systec_nvidia_retry_delay_seconds(1));
+        self::assertSame(2, systec_nvidia_retry_delay_seconds(2));
+        self::assertSame(16, systec_nvidia_retry_delay_seconds(5));
+        self::assertSame(30, systec_nvidia_retry_delay_seconds(7));
+    }
+
+    public function testOnlyRateLimitsAndServerErrorsAreRetryableHttpStatuses(): void
+    {
+        self::assertTrue(systec_nvidia_is_retryable_status(429));
+        self::assertTrue(systec_nvidia_is_retryable_status(503));
+        self::assertFalse(systec_nvidia_is_retryable_status(400));
+        self::assertFalse(systec_nvidia_is_retryable_status(600));
+    }
+
     public function testValidationPreservesEmptyFieldsAndKeepsAllExpectedKeys(): void
     {
         $original = array(

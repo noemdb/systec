@@ -10,6 +10,29 @@ $db = db();
 $property_id = isset($_GET['property_id']) ? filter_var($_GET['property_id'], FILTER_VALIDATE_INT) : false;
 $property = ($property_id !== false && $property_id !== null) ? $db->getFirstForId('properties', $property_id) : null;
 $maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
+$tickets = $property ? $db->index('tickets', array('property_id' => (int) $property_id), '*', 'created_at ASC') : array();
+$ticketDetailsById = array();
+$ticketStatusClasses = array(
+    'iniciado' => 'primary',
+    'en_progreso' => 'info',
+    'con_retraso' => 'warning',
+    'en_espera' => 'secondary',
+    'finalizado' => 'success',
+);
+foreach ($tickets as $ticket) {
+    $ticketId = (int) $ticket['id'];
+    $status = $db->getFirstForId('ticket_status', (int) $ticket['status_id']);
+    $creator = $db->getFirstForId('users', (int) $ticket['created_by']);
+    $assigneeId = (int) ($ticket['assigned_to'] ?? 0);
+    $assignee = $assigneeId > 0 ? $db->getFirstForId('users', $assigneeId) : null;
+    $ticketDetailsById[$ticketId] = array(
+        'status' => $status ?: array('name' => 'Sin estado', 'code' => ''),
+        'status_class' => $ticketStatusClasses[(string) ($status['code'] ?? '')] ?? 'secondary',
+        'creator' => $creator ?: array('username' => 'Usuario no disponible'),
+        'assignee' => $assignee ?: null,
+        'history' => $db->ticketHistoryWithActors($ticketId),
+    );
+}
 $technician = '';
 
 if (isset($_GET['embed']) && $_GET['embed'] === '1') {
@@ -31,14 +54,14 @@ $header_file = __DIR__ . '/historials/membrete.php';
 
 ob_start(); ?>
 
-    <div class="container-fluid">
-        <h4>Historial de mantenimiento</h4>
+    <section class="container-fluid" aria-labelledby="history-page-title">
+        <h1 class="h3 mb-3" id="history-page-title">Historial de mantenimiento</h1>
         <?php if (!$property) : ?>
             <div class="alert alert-warning">No se encontró el bien solicitado.</div>
         <?php else : ?>
             <?php include __DIR__ . '/historials/main.php'; ?>
         <?php endif; ?>
-    </div>
+    </section>
 
     <div class="container-fluid text-center">
         <div class="my-0 py-0">____________________________________________</div>

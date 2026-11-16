@@ -6,6 +6,7 @@ require_login();
 
 $title = 'Historiales de mantenimiento';
 $db = db();
+$canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
 
 $getFilter = function (string $key, int $maxLength = 120) {
     if (!isset($_GET[$key]) || !is_string($_GET[$key])) {
@@ -23,6 +24,18 @@ $statusFilter = $getFilter('status');
 $typeFilter = $getFilter('type');
 $technicianFilter = $getFilter('technician');
 $adscriptionFilter = $getFilter('adscription', 128);
+$responsibleFilter = $canViewAssignments
+    && isset($_GET['responsible'])
+    && is_string($_GET['responsible'])
+    && preg_match('/^[a-f0-9]{64}$/D', $_GET['responsible'])
+    ? $_GET['responsible']
+    : '';
+$assignedFilter = $canViewAssignments
+    && isset($_GET['assigned'])
+    && is_string($_GET['assigned'])
+    && preg_match('/^[a-f0-9]{64}$/D', $_GET['assigned'])
+    ? $_GET['assigned']
+    : '';
 $onlyOverdue = isset($_GET['vencido']) && $_GET['vencido'] === '1';
 $next30Filter = isset($_GET['proximo']) && $_GET['proximo'] === '30';
 
@@ -39,10 +52,14 @@ $normalizeDate = function (string $value) {
 $dateFromFilter = $normalizeDate($getFilter('desde', 10));
 $dateToFilter = $normalizeDate($getFilter('hasta', 10));
 
+$propertyFields = 'id,ident,adscription';
+if ($canViewAssignments) {
+    $propertyFields .= ',responsible_name,responsible_status,assigned_name,assigned_status';
+}
 $propertiesForAdscription = $db->index(
     'properties',
     array(),
-    'id,ident,adscription',
+    $propertyFields,
     'id ASC'
 );
 $identifiers = array_map(function ($property) {
@@ -63,12 +80,31 @@ try {
 
 $adscriptionsByPropertyId = array();
 $adscriptionOptions = array();
+$assignmentFilterOptions = array('responsible' => array(), 'assigned' => array());
 foreach ($propertiesForAdscription as $property) {
     $propertyId = (int) $property['id'];
     $assignment = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
     $adscriptionsByPropertyId[$propertyId] = $assignment;
     $adscriptionOptions[$assignment['key']] = $assignment['label'];
+    if ($canViewAssignments) {
+        foreach (array('responsible' => 'responsible', 'assigned' => 'assigned') as $filterKey => $fieldPrefix) {
+            $name = trim((string) ($property[$fieldPrefix . '_name'] ?? ''));
+            $status = trim((string) ($property[$fieldPrefix . '_status'] ?? ''));
+            $assignmentFilterOptions[$filterKey][property_assignment_filter_key($name, $status)] =
+                property_assignment_filter_label($name, $status);
+        }
+    }
 }
+foreach ($assignmentFilterOptions as &$options) {
+    asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+}
+unset($options);
+$responsibleFilter = isset($assignmentFilterOptions['responsible'][$responsibleFilter])
+    ? $responsibleFilter
+    : '';
+$assignedFilter = isset($assignmentFilterOptions['assigned'][$assignedFilter])
+    ? $assignedFilter
+    : '';
 
 $categoryLabels = array(
     'informatica' => 'Informática',
@@ -115,6 +151,12 @@ if ($adscriptionFilter !== '') {
     if ($adscriptionSourceWarning !== '') {
         $filterSummary[] = array('Fuente de adscripción', $adscriptionSourceWarning);
     }
+}
+if ($responsibleFilter !== '') {
+    $filterSummary[] = array('Responsable del bien', $assignmentFilterOptions['responsible'][$responsibleFilter]);
+}
+if ($assignedFilter !== '') {
+    $filterSummary[] = array('Usuario asignado al bien', $assignmentFilterOptions['assigned'][$assignedFilter]);
 }
 if ($dateFromFilter !== '' || $dateToFilter !== '') {
     $dateFromLabel = $dateFromFilter !== '' ? date('d-m-Y', strtotime($dateFromFilter)) : '';
@@ -213,6 +255,22 @@ foreach ($maintenances as $maintenance) {
 
     if ($adscriptionFilter !== ''
         && ($adscriptionsByPropertyId[$propertyId]['key'] ?? '__unassigned__') !== $adscriptionFilter) {
+        continue;
+    }
+
+    if ($responsibleFilter !== ''
+        && property_assignment_filter_key(
+            (string) ($property['responsible_name'] ?? ''),
+            (string) ($property['responsible_status'] ?? '')
+        ) !== $responsibleFilter) {
+        continue;
+    }
+
+    if ($assignedFilter !== ''
+        && property_assignment_filter_key(
+            (string) ($property['assigned_name'] ?? ''),
+            (string) ($property['assigned_status'] ?? '')
+        ) !== $assignedFilter) {
         continue;
     }
 

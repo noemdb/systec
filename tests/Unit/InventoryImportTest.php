@@ -77,4 +77,15 @@ class InventoryImportTest extends TestCase
             ))
         );
     }
+
+    public function testPropertyAssignmentFiltersUseOpaqueKeysAndReadableLabels(): void
+    {
+        $key = property_assignment_filter_key(' Ana Pérez ', ' activo ');
+
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $key);
+        self::assertSame($key, property_assignment_filter_key('Ana Pérez', 'ACTIVO'));
+        self::assertNotSame($key, property_assignment_filter_key('Ana Pérez', 'INACTIVO'));
+        self::assertSame('Ana Pérez · Activo', property_assignment_filter_label('Ana Pérez', 'ACTIVO'));
+        self::assertSame('Sin ficha', property_assignment_filter_label('', 'SIN FICHA'));
+    }
 }

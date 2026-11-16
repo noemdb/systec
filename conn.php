@@ -21,6 +21,7 @@ class DB extends SQLite3
         'properties' => array(
             'id', 'grupo', 'subgrupo', 'seccion', 'ident', 'adscription',
             'description', 'model', 'color', 'serial', 'status',
+            'responsible_name', 'responsible_status', 'assigned_name', 'assigned_status',
         ),
         'maintenances' => array(
             'id', 'property_id', 'code', 'type', 'description', 'date',
@@ -475,6 +476,122 @@ class DB extends SQLite3
 
         foreach ($rows as $row) {
             $counts[(int) $row['property_id']] = (int) $row['maintenance_count'];
+        }
+
+        return $counts;
+    }
+
+    public function syncPropertyAdscriptions(array $properties, array $adscriptionsByIdent): int
+    {
+        $updates = array();
+        foreach ($properties as $property) {
+            $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
+            $assignment = $adscriptionsByIdent[$ident] ?? null;
+            if (!is_array($assignment) || !isset($assignment['label']) || !is_string($assignment['label'])) {
+                continue;
+            }
+
+            $label = trim($assignment['label']);
+            if ($label === '' || $label === trim((string) ($property['adscription'] ?? ''))) {
+                continue;
+            }
+
+            $propertyId = (int) ($property['id'] ?? 0);
+            if ($propertyId < 1) {
+                throw new InvalidArgumentException('No se puede sincronizar una adscripción sin ID de bien.');
+            }
+            $updates[$propertyId] = $label;
+        }
+
+        if ($updates === array()) {
+            return 0;
+        }
+        if (!$this->exec('BEGIN IMMEDIATE')) {
+            throw new RuntimeException('No se pudo iniciar la sincronización de adscripciones: ' . $this->lastErrorMsg());
+        }
+
+        try {
+            foreach ($updates as $propertyId => $label) {
+                if ($this->update('properties', $propertyId, array('adscription' => $label)) !== 1) {
+                    throw new RuntimeException('No se pudo guardar la adscripción del bien #' . $propertyId . '.');
+                }
+            }
+            if (!$this->exec('COMMIT')) {
+                throw new RuntimeException('No se pudo confirmar la sincronización de adscripciones: ' . $this->lastErrorMsg());
+            }
+        } catch (Throwable $e) {
+            $this->exec('ROLLBACK');
+            throw $e;
+        }
+
+        return count($updates);
+    }
+
+    public function syncPropertyAssignments(array $properties, array $assignmentsByIdent): int
+    {
+        $fields = array('responsible_name', 'responsible_status', 'assigned_name', 'assigned_status');
+        $updates = array();
+
+        foreach ($properties as $property) {
+            $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
+            if (!isset($assignmentsByIdent[$ident]) || !is_array($assignmentsByIdent[$ident])) {
+                continue;
+            }
+
+            $propertyId = (int) ($property['id'] ?? 0);
+            if ($propertyId < 1) {
+                throw new InvalidArgumentException('No se puede sincronizar una asignación sin ID de bien.');
+            }
+
+            foreach ($fields as $field) {
+                $value = $assignmentsByIdent[$ident][$field] ?? null;
+                if (!is_string($value)) {
+                    throw new InvalidArgumentException('La asignación del bien no contiene el campo esperado: ' . $field);
+                }
+
+                $value = trim($value);
+                if ($value !== trim((string) ($property[$field] ?? ''))) {
+                    $updates[$propertyId][$field] = $value;
+                }
+            }
+        }
+
+        if ($updates === array()) {
+            return 0;
+        }
+        if (!$this->exec('BEGIN IMMEDIATE')) {
+            throw new RuntimeException('No se pudo iniciar la sincronización de asignaciones: ' . $this->lastErrorMsg());
+        }
+
+        try {
+            foreach ($updates as $propertyId => $values) {
+                if ($this->update('properties', $propertyId, $values) !== 1) {
+                    throw new RuntimeException('No se pudo guardar la asignación del bien #' . $propertyId . '.');
+                }
+            }
+            if (!$this->exec('COMMIT')) {
+                throw new RuntimeException('No se pudo confirmar la sincronización de asignaciones: ' . $this->lastErrorMsg());
+            }
+        } catch (Throwable $e) {
+            $this->exec('ROLLBACK');
+            throw $e;
+        }
+
+        return count($updates);
+    }
+
+    public function ticketCountsByProperty(): array
+    {
+        $rows = $this->fetchAll(
+            'SELECT property_id, COUNT(*) AS ticket_count
+             FROM tickets
+             WHERE deleted_at IS NULL
+             GROUP BY property_id'
+        );
+        $counts = array();
+
+        foreach ($rows as $row) {
+            $counts[(int) $row['property_id']] = (int) $row['ticket_count'];
         }
 
         return $counts;

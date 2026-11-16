@@ -1,37 +1,126 @@
 <?php
 $types = array();
 $technician = '';
+$ticketActionLabels = array(
+    'created' => 'Ticket creado',
+    'status_change' => 'Cambio de estado',
+    'comment' => 'Seguimiento',
+    'deleted' => 'Ticket eliminado',
+);
 ?>
 
-<table class="table table-bordered table-sm" style="font-size:0.8rem">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Técnico</th>
-            <th>Estado</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($maintenances as $maintenance) : ?>
+<div class="table-responsive">
+    <table class="table table-bordered table-sm">
+        <caption class="visually-hidden">Historial de mantenimientos del bien</caption>
+        <thead>
             <tr>
-                <td class="small"><?= e($property['id']) ?></td>
-                <td class="small text-nowrap"><?= e(date('d-m-Y', strtotime($maintenance['date']))) ?></td>
-                <td class="small"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>
-                <td class="small"><?= e($maintenance['technician']) ?></td>
-                <td class="small"><?= sat_badge(badge_clase_mantenimiento((string) $maintenance['status']), texto_mantenimiento((string) $maintenance['status'])) ?></td>
+                <th scope="col">ID</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Técnico</th>
+                <th scope="col">Estado</th>
             </tr>
-            <tr>
-                <td colspan="5" class="small" style="border-bottom: 5px #ccc solid !important;">
-                    <i>Descripción:</i> <?= e($maintenance['description']) ?>
-                </td>
-            </tr>
-            <?php $types[$maintenance['type']] = array_key_exists($maintenance['type'], $types) ? $types[$maintenance['type']] + 1 : 1; ?>
-            <?php $technician = $maintenance['technician']; ?>
-        <?php endforeach; ?>
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            <?php foreach ($maintenances as $maintenance) : ?>
+                <tr>
+                    <td class="small"><?= e($property['id']) ?></td>
+                    <td class="small text-nowrap"><?= e(date('d-m-Y', strtotime($maintenance['date']))) ?></td>
+                    <td class="small"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>
+                    <td class="small"><?= e($maintenance['technician']) ?></td>
+                    <td class="small"><?= sat_badge(badge_clase_mantenimiento((string) $maintenance['status']), texto_mantenimiento((string) $maintenance['status'])) ?></td>
+                </tr>
+                <tr>
+                    <td colspan="5" class="small" style="border-bottom: 5px #ccc solid !important;">
+                        <i>Descripción:</i> <?= e($maintenance['description']) ?>
+                    </td>
+                </tr>
+                <?php $types[$maintenance['type']] = array_key_exists($maintenance['type'], $types) ? $types[$maintenance['type']] + 1 : 1; ?>
+                <?php $technician = $maintenance['technician']; ?>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+
+<section class="container-fluid text-start mt-4" aria-labelledby="ticket-history-title">
+    <h2 class="h5 mb-3" id="ticket-history-title">
+        <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>
+        Tickets asociados al bien
+        <span class="badge text-bg-light border text-body-secondary"><?= e((string) count($tickets)) ?></span>
+    </h2>
+    <?php if ($tickets === array()) : ?>
+        <p class="text-body-secondary mb-0">No hay tickets registrados para este bien.</p>
+    <?php else : ?>
+        <div class="d-grid gap-2">
+            <?php foreach ($tickets as $ticket) :
+                $ticketId = (int) $ticket['id'];
+                $ticketDetails = $ticketDetailsById[$ticketId];
+                $status = $ticketDetails['status'];
+                ?>
+                <article class="card shadow-sm">
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div class="d-flex flex-wrap align-items-baseline gap-2">
+                            <span class="fw-semibold">Ticket #<?= e((string) $ticketId) ?></span>
+                            <span class="small text-body-secondary"><?= e((string) $ticket['created_at']) ?></span>
+                            <h3 class="h6 mb-0 text-break"><?= e((string) $ticket['title']) ?></h3>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span class="badge text-bg-<?= e($ticketDetails['status_class']) ?>">
+                                <?= e((string) $status['name']) ?>
+                            </span>
+                            <?php if (!empty($ticket['deleted_at'])) : ?>
+                                <span class="badge text-bg-dark">Eliminado</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="d-flex flex-wrap column-gap-3 row-gap-1 small text-body-secondary mb-2">
+                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Registrado por: <?= e((string) $ticketDetails['creator']['username']) ?></span>
+                            <span><i class="bi bi-person-check me-1" aria-hidden="true"></i>Asignado a: <?= e((string) ($ticketDetails['assignee']['username'] ?? 'Sin asignar')) ?></span>
+                            <?php if (!empty($ticket['closed_at'])) : ?>
+                                <span><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Finalizado: <?= e((string) $ticket['closed_at']) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($ticket['deleted_at'])) : ?>
+                                <span><i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminado: <?= e((string) $ticket['deleted_at']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="small mb-2 text-break">
+                            <p class="mb-1"><span class="text-body-secondary">Descripción:</span> <?= nl2br(e((string) $ticket['description'])) ?></p>
+                            <?php if (!empty($ticket['observation'])) : ?>
+                                <p class="mb-0"><span class="text-body-secondary">Observación:</span> <?= nl2br(e((string) $ticket['observation'])) ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="border-top pt-2">
+                            <h4 class="small fw-semibold mb-2">Seguimiento</h4>
+                            <?php if ($ticketDetails['history'] === array()) : ?>
+                                <p class="small text-body-secondary mb-0">Todavía no hay acciones registradas.</p>
+                            <?php else : ?>
+                                <ol class="list-unstyled mb-0">
+                                    <?php foreach ($ticketDetails['history'] as $entry) : ?>
+                                        <li class="border-start border-2 ps-2 mb-2">
+                                            <div class="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-1 small">
+                                                <span class="fw-semibold"><?= e((string) ($ticketActionLabels[$entry['action_type']] ?? $entry['action_type'])) ?></span>
+                                                <span class="text-body-secondary"><?= e((string) ($entry['actor_username'] ?? 'Usuario no disponible')) ?></span>
+                                                <time class="small text-body-secondary ms-sm-auto"><?= e((string) $entry['created_at']) ?></time>
+                                            </div>
+                                            <div class="small text-break"><?= nl2br(e((string) $entry['description'])) ?></div>
+                                            <?php if (!empty($entry['observation'])) : ?>
+                                                <div class="small text-body-secondary text-break">
+                                                    <span class="fw-semibold">Observación:</span> <?= nl2br(e((string) $entry['observation'])) ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ol>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
 
 <div class="container-fluid text-start" style="font-size:0.8rem">
     <div>Observaciones:</div>

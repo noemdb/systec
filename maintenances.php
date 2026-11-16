@@ -17,22 +17,52 @@ $notifications = $maintenanceNotice !== ''
 ///////////////index/////////////////////
 $db = db();
 $maintenances = $db->index('maintenances', array(), '*', 'id DESC');
+$canViewTickets = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
+$ticketCount = $canViewTickets
+    ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
+    : 0;
+$ticketCountsByProperty = $db->ticketCountsByProperty();
 $propertyCategories = array();
 $propertiesById = array();
+$assignmentFilterOptions = array('responsible' => array(), 'assigned' => array());
+$assignmentFilterKeysByPropertyId = array();
+$propertyFields = 'id,grupo,subgrupo,seccion,ident,adscription,description,model,color,status';
+if ($canViewAssignments) {
+    $propertyFields .= ',responsible_name,responsible_status,assigned_name,assigned_status';
+}
 $propertiesForSelect = $db->index(
     'properties',
     array(),
-    'id,grupo,subgrupo,seccion,ident,adscription,description,model,color,status',
+    $propertyFields,
     'id ASC'
 );
+$localAdscriptionCount = 0;
 foreach ($propertiesForSelect as $propertyRow) {
     $propertyId = (int) $propertyRow['id'];
     $propertyCategories[$propertyId] = property_category($propertyRow);
     $propertiesById[$propertyId] = $propertyRow;
+    if (trim((string) $propertyRow['adscription']) !== '') {
+        $localAdscriptionCount++;
+    }
+    if ($canViewAssignments) {
+        foreach (array('responsible' => 'responsible', 'assigned' => 'assigned') as $filterKey => $fieldPrefix) {
+            $name = trim((string) ($propertyRow[$fieldPrefix . '_name'] ?? ''));
+            $status = trim((string) ($propertyRow[$fieldPrefix . '_status'] ?? ''));
+            $key = property_assignment_filter_key($name, $status);
+            $assignmentFilterOptions[$filterKey][$key] = property_assignment_filter_label($name, $status);
+            $assignmentFilterKeysByPropertyId[$propertyId][$filterKey] = $key;
+        }
+    }
 }
+foreach ($assignmentFilterOptions as &$options) {
+    asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+}
+unset($options);
 
 $legacyAdscriptionsByIdent = array();
 $adscriptionSourceWarning = '';
+$adscriptionSourceUnavailable = false;
 try {
     $identifiers = array_map(function ($propertyRow) {
         return trim((string) $propertyRow['ident']);
@@ -41,10 +71,17 @@ try {
     $legacyAdscriptionsByIdent = $adscriptionSnapshot['adscriptions'];
     if (!empty($adscriptionSnapshot['stale'])) {
         $adscriptionSourceWarning = 'La fuente institucional no responde; se usa la última consulta guardada.';
+    } else {
+        try {
+            $db->syncPropertyAdscriptions($propertiesForSelect, $legacyAdscriptionsByIdent);
+        } catch (Throwable $e) {
+            error_log('Mantenimientos no pudo guardar las adscripciones locales: ' . $e->getMessage());
+            $adscriptionSourceWarning = 'Se cargaron las adscripciones, pero no se pudieron guardar para respaldo local.';
+        }
     }
 } catch (Throwable $e) {
     error_log('Mantenimientos no pudo cargar las adscripciones institucionales: ' . $e->getMessage());
-    $adscriptionSourceWarning = 'No se pudo consultar la fuente institucional; se usan los datos locales guardados.';
+    $adscriptionSourceUnavailable = true;
 }
 
 $adscriptionsByPropertyId = array();
@@ -56,6 +93,11 @@ foreach ($propertiesForSelect as $propertyRow) {
     $adscriptionOptions[$assignment['key']] = $assignment['label'];
 }
 asort($adscriptionOptions, SORT_NATURAL | SORT_FLAG_CASE);
+if ($adscriptionSourceUnavailable) {
+    $adscriptionSourceWarning = $localAdscriptionCount > 0
+        ? 'No se pudo consultar la fuente institucional; se usan las adscripciones locales guardadas.'
+        : 'No se pudo consultar la fuente institucional y aún no hay adscripciones locales guardadas; los bienes aparecen como "Sin adscripción".';
+}
 
 $maintenanceCounts = array(
     'total' => count($maintenances),
@@ -136,7 +178,7 @@ ob_start(); ?>
             </div>
         <?php endif; ?>
 
-        <section class="row g-3 mb-4" aria-label="Resumen de mantenimientos">
+        <section class="row g-3 mb-4" aria-label="Resumen de mantenimientos y tickets">
             <?php
             $indicators = array(
                 array('total', 'Total', $maintenanceCounts['total'], 'primary', 'bi-tools', 'Quitar todos los filtros'),
@@ -166,6 +208,21 @@ ob_start(); ?>
                     </button>
                 </div>
             <?php endforeach; ?>
+            <?php if ($canViewTickets) : ?>
+                <div class="col-6 col-md">
+                    <article class="card h-100 border-start border-4 border-primary shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-2">
+                            <span class="rounded-circle bg-primary-subtle text-primary p-2" aria-hidden="true">
+                                <i class="bi bi-ticket-detailed fs-4"></i>
+                            </span>
+                            <div class="flex-grow-1">
+                                <p class="small text-body-secondary mb-0">Tickets activos</p>
+                                <p class="h3 mb-0"><?= e((string) $ticketCount) ?></p>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            <?php endif; ?>
         </section>
 
         <?php if ($modeEdit === 'true') : ?>
@@ -332,6 +389,8 @@ ob_start(); ?>
         const statusFilterSelect = document.getElementById('filterEstado');
         const typeFilterSelect = document.getElementById('filterTipo');
         const technicianFilterSelect = document.getElementById('filterTecnico');
+        const responsibleFilterSelect = document.getElementById('filterResponsible');
+        const assignedFilterSelect = document.getElementById('filterAssigned');
         const maintenanceParams = new URLSearchParams(window.location.search);
         const initialUrlFilters = maintenanceParams;
         categoryFilter.value = maintenanceParams.get('category') ?? '';
@@ -475,7 +534,15 @@ ob_start(); ?>
             type: 'filterTipo',
             technician: 'filterTecnico'
         };
-        const activeFilters = { status: '', type: '', technician: '' };
+        if (responsibleFilterSelect) selectFilters.responsible = 'filterResponsible';
+        if (assignedFilterSelect) selectFilters.assigned = 'filterAssigned';
+        const activeFilters = {
+            status: '',
+            type: '',
+            technician: '',
+            responsible: '',
+            assigned: ''
+        };
         let applyingHistory = false;
 
         const readSelectFilters = () => {
@@ -501,6 +568,8 @@ ob_start(); ?>
             || activeFilters.status !== ''
             || activeFilters.type !== ''
             || activeFilters.technician !== ''
+            || activeFilters.responsible !== ''
+            || activeFilters.assigned !== ''
             || dateFromFilter.value !== ''
             || dateToFilter.value !== ''
             || next30Filter.checked
@@ -518,6 +587,8 @@ ob_start(); ?>
                 estado: activeFilters.status,
                 tipo: activeFilters.type,
                 tecnico: activeFilters.technician,
+                responsible: activeFilters.responsible,
+                assigned: activeFilters.assigned,
                 desde: dateFromFilter.value,
                 hasta: dateToFilter.value,
                 proximo: next30Filter.checked ? '30' : '',
@@ -747,7 +818,7 @@ ob_start(); ?>
 
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
 
-        // Filtros combinados: vencidos, categoría, adscripción, estado, tipo, técnico y fechas
+        // Filtros combinados: asignaciones, vencidos, categoría, adscripción, estado, tipo, técnico y fechas
         $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
             if (settings.nTable.id !== 'myTable') return true;
             const node = table.row(dataIndex).node();
@@ -760,12 +831,15 @@ ob_start(); ?>
             const statusMatches = !activeFilters.status || ds.status === activeFilters.status;
             const typeMatches = !activeFilters.type || ds.type === activeFilters.type;
             const technicianMatches = !activeFilters.technician || ds.technician === activeFilters.technician;
+            const responsibleMatches = !activeFilters.responsible || ds.responsible === activeFilters.responsible;
+            const assignedMatches = !activeFilters.assigned || ds.assigned === activeFilters.assigned;
             const dateFromMatches = !dateFromFilter.value || (ds.date && ds.date >= dateFromFilter.value);
             const dateToMatches = !dateToFilter.value || (ds.date && ds.date <= dateToFilter.value);
             const next30Matches = !table.filterNext30 || ds.next30 === '1';
 
             return vencidosMatch && categoryMatches && adscriptionMatches
                 && statusMatches && typeMatches && technicianMatches
+                && responsibleMatches && assignedMatches
                 && dateFromMatches && dateToMatches && next30Matches;
         });
 
@@ -1004,12 +1078,18 @@ ob_start(); ?>
             }
             adscriptionFilter.value = requestedAdscription;
 
-            [statusFilterSelect, typeFilterSelect, technicianFilterSelect].forEach((select) => {
-                select.value = '';
+            Object.values(selectFilters).forEach((id) => {
+                document.getElementById(id).value = '';
             });
             setSelectFromParam(statusFilterSelect, urlFilters.get('estado'));
             setSelectFromParam(typeFilterSelect, urlFilters.get('tipo'));
             setSelectFromParam(technicianFilterSelect, urlFilters.get('tecnico'));
+            if (responsibleFilterSelect) {
+                setSelectFromParam(responsibleFilterSelect, urlFilters.get('responsible'));
+            }
+            if (assignedFilterSelect) {
+                setSelectFromParam(assignedFilterSelect, urlFilters.get('assigned'));
+            }
             readSelectFilters();
 
             ['desde', 'hasta'].forEach((param) => {
@@ -1083,6 +1163,8 @@ ob_start(); ?>
                     status: activeFilters.status,
                     type: activeFilters.type,
                     technician: activeFilters.technician,
+                    responsible: activeFilters.responsible,
+                    assigned: activeFilters.assigned,
                     desde: dateFromFilter.value,
                     hasta: dateToFilter.value,
                     proximo: next30Filter.checked ? '30' : '',

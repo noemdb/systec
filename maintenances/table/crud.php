@@ -18,7 +18,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
 
 <section aria-labelledby="maintenanceFiltersTitle">
     <div class="row g-2 align-items-end">
-        <div class="col-12 col-sm-6 col-xl">
+        <div class="col-12 col-sm-6 col-xl-3">
             <label for="filterCategory" class="form-label fw-semibold small mb-0">Categoría del bien</label>
             <select id="filterCategory" class="form-select form-select-sm">
                 <option value="">Todas las categorías</option>
@@ -28,7 +28,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             </select>
         </div>
 
-        <div class="col-12 col-sm-6 col-xl">
+        <div class="col-12 col-sm-6 col-xl-3">
             <label for="filterAdscription" class="form-label fw-semibold small mb-0">Unidad de adscripción</label>
             <select id="filterAdscription" class="form-select form-select-sm">
                 <option value="">Todas las unidades</option>
@@ -41,7 +41,28 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             <?php endif; ?>
         </div>
 
-        <div class="col-12 col-sm-6 col-xl">
+        <?php if ($canViewAssignments) : ?>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <label for="filterResponsible" class="form-label fw-semibold small mb-0">Responsable del bien</label>
+                <select id="filterResponsible" class="form-select form-select-sm js-col-filter" data-filter="responsible">
+                    <option value="">Todos los responsables</option>
+                    <?php foreach ($assignmentFilterOptions['responsible'] as $key => $label) : ?>
+                        <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <label for="filterAssigned" class="form-label fw-semibold small mb-0">Usuario asignado al bien</label>
+                <select id="filterAssigned" class="form-select form-select-sm js-col-filter" data-filter="assigned">
+                    <option value="">Todos los usuarios asignados</option>
+                    <?php foreach ($assignmentFilterOptions['assigned'] as $key => $label) : ?>
+                        <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
+
+        <div class="col-12 col-sm-6 col-xl-3">
             <label for="filterEstado" class="form-label fw-semibold small mb-0">Estado</label>
             <select id="filterEstado" class="form-select form-select-sm js-col-filter" data-filter="status">
                 <option value="">Todos</option>
@@ -51,7 +72,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             </select>
         </div>
 
-        <div class="col-12 col-sm-6 col-xl">
+        <div class="col-12 col-sm-6 col-xl-3">
             <label for="filterTipo" class="form-label fw-semibold small mb-0">Tipo</label>
             <select id="filterTipo" class="form-select form-select-sm js-col-filter" data-filter="type">
                 <option value="">Todos</option>
@@ -61,7 +82,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             </select>
         </div>
 
-        <div class="col-12 col-sm-6 col-xl">
+        <div class="col-12 col-sm-6 col-xl-3">
             <label for="filterTecnico" class="form-label fw-semibold small mb-0">Técnico</label>
             <select id="filterTecnico" class="form-select form-select-sm js-col-filter" data-filter="technician">
                 <option value="">Todos</option>
@@ -141,7 +162,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
 <div class="table-responsive">
 <table class="table table-striped table-sm table-hover align-middle mb-0" id="myTable">
     <caption class="visually-hidden">Mantenimientos registrados con datos del bien y sus acciones</caption>
-    <thead class="table-light">
+    <thead class="table-light text-nowrap">
         <tr>
             <?php if ($canEditMaintenance) : ?>
                 <th scope="col" class="maintenance-select-cell" data-orderable="false">
@@ -150,6 +171,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 </th>
             <?php endif; ?>
             <th scope="col">Código</th>
+            <th scope="col" class="text-center" title="Tickets activos asociados al bien">Tickets</th>
             <th scope="col" class="d-none d-sm-table-cell">Tipo</th>
             <th scope="col">Descripción</th>
             <th scope="col">Fecha</th>
@@ -157,8 +179,6 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             <th scope="col" class="d-none d-md-table-cell">Técnico</th>
             <th scope="col">Estado</th>
             <th scope="col">Próx. mant.</th>
-            <th scope="col" class="d-none d-xl-table-cell">Modelo</th>
-            <th scope="col" class="d-none d-xl-table-cell">Color</th>
             <th scope="col">Acciones</th>
         </tr>
     </thead>
@@ -177,9 +197,6 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 ? (string) $maintenance['time_taken']
                 : '—';
 
-            $propertyDetails = $propertiesById[(int) $maintenance['property_id']] ?? array();
-            $propertyModel = trim((string) ($propertyDetails['model'] ?? ''));
-            $propertyColor = trim((string) ($propertyDetails['color'] ?? ''));
             $propertyAdscription = $adscriptionsByPropertyId[(int) $maintenance['property_id']]
                 ?? array('key' => '__unassigned__');
             $statusKey = mb_strtolower(trim((string) $maintenance['status']));
@@ -231,6 +248,10 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             <tr class="<?= ($maintenance['id'] == $id) ? 'table-secondary' : '' ?> <?= $vencido ? 'js-vencido' : '' ?>"
                 data-category="<?= e($propertyCategories[(int) $maintenance['property_id']] ?? '') ?>"
                 data-adscription="<?= e($propertyAdscription['key']) ?>"
+                <?php if ($canViewAssignments) : ?>
+                    data-responsible="<?= e($assignmentFilterKeysByPropertyId[(int) $maintenance['property_id']]['responsible'] ?? '') ?>"
+                    data-assigned="<?= e($assignmentFilterKeysByPropertyId[(int) $maintenance['property_id']]['assigned'] ?? '') ?>"
+                <?php endif; ?>
                 data-status="<?= e($statusKey) ?>"
                 data-type="<?= e((string) $maintenance['type']) ?>"
                 data-technician="<?= e((string) $maintenance['technician']) ?>"
@@ -246,6 +267,8 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                     </td>
                 <?php endif; ?>
                 <td class="text-nowrap fw-semibold"><?= e($maintenance['code']) ?></td>
+                <?php $ticketCount = $ticketCountsByProperty[(int) $maintenance['property_id']] ?? 0; ?>
+                <td class="text-center" data-order="<?= (int) $ticketCount ?>"><?= (int) $ticketCount ?></td>
                 <td class="d-none d-sm-table-cell"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>
                 <td class="maintenance-description-cell"><?= e($maintenance['description']) ?></td>
                 <td class="text-nowrap" data-order="<?= e($dateRaw) ?>"><?= e($dateLabel) ?></td>
@@ -261,12 +284,6 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                     <?php else : ?>
                         <?= e($nextLabel) ?>
                     <?php endif; ?>
-                </td>
-                <td class="text-break d-none d-xl-table-cell">
-                    <?= $propertyModel !== '' ? e($propertyModel) : '<span class="text-body-secondary">No registrado</span>' ?>
-                </td>
-                <td class="d-none d-xl-table-cell">
-                    <?= $propertyColor !== '' ? e($propertyColor) : '<span class="text-body-secondary">No registrado</span>' ?>
                 </td>
                 <td class="text-nowrap">
                     <div class="btn-group btn-group-sm" role="group"

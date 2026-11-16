@@ -31,6 +31,14 @@ if (isset($_POST['register'])) {
         && preg_match('/^[A-Za-z0-9_.:\/-]{1,128}$/D', $_POST['return_adscription'])) {
         $returnQuery['adscription'] = $_POST['return_adscription'];
     }
+    foreach (array('responsible', 'assigned') as $filter) {
+        $postKey = 'return_' . $filter;
+        if (isset($_POST[$postKey])
+            && is_string($_POST[$postKey])
+            && preg_match('/^[a-f0-9]{64}$/D', $_POST[$postKey])) {
+            $returnQuery[$filter] = $_POST[$postKey];
+        }
+    }
     if (isset($_POST['return_search']) && is_string($_POST['return_search'])) {
         $search = trim($_POST['return_search']);
         if ($search !== '') {

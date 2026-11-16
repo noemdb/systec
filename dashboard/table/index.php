@@ -1,6 +1,17 @@
 <?php
 $canRegisterMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
 $canPropertyStatus = auth_has_role(array('admin', 'operador'));
+$assignmentStatusLabels = array(
+    'ACTIVO' => 'Activo',
+    'INACTIVO' => 'Inactivo',
+    'JUBILADO' => 'Jubilado',
+    'REMOCION' => 'Remoción',
+    'RENUNCIA' => 'Renuncia',
+    'VACACIONES' => 'Vacaciones',
+    'SIN ASIGNAR' => 'Sin asignar',
+    'SIN FICHA' => 'Sin ficha',
+    'SIN ESTADO' => 'Estado no registrado',
+);
 ?>
 <div class="container-fluid text-start">
     <div class="table-responsive">
@@ -13,12 +24,17 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 <th scope="col">Sec</th>
                 <th scope="col">Ident.</th>
                 <th scope="col">Adscripción / unidad operativa</th>
+                <?php if ($canViewAssignments) : ?>
+                    <th scope="col">Responsable</th>
+                    <th scope="col">Usuario asignado</th>
+                <?php endif; ?>
                 <th scope="col">Descripción</th>
                 <th scope="col">Modelo</th>
                 <th scope="col">Color</th>
                 <th scope="col">Serial</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Mant.</th>
+                <th scope="col">Tickets</th>
                 <th scope="col" class="text-center">Acciones</th>
             </tr>
         </thead>
@@ -35,16 +51,52 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                 $propertyColor = trim((string) ($property['color'] ?? ''));
                 $propertyAdscription = $adscriptionsByPropertyId[(int) $property['id']]
                     ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
+                $responsibleName = trim((string) ($property['responsible_name'] ?? ''));
+                $responsibleStatus = mb_strtoupper(trim((string) ($property['responsible_status'] ?? '')));
+                $responsibleStatusLabel = $assignmentStatusLabels[$responsibleStatus]
+                    ?? ($responsibleStatus !== '' ? ucfirst(mb_strtolower($responsibleStatus)) : 'Pendiente de sincronizar');
+                $responsibleDisplay = $responsibleName !== ''
+                    ? $responsibleName
+                    : ($responsibleStatusLabel === 'Sin asignar' || $responsibleStatusLabel === 'Sin ficha'
+                        ? $responsibleStatusLabel
+                        : 'Nombre no registrado');
+                $assignedName = trim((string) ($property['assigned_name'] ?? ''));
+                $assignedStatus = mb_strtoupper(trim((string) ($property['assigned_status'] ?? '')));
+                $assignedStatusLabel = $assignmentStatusLabels[$assignedStatus]
+                    ?? ($assignedStatus !== '' ? ucfirst(mb_strtolower($assignedStatus)) : 'Pendiente de sincronizar');
+                $assignedDisplay = $assignedName !== ''
+                    ? $assignedName
+                    : ($assignedStatusLabel === 'Sin asignar' || $assignedStatusLabel === 'Sin ficha'
+                        ? $assignedStatusLabel
+                        : 'Nombre no registrado');
                 ?>
                 <tr data-category="<?= e($propertyCategory) ?>"
                     data-adscription="<?= e($propertyAdscription['key']) ?>"
-                    data-status="<?= e(mb_strtoupper(trim((string) $property['status']))) ?>">
+                    data-status="<?= e(mb_strtoupper(trim((string) $property['status']))) ?>"
+                    <?php if ($canViewAssignments) : ?>
+                        data-responsible="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['responsible'] ?? '') ?>"
+                        data-assigned="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['assigned'] ?? '') ?>"
+                    <?php endif; ?>>
                     <td><?= e($property['id']) ?></td>
                     <td><?= e($property['grupo']) ?></td>
                     <td><?= e($subgroup) ?></td>
                     <td><?= e($section) ?></td>
                     <td><?= e(str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT)) ?></td>
                     <td><?= e($propertyAdscription['label']) ?></td>
+                    <?php if ($canViewAssignments) : ?>
+                        <td class="text-break">
+                            <span><?= e($responsibleDisplay) ?></span>
+                            <?php if ($responsibleName !== '') : ?>
+                                <small class="d-block text-body-secondary"><?= e($responsibleStatusLabel) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-break">
+                            <span><?= e($assignedDisplay) ?></span>
+                            <?php if ($assignedName !== '') : ?>
+                                <small class="d-block text-body-secondary"><?= e($assignedStatusLabel) ?></small>
+                            <?php endif; ?>
+                        </td>
+                    <?php endif; ?>
                     <td><?= e($property['description']) ?></td>
                     <td class="text-break">
                         <?= $propertyModel !== '' ? e($propertyModel) : '<span class="text-body-secondary">No registrado</span>' ?>
@@ -55,6 +107,7 @@ $canPropertyStatus = auth_has_role(array('admin', 'operador'));
                     <td><?= e($property['serial']) ?></td>
                     <td><?= sat_badge(badge_clase_bien((string) $property['status']), property_status_label((string) $property['status'])) ?></td>
                     <td><?= e($maintenanceCountsByProperty[(int) $property['id']] ?? 0) ?></td>
+                    <td><?= e($ticketCountsByProperty[(int) $property['id']] ?? 0) ?></td>
                     <td>
                         <div class="btn-group" role="group" aria-label="Acciones del bien">
                             <?php if ($canRegisterMaintenance) : ?>

@@ -7,13 +7,19 @@ require_login();
 $title = 'Dashboard';
 $db = db();
 
-$properties = $db->index('properties', array(), '*', 'id ASC');
-$completedMaintenanceCount = $db->countRows('maintenances', array('status' => 'finalizado'));
 $canViewTickets = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
+$propertyFields = 'id,grupo,subgrupo,seccion,ident,adscription,description,model,color,serial,status';
+if ($canViewAssignments) {
+    $propertyFields .= ',responsible_name,responsible_status,assigned_name,assigned_status';
+}
+$properties = $db->index('properties', array(), $propertyFields, 'id ASC');
+$completedMaintenanceCount = $db->countRows('maintenances', array('status' => 'finalizado'));
 $ticketCount = $canViewTickets
     ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
     : 0;
 $maintenanceCountsByProperty = $db->maintenanceCountsByProperty();
+$ticketCountsByProperty = $db->ticketCountsByProperty();
 $propertyCount = count($properties);
 $goodPropertyCount = 0;
 $attentionPropertyCount = 0;
@@ -67,6 +73,7 @@ $legacySyncSourceCount = 0;
 $legacySyncCheckedAt = date('d/m/Y H:i');
 $localPropertiesByIdent = array();
 $legacyAdscriptionsByIdent = array();
+$legacyAssignmentsByIdent = array();
 
 foreach ($properties as $property) {
     $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
@@ -79,9 +86,14 @@ try {
     $localPropertyIdentifiers = array_map(function ($property) {
         return trim((string) $property['ident']);
     }, $properties);
-    $legacySnapshot = legacy_postgres_inventory_snapshot($localPropertyIdentifiers);
+    $legacySnapshot = legacy_postgres_inventory_snapshot(
+        $localPropertyIdentifiers,
+        true,
+        $canViewAssignments
+    );
     $legacyRows = $legacySnapshot['rows'];
     $legacyAdscriptionsByIdent = $legacySnapshot['adscriptions'];
+    $legacyAssignmentsByIdent = $legacySnapshot['assignments'];
     $legacySyncSourceCount = count($legacyRows);
     foreach ($legacyRows as $row) {
         $ident = str_pad(trim((string) $row[3]), 4, '0', STR_PAD_LEFT);
@@ -90,19 +102,53 @@ try {
         }
     }
     $legacySyncAvailable = true;
+
+    if ($canViewAssignments) {
+        try {
+            $db->syncPropertyAssignments($properties, $legacyAssignmentsByIdent);
+        } catch (Throwable $e) {
+            error_log('Dashboard no pudo guardar las asignaciones locales: ' . $e->getMessage());
+            $notifications[] = toast_notification(
+                'warning',
+                'Se consultaron las asignaciones, pero no se pudieron guardar para uso local.'
+            );
+        }
+
+        foreach ($properties as $index => $property) {
+            $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
+            if (isset($legacyAssignmentsByIdent[$ident])) {
+                $properties[$index] = array_merge($property, $legacyAssignmentsByIdent[$ident]);
+            }
+        }
+    }
 } catch (Throwable $e) {
     error_log('Dashboard no pudo verificar la sincronización con PostgreSQL legacy: ' . $e->getMessage());
 }
 
 $adscriptionsByPropertyId = array();
 $adscriptionOptions = array();
+$assignmentFilterOptions = array('responsible' => array(), 'assigned' => array());
+$assignmentFilterKeysByPropertyId = array();
 foreach ($properties as $property) {
     $propertyId = (int) $property['id'];
     $adscription = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
     $adscriptionsByPropertyId[$propertyId] = $adscription;
     $adscriptionOptions[$adscription['key']] = $adscription['label'];
+    if ($canViewAssignments) {
+        foreach (array('responsible' => 'responsible', 'assigned' => 'assigned') as $filterKey => $fieldPrefix) {
+            $name = trim((string) ($property[$fieldPrefix . '_name'] ?? ''));
+            $status = trim((string) ($property[$fieldPrefix . '_status'] ?? ''));
+            $key = property_assignment_filter_key($name, $status);
+            $assignmentFilterOptions[$filterKey][$key] = property_assignment_filter_label($name, $status);
+            $assignmentFilterKeysByPropertyId[$propertyId][$filterKey] = $key;
+        }
+    }
 }
 asort($adscriptionOptions, SORT_NATURAL | SORT_FLAG_CASE);
+foreach ($assignmentFilterOptions as &$options) {
+    asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+}
+unset($options);
 
 $legacySyncCardClass = $legacySyncAvailable
     ? ($legacySyncPendingCount === 0 ? 'success' : 'warning')
@@ -272,6 +318,26 @@ ob_start(); ?>
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <?php if ($canViewAssignments) : ?>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold" for="filterResponsible">Responsable del bien</label>
+                            <select class="form-select" id="filterResponsible">
+                                <option value="">Todos los responsables</option>
+                                <?php foreach ($assignmentFilterOptions['responsible'] as $key => $label) : ?>
+                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold" for="filterAssigned">Usuario asignado al bien</label>
+                            <select class="form-select" id="filterAssigned">
+                                <option value="">Todos los usuarios asignados</option>
+                                <?php foreach ($assignmentFilterOptions['assigned'] as $key => $label) : ?>
+                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
                     <div class="col-12 col-md-4">
                         <button type="button" class="btn btn-outline-secondary" id="resetInventoryFilters">
                             <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Limpiar filtros
@@ -341,6 +407,10 @@ ob_start(); ?>
                     <input type="hidden" name="return_category" value="">
                     <input type="hidden" name="return_status" value="">
                     <input type="hidden" name="return_adscription" value="">
+                    <?php if ($canViewAssignments) : ?>
+                        <input type="hidden" name="return_responsible" value="">
+                        <input type="hidden" name="return_assigned" value="">
+                    <?php endif; ?>
                     <input type="hidden" name="return_search" value="">
                     <div class="modal-header">
                         <div>
@@ -410,9 +480,13 @@ ob_start(); ?>
         const categoryFilter = document.getElementById('filterCategory');
         const statusFilter = document.getElementById('filterStatus');
         const adscriptionFilter = document.getElementById('filterAdscription');
+        const responsibleFilter = document.getElementById('filterResponsible');
+        const assignedFilter = document.getElementById('filterAssigned');
         categoryFilter.value = dashboardParams.get('category') ?? '';
         statusFilter.value = dashboardParams.get('status') ?? '';
         adscriptionFilter.value = dashboardParams.get('adscription') ?? '';
+        if (responsibleFilter) responsibleFilter.value = dashboardParams.get('responsible') ?? '';
+        if (assignedFilter) assignedFilter.value = dashboardParams.get('assigned') ?? '';
 
         const table = new DataTable('#myTable', {
             search: {
@@ -452,6 +526,18 @@ ob_start(); ?>
                     label: `Adscripción: ${adscriptionFilter.selectedOptions[0].textContent}`
                 });
             }
+            if (responsibleFilter && responsibleFilter.value) {
+                activeFilters.push({
+                    key: 'responsible',
+                    label: `Responsable: ${responsibleFilter.selectedOptions[0].textContent}`
+                });
+            }
+            if (assignedFilter && assignedFilter.value) {
+                activeFilters.push({
+                    key: 'assigned',
+                    label: `Usuario asignado: ${assignedFilter.selectedOptions[0].textContent}`
+                });
+            }
             if (table.search().trim()) {
                 activeFilters.push({
                     key: 'search',
@@ -481,6 +567,8 @@ ob_start(); ?>
             if (chip.dataset.filterKey === 'category') categoryFilter.value = '';
             if (chip.dataset.filterKey === 'status') statusFilter.value = '';
             if (chip.dataset.filterKey === 'adscription') adscriptionFilter.value = '';
+            if (chip.dataset.filterKey === 'responsible' && responsibleFilter) responsibleFilter.value = '';
+            if (chip.dataset.filterKey === 'assigned' && assignedFilter) assignedFilter.value = '';
             if (chip.dataset.filterKey === 'search') table.search('');
 
             table.draw();
@@ -494,6 +582,8 @@ ob_start(); ?>
                 category: categoryFilter.value,
                 status: statusFilter.value,
                 adscription: adscriptionFilter.value,
+                responsible: responsibleFilter?.value ?? '',
+                assigned: assignedFilter?.value ?? '',
                 search: table.search().trim()
             };
 
@@ -512,7 +602,8 @@ ob_start(); ?>
             inventoryIndicators.forEach((indicator) => {
                 const status = indicator.dataset.filterStatus;
                 const isActive = status === ''
-                    ? !categoryFilter.value && !statusFilter.value && !adscriptionFilter.value && !table.search().trim()
+                    ? !categoryFilter.value && !statusFilter.value && !adscriptionFilter.value
+                        && !(responsibleFilter?.value) && !(assignedFilter?.value) && !table.search().trim()
                     : statusFilter.value === status;
                 indicator.setAttribute('aria-pressed', String(isActive));
             });
@@ -534,17 +625,26 @@ ob_start(); ?>
                 || (statusFilter.value === '__attention__'
                     ? rowStatus === 'MALO' || rowStatus === 'MUY MALO'
                     : rowStatus === statusFilter.value);
+            const responsibleMatches = !responsibleFilter || !responsibleFilter.value
+                || row.dataset.responsible === responsibleFilter.value;
+            const assignedMatches = !assignedFilter || !assignedFilter.value
+                || row.dataset.assigned === assignedFilter.value;
 
-            return categoryMatches && statusMatches && adscriptionMatches;
+            return categoryMatches && statusMatches && adscriptionMatches
+                && responsibleMatches && assignedMatches;
         });
 
-        [categoryFilter, statusFilter, adscriptionFilter].forEach((filter) => {
-            filter.addEventListener('change', () => {
-                table.draw();
-                syncInventoryUrl();
-                syncIndicatorState();
+        [categoryFilter, statusFilter, adscriptionFilter, responsibleFilter, assignedFilter]
+            .filter(Boolean)
+            .forEach((filter) => {
+                filter.addEventListener('change', () => {
+                    table.draw();
+                    syncInventoryUrl();
+                    syncIndicatorState();
+                });
             });
-        });
+        table.draw();
+        syncIndicatorState();
 
         inventoryIndicators.forEach((indicator) => {
             indicator.addEventListener('click', () => {
@@ -553,6 +653,8 @@ ob_start(); ?>
                     categoryFilter.value = '';
                     statusFilter.value = '';
                     adscriptionFilter.value = '';
+                    if (responsibleFilter) responsibleFilter.value = '';
+                    if (assignedFilter) assignedFilter.value = '';
                     table.search('');
                 } else {
                     statusFilter.value = (statusFilter.value === status) ? '' : status;
@@ -572,6 +674,8 @@ ob_start(); ?>
             categoryFilter.value = '';
             statusFilter.value = '';
             adscriptionFilter.value = '';
+            if (responsibleFilter) responsibleFilter.value = '';
+            if (assignedFilter) assignedFilter.value = '';
             table.search('');
             table.draw();
             syncInventoryUrl();
@@ -589,8 +693,9 @@ ob_start(); ?>
         const maintenanceForm = document.querySelector('.maintenance-modal-form');
         maintenanceForm.addEventListener('submit', () => {
             const params = new URLSearchParams(window.location.search);
-            ['category', 'status', 'adscription', 'search'].forEach((key) => {
-                maintenanceForm.elements[`return_${key}`].value = params.get(key) ?? '';
+            ['category', 'status', 'adscription', 'responsible', 'assigned', 'search'].forEach((key) => {
+                const field = maintenanceForm.elements[`return_${key}`];
+                if (field) field.value = params.get(key) ?? '';
             });
         });
 

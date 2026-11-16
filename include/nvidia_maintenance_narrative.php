@@ -87,6 +87,16 @@ function systec_nvidia_api_error_message(string $response): ?string
     return substr(trim(strip_tags($message)), 0, 500);
 }
 
+function systec_nvidia_retry_delay_seconds(int $attempt): int
+{
+    return min(30, 1 << min(max($attempt - 1, 0), 5));
+}
+
+function systec_nvidia_is_retryable_status(int $status): bool
+{
+    return $status === 429 || ($status >= 500 && $status < 600);
+}
+
 function systec_nvidia_improve_maintenance_texts(array $original, string $apiKey): array
 {
     if (!function_exists('curl_init')) {
@@ -125,9 +135,11 @@ function systec_nvidia_improve_maintenance_texts(array $original, string $apiKey
         throw new RuntimeException('No se pudo iniciar la conexión con NVIDIA Build.');
     }
 
-    for ($attempt = 1; $attempt <= 2; $attempt++) {
+    $maxAttempts = 5;
+    $correctFormatOnRetry = false;
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
         $systemPrompt = $prompt;
-        if ($attempt === 2) {
+        if ($correctFormatOnRetry) {
             $systemPrompt .= ' La respuesta anterior incumplió el formato: devuelve solo el objeto JSON válido, '
                 . 'con los tres campos requeridos y sin texto adicional.';
         }
@@ -175,17 +187,34 @@ function systec_nvidia_improve_maintenance_texts(array $original, string $apiKey
         $response = curl_exec($curl);
         if ($response === false) {
             $error = curl_error($curl);
+            if ($attempt < $maxAttempts) {
+                sleep(systec_nvidia_retry_delay_seconds($attempt));
+                continue;
+            }
+
             curl_close($curl);
-            throw new RuntimeException('Falló la solicitud a NVIDIA Build: ' . $error);
+            throw new RuntimeException(
+                'Falló la solicitud a NVIDIA Build después de ' . $maxAttempts . ' intentos: ' . $error
+                    . ' No se guardaron cambios.'
+            );
         }
 
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         if ($status < 200 || $status >= 300) {
-            curl_close($curl);
             $detail = systec_nvidia_api_error_message($response);
+            $retryableStatus = systec_nvidia_is_retryable_status($status);
+            if ($retryableStatus && $attempt < $maxAttempts) {
+                sleep(systec_nvidia_retry_delay_seconds($attempt));
+                continue;
+            }
+
+            curl_close($curl);
             throw new RuntimeException(
                 'NVIDIA Build respondió con HTTP ' . $status
                     . ($detail === null ? '.' : ': ' . $detail)
+                    . ($retryableStatus
+                        ? ' Se agotaron los ' . $maxAttempts . ' intentos.'
+                        : '')
                     . ' No se guardaron cambios.'
             );
         }
@@ -196,15 +225,17 @@ function systec_nvidia_improve_maintenance_texts(array $original, string $apiKey
             curl_close($curl);
             return $improved;
         } catch (SystecNvidiaOutputException $e) {
-            if ($attempt === 2) {
+            if ($attempt === $maxAttempts) {
                 curl_close($curl);
                 throw new RuntimeException(
-                    'NVIDIA no generó una respuesta narrativa válida después de 2 intentos: '
+                    'NVIDIA no generó una respuesta narrativa válida después de ' . $maxAttempts . ' intentos: '
                         . $e->getMessage(),
                     0,
                     $e
                 );
             }
+            $correctFormatOnRetry = true;
+            sleep(systec_nvidia_retry_delay_seconds($attempt));
         }
     }
 

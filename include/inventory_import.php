@@ -2,6 +2,38 @@
 
 require_once __DIR__ . '/csv_import.php';
 
+function property_assignment_filter_key(string $name, string $status): string
+{
+    $name = trim($name);
+    $status = mb_strtoupper(trim($status), 'UTF-8');
+
+    return hash('sha256', strlen($name) . ':' . $name . $status);
+}
+
+function property_assignment_filter_label(string $name, string $status): string
+{
+    $statusLabels = array(
+        'ACTIVO' => 'Activo',
+        'INACTIVO' => 'Inactivo',
+        'JUBILADO' => 'Jubilado',
+        'REMOCION' => 'Remoción',
+        'RENUNCIA' => 'Renuncia',
+        'VACACIONES' => 'Vacaciones',
+        'SIN ASIGNAR' => 'Sin asignar',
+        'SIN FICHA' => 'Sin ficha',
+        'SIN ESTADO' => 'Estado no registrado',
+    );
+    $name = trim($name);
+    $status = mb_strtoupper(trim($status), 'UTF-8');
+    $statusLabel = $statusLabels[$status] ?? ($status !== '' ? ucfirst(mb_strtolower($status)) : '');
+
+    if ($name !== '' && $statusLabel !== '') {
+        return $name . ' · ' . $statusLabel;
+    }
+
+    return $name !== '' ? $name : ($statusLabel !== '' ? $statusLabel : 'Pendiente de sincronizar');
+}
+
 function execute_inventory_import($db, string $filename, string $extension, callable $processor): string
 {
     $extension = strtolower($extension);
@@ -54,7 +86,11 @@ function legacy_postgres_inventory_rows(): array
     return $snapshot['rows'];
 }
 
-function legacy_postgres_inventory_snapshot(array $propertyIdentifiers = array(), bool $includeInventoryRows = true): array
+function legacy_postgres_inventory_snapshot(
+    array $propertyIdentifiers = array(),
+    bool $includeInventoryRows = true,
+    bool $includePropertyAssignments = false
+): array
 {
     $host = inventory_environment_value('SYSTEC_LEGACY_PG_HOST', 'localhost');
     $port = inventory_environment_value('SYSTEC_LEGACY_PG_PORT', '5432');
@@ -180,10 +216,20 @@ function legacy_postgres_inventory_snapshot(array $propertyIdentifiers = array()
         }
 
         $adscriptions = legacy_postgres_property_adscriptions($pdo, $propertyIdentifiers);
+        $assignments = array();
+        if ($includePropertyAssignments) {
+            $assignmentIdentifiers = $propertyIdentifiers;
+            foreach ($rows as $row) {
+                $assignmentIdentifiers[] = $row[3];
+            }
+            $assignments = legacy_postgres_property_assignments($pdo, $assignmentIdentifiers);
+        }
+
         $pdo->commit();
         return array(
             'rows' => $rows,
             'adscriptions' => $adscriptions,
+            'assignments' => $assignments,
         );
     } catch (CsvImportException $e) {
         if ($pdo instanceof PDO && $pdo->inTransaction()) {
@@ -450,6 +496,118 @@ function legacy_postgres_property_adscriptions(PDO $pdo, array $propertyIdentifi
     }
 
     return $adscriptions;
+}
+
+function legacy_postgres_property_assignments(PDO $pdo, array $propertyIdentifiers): array
+{
+    $identifiers = array();
+    foreach ($propertyIdentifiers as $identifier) {
+        if (is_string($identifier) || is_int($identifier)) {
+            $identifier = trim((string) $identifier);
+            if ($identifier !== '') {
+                $normalizedIdentifier = str_pad($identifier, 4, '0', STR_PAD_LEFT);
+                $identifiers[$normalizedIdentifier] = $normalizedIdentifier;
+            }
+        }
+    }
+
+    $assignments = array();
+    foreach (array_chunk(array_values($identifiers), 500) as $identifierBatch) {
+        $parameters = array();
+        $placeholders = array();
+        foreach ($identifierBatch as $index => $identifier) {
+            $placeholder = ':ident' . $index;
+            $placeholders[] = $placeholder;
+            $parameters[$placeholder] = $identifier;
+        }
+
+        $statement = $pdo->prepare(
+            "SELECT
+                b.num_bien AS ident,
+                COALESCE(responsible.display_name, '') AS responsible_name,
+                CASE
+                    WHEN NULLIF(TRIM(b.ced_responsable), '') IS NULL THEN 'SIN ASIGNAR'
+                    WHEN responsible.employment_status IS NULL THEN 'SIN FICHA'
+                    WHEN responsible.employment_status = '' THEN 'SIN ESTADO'
+                    ELSE UPPER(responsible.employment_status)
+                END AS responsible_status,
+                COALESCE(assigned.display_name, '') AS assigned_name,
+                CASE
+                    WHEN NULLIF(TRIM(b.ced_responsable_uso), '') IS NULL THEN 'SIN ASIGNAR'
+                    WHEN assigned.employment_status IS NULL THEN 'SIN FICHA'
+                    WHEN assigned.employment_status = '' THEN 'SIN ESTADO'
+                    ELSE UPPER(assigned.employment_status)
+                END AS assigned_status
+             FROM public.bien015 b
+             LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT_WS(
+                            ' ',
+                            NULLIF(TRIM(t.nombre1), ''),
+                            NULLIF(TRIM(t.nombre2), ''),
+                            NULLIF(TRIM(t.apellido1), ''),
+                            NULLIF(TRIM(t.apellido2), '')
+                        )), ''),
+                        NULLIF(TRIM(t.nombre), '')
+                    ) AS display_name,
+                    NULLIF(TRIM(t.status), '') AS employment_status
+                FROM public.trabajadores t
+                WHERE NULLIF(TRIM(t.cedula), '') = NULLIF(TRIM(b.ced_responsable), '')
+                ORDER BY
+                    CASE WHEN UPPER(TRIM(COALESCE(t.status, ''))) = 'ACTIVO' THEN 0 ELSE 1 END,
+                    t.status,
+                    t.cod_empleado
+                LIMIT 1
+             ) responsible ON TRUE
+             LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT_WS(
+                            ' ',
+                            NULLIF(TRIM(t.nombre1), ''),
+                            NULLIF(TRIM(t.nombre2), ''),
+                            NULLIF(TRIM(t.apellido1), ''),
+                            NULLIF(TRIM(t.apellido2), '')
+                        )), ''),
+                        NULLIF(TRIM(t.nombre), '')
+                    ) AS display_name,
+                    NULLIF(TRIM(t.status), '') AS employment_status
+                FROM public.trabajadores t
+                WHERE NULLIF(TRIM(t.cedula), '') = NULLIF(TRIM(b.ced_responsable_uso), '')
+                ORDER BY
+                    CASE WHEN UPPER(TRIM(COALESCE(t.status, ''))) = 'ACTIVO' THEN 0 ELSE 1 END,
+                    t.status,
+                    t.cod_empleado
+                LIMIT 1
+             ) assigned ON TRUE
+             WHERE LPAD(TRIM(b.num_bien), 4, '0') IN (" . implode(', ', $placeholders) . ")
+             ORDER BY b.num_bien"
+        );
+        foreach ($parameters as $placeholder => $value) {
+            $statement->bindValue($placeholder, $value, PDO::PARAM_STR);
+        }
+        $statement->execute();
+
+        foreach ($statement->fetchAll() as $sourceRow) {
+            $ident = trim((string) $sourceRow['ident']);
+            $normalizedIdent = str_pad($ident, 4, '0', STR_PAD_LEFT);
+            if (isset($assignments[$normalizedIdent])) {
+                throw new CsvImportException(
+                    'La fuente contiene identificadores repetidos; no se puede determinar la asignación del bien.'
+                );
+            }
+
+            $assignments[$normalizedIdent] = array(
+                'responsible_name' => trim((string) $sourceRow['responsible_name']),
+                'responsible_status' => trim((string) $sourceRow['responsible_status']),
+                'assigned_name' => trim((string) $sourceRow['assigned_name']),
+                'assigned_status' => trim((string) $sourceRow['assigned_status']),
+            );
+        }
+    }
+
+    return $assignments;
 }
 
 function inventory_adscription(array $sourceRow): array

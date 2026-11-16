@@ -3,8 +3,9 @@
  * Propone mejoras de redacción para los textos de mantenimiento con NVIDIA Build.
  *
  * Uso:
- *   php bin/improve-maintenance-narrative.php [--id=ID] [--property-id=ID] [--limit=N] [--execute]
- *
+ *   php bin/improve-maintenance-narrative.php [--id=ID] [--start-id=ID] [--property-id=ID] [--limit=N] [--execute]
+ *   php bin/improve-maintenance-narrative.php --execute
+ *   php bin/improve-maintenance-narrative.php --execute --start-id=67
  * La vista previa también consulta la API, pero no modifica la base. Solo --execute guarda los textos.
  */
 
@@ -13,8 +14,9 @@ if (PHP_SAPI !== 'cli') {
     exit("Solo CLI\n");
 }
 
-$usage = "Uso: php bin/improve-maintenance-narrative.php [--id=ID] [--property-id=ID] [--limit=N] [--execute]\n"
+$usage = "Uso: php bin/improve-maintenance-narrative.php [--id=ID] [--start-id=ID] [--property-id=ID] [--limit=N] [--execute]\n"
     . "Sin --execute consulta NVIDIA Build y muestra propuestas sin cambiar la base.\n"
+    . "--start-id=ID procesa mantenimientos desde ese ID inclusive, en orden ascendente.\n"
     . "Se envían únicamente descripción, motivo de falla y observaciones; --execute guarda las propuestas.\n";
 $arguments = array_slice($argv, 1);
 if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true)) {
@@ -25,6 +27,7 @@ if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true)) {
 $options = array(
     'execute' => false,
     'id' => null,
+    'start_id' => null,
     'property_id' => null,
     'limit' => null,
 );
@@ -35,7 +38,7 @@ foreach ($arguments as $argument) {
     }
 
     $matched = false;
-    foreach (array('id', 'property-id', 'limit') as $optionName) {
+    foreach (array('id', 'start-id', 'property-id', 'limit') as $optionName) {
         $prefix = '--' . $optionName . '=';
         if (strpos($argument, $prefix) !== 0) {
             continue;
@@ -84,6 +87,10 @@ try {
     if ($options['id'] !== null) {
         $sql .= ' AND id = :id';
         $parameters[':id'] = array($options['id'], SQLITE3_INTEGER);
+    }
+    if ($options['start_id'] !== null) {
+        $sql .= ' AND id >= :start_id';
+        $parameters[':start_id'] = array($options['start_id'], SQLITE3_INTEGER);
     }
     if ($options['property_id'] !== null) {
         $sql .= ' AND property_id = :property_id';
