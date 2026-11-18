@@ -218,13 +218,22 @@ $assignmentStatusLabels = array(
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
-                        <label class="form-label fw-semibold" for="propertyStatus">Nuevo estado</label>
-                        <select class="form-select" name="status" id="propertyStatus" required>
-                            <option value="">Seleccione un estado</option>
-                            <?php foreach ($db->getListPropertyStatus() as $key => $label) : ?>
-                                <option value="<?= e($key) ?>"><?= e($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="mb-3">
+                            <span class="text-body-secondary small d-block mb-1">Condición actual:</span>
+                            <span id="statusCurrentBadge" class="badge bg-secondary">No registrado</span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="propertyStatus">Nueva condición física</label>
+                            <select class="form-select" name="status" id="propertyStatus" required>
+                                <option value="">Seleccione un estado</option>
+                                <?php foreach ($db->getListPropertyStatus() as $key => $label) : ?>
+                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">
+                                Define si el bien está operativo o requiere atención técnica.
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>

@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — SysTec GMB
 
-> **Estado:** v1.4 (tickets y componentes compartidos) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (repositorios especializados, CI y gestión de usuarios) · **Actualizado:** 2026-11-18.
 > Describe cómo se conectan las piezas del sistema actual. El detalle de rutas y parámetros vive en `API.md`; el esquema y los datos, en `DATABASE.md`; los riesgos, en `SECURITY.md`.
 
 ## Principio rector
@@ -29,8 +29,8 @@ La simplicidad es deliberada: el sistema debe funcionar en un servidor PHP bási
 | Iconos | Bootstrap Icons | Incluido en `vendor/bootstrap/5.3.2/icon/` | Badges y acciones |
 | Plantillas | PHP + output buffering | `include/layout.php` | Layout reutilizable sin motor de plantillas |
 | Dependencias | Vendorizadas | `vendor/` (17 MB) | Sin Composer ni red en ejecución |
-| Pruebas | PHPUnit 9.6 | `composer test`, `tests/`, `phpunit.xml.dist` | Suite existente; cobertura y CI aún parciales |
-| Migraciones | Runner CLI + SQL versionado | `bin/migrate.php`, `migrations/`, `schema_migrations` | Cada migración requiere backup verificado y usa transacción |
+| Pruebas y CI | PHPUnit 9.6 + GitHub Actions | `make ci`, `composer ci`, `.github/workflows/ci.yml` | 70 pruebas automatizadas + lint de todos los archivos PHP |
+| Migraciones y Backups | Runner CLI + `bin/backup.sh` | `bin/migrate.php`, `migrations/`, `bin/backup.sh` | Migraciones transaccionales y script de respaldo con `PRAGMA integrity_check` y rotación 30/12/12 |
 
 ## Diagrama de componentes
 

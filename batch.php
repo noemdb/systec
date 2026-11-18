@@ -31,7 +31,14 @@ $db = db();
                 $property_id = isset($_GET['property_id']) ? filter_var($_GET['property_id'], FILTER_VALIDATE_INT) : false;
                 $property = ($property_id !== false && $property_id !== null) ? $db->getFirstForId('properties', $property_id) : null;
                 $maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
+                $user = auth_user();
+                $lastMaintenance = !empty($maintenances) ? end($maintenances) : null;
                 $technician = '';
+                if ($lastMaintenance && !empty($lastMaintenance['technician'])) {
+                    $technician = (string) $lastMaintenance['technician'];
+                } elseif (is_array($user) && !empty($user['username'])) {
+                    $technician = (string) $user['username'];
+                }
                 ?>
 
                 <div class="d-flex w-100 h-100 mx-auto flex-column">
@@ -60,7 +67,13 @@ $db = db();
                 $property_id = isset($_GET['property_id2']) ? filter_var($_GET['property_id2'], FILTER_VALIDATE_INT) : false;
                 $property = ($property_id !== false && $property_id !== null) ? $db->getFirstForId('properties', $property_id) : null;
                 $maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
+                $lastMaintenance = !empty($maintenances) ? end($maintenances) : null;
                 $technician = '';
+                if ($lastMaintenance && !empty($lastMaintenance['technician'])) {
+                    $technician = (string) $lastMaintenance['technician'];
+                } elseif (is_array($user) && !empty($user['username'])) {
+                    $technician = (string) $user['username'];
+                }
                 ?>
 
                 <div class="d-flex w-100 h-100 mx-auto flex-column">

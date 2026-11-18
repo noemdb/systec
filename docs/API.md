@@ -1,6 +1,6 @@
 # API.md — SysTec GMB
 
-> **Estado:** v1.4 (registro reutilizable de tickets) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (repositorios, paginación de soporte, gestión de usuarios y rate limiting) · **Actualizado:** 2026-11-18.
 > **No existe una API pública.** El sistema expone una superficie HTTP de páginas y formularios que devuelven HTML y redirecciones. Este documento describe esa superficie real, no un contrato REST ideal.
 
 ---
@@ -44,6 +44,7 @@
 | `405` | Método distinto de POST en una acción de mutación |
 | `419` | Token CSRF ausente o inválido |
 | `422` | Validación de negocio (fecha, estado, transición, bien) |
+| `429` | Límite de intentos de login excedido (bloqueo temporal por usuario/IP) |
 | `503` | Fuente o datos necesarios no disponibles para una lectura JSON |
 | `500` | Error interno controlado |
 
@@ -64,14 +65,17 @@
 | 4e | POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + CSRF | Agrega seguimiento a un ticket propio | `302` |
 | 4f | GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | Devuelve detalle e historial del ticket | JSON |
 | 4g | GET | `/personal/actions/properties.php` | `personal/actions/properties.php` | `personal` | Devuelve bienes y direcciones para el selector | JSON |
-| 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search` | HTML |
-| 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Avanza el estado de un bien | `302` |
+| 4h | POST | `/personal/actions/password.php` | `personal/actions/password.php` | Sesión + CSRF | Cambia la contraseña de la cuenta autenticada | `302` |
+| 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search`, `category`, `status`, `adscription` | HTML |
+| 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Actualiza el estado físico de un bien previa confirmación | `302` |
 | 7 | GET | `/maintenances.php` | `maintenances.php` | Sesión | Lista, alta o edición según parámetros | HTML |
 | 8 | POST | `/maintenances/register.php` | `maintenances/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea mantenimiento | `302` |
 | 9 | POST | `/maintenances/update.php` | `maintenances/update.php` | `admin`, `operador`, `tecnico` + CSRF | Actualiza mantenimiento | `302` |
 | 10 | POST | `/maintenances/actions/status.php` | `maintenances/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y calcula horas | `302` |
 | 10a | POST | `/tickets/actions/delete.php` | `tickets/actions/delete.php` | `admin`, `operador` + CSRF | Oculta ticket y registra eliminación en su historial | `302` |
-| 10b | GET | `/tickets.php` | `tickets.php` | `admin`, `operador`, `tecnico` | Bandeja de soporte y modal de alta | HTML |
+| 10b | GET | `/tickets.php` | `tickets.php` | `admin`, `operador`, `tecnico` | Bandeja de soporte paginada (`page`) y modal de alta | HTML |
+| 10i | GET | `/users.php` | `users.php` | `admin` | Administración de cuentas, roles y técnicos activos | HTML |
+| 10j | POST | `/users/actions/save.php` | `users/actions/save.php` | `admin` + CSRF | Crea o actualiza usuario, rol, estado o contraseña | `302` |
 | 10c | GET | `/tickets/register.php` | `tickets/register.php` | `personal`, `admin`, `operador`, `tecnico` | Formulario de alta independiente, conservado junto al modal | HTML |
 | 10d | POST | `/tickets/actions/register.php` | `tickets/actions/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea ticket y su evento inicial | `302` |
 | 10e | GET | `/tickets/actions/properties.php` | `tickets/actions/properties.php` | `admin`, `operador`, `tecnico` | Devuelve bienes y direcciones para el selector | JSON |

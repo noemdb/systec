@@ -20,38 +20,22 @@ if (isset($_POST['update'])) {
     $notes = isset($_POST['notes']) ? trim((string) $_POST['notes']) : '';
     $status = isset($_POST['status']) ? trim((string) $_POST['status']) : '';
 
-    include_once __DIR__ . '/validations/update.php';
-
     $existing = $db->getFirstForId($table, $id);
-    if (!$existing) {
+    if (!$existing && $id !== false && $id !== null && $id > 0) {
         http_response_code(404);
         exit('Mantenimiento no encontrado.');
+    }
+
+    include_once __DIR__ . '/validations/update.php';
+    if ($validationError !== null) {
+        http_response_code(422);
+        exit($validationError);
     }
 
     $property = $db->getFirstForId('properties', $property_id);
     if (!$property) {
         http_response_code(422);
         exit('El bien seleccionado no existe.');
-    }
-
-    if (!array_key_exists($status, $db->getListMaintenanceStatus())) {
-        http_response_code(422);
-        exit('El estado del mantenimiento no es válido.');
-    }
-
-    if (!maintenance_transition_allowed((string) $existing['status'], $status)) {
-        http_response_code(422);
-        exit('La transición de estado no está permitida.');
-    }
-
-    if (strtotime($date) === false) {
-        http_response_code(422);
-        exit('La fecha de inicio no es válida.');
-    }
-
-    if ($next_maintenance_date !== '' && strtotime($next_maintenance_date) === false) {
-        http_response_code(422);
-        exit('La fecha del próximo mantenimiento no es válida.');
     }
 
     try {

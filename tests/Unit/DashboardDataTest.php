@@ -183,4 +183,27 @@ class DashboardDataTest extends TestCase
             $db->close();
         }
     }
+
+    public function testPropertyStatusListMatchesAcceptedValues(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            $statuses = $db->getListPropertyStatus();
+            self::assertCount(4, $statuses);
+            self::assertArrayHasKey('bueno', $statuses);
+            self::assertArrayHasKey('regular', $statuses);
+            self::assertArrayHasKey('malo', $statuses);
+            self::assertArrayHasKey('muy malo', $statuses);
+
+            $propertyId = $db->create('properties', array('ident' => '0001', 'status' => 'BUENO'));
+            $changes = $db->update('properties', $propertyId, array('status' => 'REGULAR'));
+            self::assertSame(1, $changes);
+
+            $updated = $db->getFirstForId('properties', $propertyId);
+            self::assertSame('REGULAR', $updated['status']);
+        } finally {
+            $db->close();
+        }
+    }
 }

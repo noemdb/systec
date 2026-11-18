@@ -8,6 +8,15 @@ storage/logs/
 storage/initial-admin-password.txt
 .env
 
+# Datos y copias en raiz
+/*.db
+/*.db-*
+/*.csv
+/*.xls
+/*.xlsx
+/bck/
+/dataFile/
+
 # Artefactos
 *.log
 .DS_Store

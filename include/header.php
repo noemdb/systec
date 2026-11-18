@@ -16,6 +16,9 @@ if (auth_has_role(array('personal'))) {
         array('label' => 'Tickets', 'page' => 'tickets.php', 'icon' => 'bi-ticket-detailed'),
         array('label' => 'Dañados', 'page' => 'report.php', 'icon' => 'bi-exclamation-triangle'),
     );
+    if (auth_has_role(array('admin'))) {
+        $navigation[] = array('label' => 'Usuarios', 'page' => 'users.php', 'icon' => 'bi-people');
+    }
 }
 
 $canImport = auth_has_role(array('admin', 'operador'));
@@ -90,6 +93,13 @@ $importPageActive = in_array($currentPage, array('updates.php', 'imports.php', '
                         <i class="bi bi-person-circle text-primary" aria-hidden="true"></i>
                         <span class="fw-semibold small"><?= e($currentUser['username']) ?></span>
                     </div>
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
+                            data-bs-toggle="modal" data-bs-target="#changePasswordModal"
+                            aria-label="Cambiar contraseña">
+                        <i class="bi bi-key" aria-hidden="true"></i>
+                        <span>Contraseña</span>
+                    </button>
                     <form method="post" action="<?= e(url('logout.php')) ?>" class="m-0">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">

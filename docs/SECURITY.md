@@ -1,7 +1,7 @@
 # SECURITY.md — SysTec GMB
 
-> **Estado:** v1.4 (ámbito y rutas de tickets actualizados) · **Actualizado:** 2026-11-11.
-> **Resumen ejecutivo:** F1 implementó autenticación, roles, CSRF, escape, SQL parametrizado y protección de `storage/`. F2 agregó transacciones y límites de importación, normalizó datos aprobados, aplicó triggers e índices. Siguen pendientes HTTPS/HSTS en el servidor real, rate limiting, auditoría, calendario/cifrado de backups y pruebas automatizadas. No exponer fuera de la red de confianza hasta cerrar el checklist de despliegue.
+> **Estado:** v1.5 (rate limiting en login, gestión web de usuarios, pruebas de seguridad y CI) · **Actualizado:** 2026-11-18.
+> **Resumen ejecutivo:** F1 implementó autenticación, roles, CSRF, escape, SQL parametrizado y protección de `storage/`. F2 agregó transacciones y límites de importación, normalizó datos aprobados, aplicó triggers e índices.En 2026-11-18 se incorporaron bloqueo por fuerza bruta en login (`SEC-02`), eliminación de artefactos sensibles del repositorio (`SEC-01`), gestión de usuarios/contraseñas (`OPS-02`), script de backup verificable (`OPS-01`) y suite automatizada de seguridad y CI (`TEST-01`/`TEST-02`). Siguen pendientes HTTPS/HSTS en el servidor real y la tabla de auditoría general (`audit_events`).
 
 ---
 
@@ -41,7 +41,7 @@
 | Fuga por backups/CSV | Baja | Alto | `storage/` + denegación | ✅ |
 | DoS por importación masiva | Baja | Medio | Límite de 5 MB/5000 filas; sin rate limiting | ⚠️ |
 | Clickjacking | Baja | Medio | `X-Frame-Options: DENY` + CSP | ✅ |
-| Fuerza bruta | Media | Medio | Login existe; sin rate limiting | ⚠️ |
+| Fuerza bruta | Baja | Medio | Bloqueo temporal tras 5 intentos fallidos por usuario o 15 por IP en 15 min (`HTTP 429`) | ✅ |
 
 ---
 
@@ -131,9 +131,9 @@
 | H-17 | Orden de carga DataTables/jQuery dudoso | Verificado: `datatables.min.js` incluye jQuery 3.7.0 | ✅ Falso positivo |
 | — | Sin headers de seguridad | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, CSP | ✅ F1 |
 | — | Sin límites de importación | Límite 5 MB/5000 filas | ✅ F2 |
-| — | Sin logs | Log de PHP en `storage/logs/` sin PII | 🧪 F1 (rotación pendiente) |
+| — | Sin logs | Log de PHP en `storage/logs/` sin PII, con niveles y rotación automática (`.1`..`.5`) | ✅ F3 |
 | — | Sin CSRF | Token por sesión en todos los POST y acciones de estado | ✅ F1 |
-| — | Sin rate limiting | Limitar intentos de login e importación | 🔲 F3 |
+| — | Sin rate limiting | Bloqueo por usuario (5) e IP (15) en 15 min (`HTTP 429`) | ✅ F3 |
 
 ---
 

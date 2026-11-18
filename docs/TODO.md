@@ -81,17 +81,17 @@
 
 | ID | Tarea | Criterio de aceptación | Depende | Estado |
 |---|---|---|---|---|
-| P2-01 | Catálogo de estados/tipos/técnicos en BD | Tablas o enums; UI alimentada desde BD | P1-01…P1-03 | 🔲 F3 |
-| P2-02 | Selector explícito de estado del bien | Reemplaza botón cíclico; motivo y auditoría | P0-02 | 🔲 F3 |
+| P2-01 | Catálogo de estados/tipos/técnicos en BD | Tablas o enums; UI alimentada desde BD | P1-01…P1-03 | ✅ F3 (`ticket_status` y `users WHERE role='tecnico'`) |
+| P2-02 | Selector explícito de estado del bien | Reemplaza botón cíclico; motivo y auditoría | P0-02 | ✅ F3 (`dashboard/actions/status.php` + modal de confirmación) |
 | P2-03 | Auditoría de cambios | Tabla `audit_events`; escritura en la misma transacción | P0-01 | 🔲 F3 |
-| P2-04 | Separar capa de datos | `src/Database.php` + repositorios; páginas sin SQL | P0-03 | 🔲 F3 |
-| P2-05 | Validación centralizada | Un validador por contexto (`create`/`update`/`transition`) | P1-12 | 🔲 F3 |
-| P2-06 | Ampliar pruebas unitarias e integración | Cubrir reglas críticas y flujos HTTP con PHPUnit; agregar CI local | P2-04 | 🧪 F3 (suite básica ya existe) |
-| P2-07 | Logs sin PII | Archivo fuera del webroot; niveles y rotación | P0-07 | 🧪 F1 (archivo); 🔲 rotación |
-| P2-08 | Búsqueda y filtros del dashboard | Búsqueda por código/descripción/serial; filtros persistentes | — | 🔲 F3 |
+| P2-04 | Separar capa de datos | `src/Database.php` + repositorios; páginas sin SQL | P0-03 | ✅ F3 (`include/repositories/*`) |
+| P2-05 | Validación centralizada | Un validador por contexto (`create`/`update`/`transition`) | P1-12 | ✅ F3 (`include/maintenance_validator.php`) |
+| P2-06 | Ampliar pruebas unitarias e integración | Cubrir reglas críticas y flujos HTTP con PHPUnit; agregar CI local | P2-04 | ✅ F3 (73 pruebas + CI en `.github/workflows/ci.yml` y `make ci`) |
+| P2-07 | Logs sin PII | Archivo fuera del webroot; niveles y rotación | P0-07 | ✅ F3 (`systec_rotate_log_file()` y `systec_log()` en `include/security.php`) |
+| P2-08 | Búsqueda y filtros del dashboard | Búsqueda por código/descripción/serial; filtros persistentes | — | ✅ F3 |
 | P2-09 | Exportación CSV/PDF de reportes | Botón de exportación; PDF generado o impresión guiada | P1-08 | 🔲 F4 |
-| P2-10 | Gestión de técnicos | Alta/baja; select desde BD | P2-01 | 🔲 F3 |
-| P2-11 | Gestión de usuarios | CRUD y asignación de roles | P0-02 | 🧪 F1 (CLI); 🔲 UI |
+| P2-10 | Gestión de técnicos | Alta/baja; select desde BD | P2-01 | ✅ F3 (`MaintenanceRepository::getListMaintenanceTechnician()` + `users.php`) |
+| P2-11 | Gestión de usuarios | CRUD y asignación de roles | P0-02 | ✅ F3 (CLI + UI web en `users.php` y cambio de contraseña en `personal/actions/password.php`) |
 | P2-12 | Snapshot de reportes | `report_versions` con hash; reproducibilidad | P2-03 | 🔲 F4 |
 | P2-13 | Limpiar código muerto y configuración | Archivos sin uso eliminados o justificados; `.gitignore` corregido | — | ✅ F1 |
 
@@ -154,12 +154,12 @@
 
 ### F3 — Mantenibilidad (P2)
 
-- [ ] Repositorios y servicios.
-- [ ] Validación centralizada.
-- [ ] Auditoría.
-- [ ] Pruebas y CI local.
-- [ ] Catálogos en BD.
-- [ ] Limpiar código muerto y configuración.
+- [x] Repositorios y servicios (`include/repositories/*`).
+- [x] Validación centralizada (`include/maintenance_validator.php`).
+- [ ] Auditoría (`audit_events`).
+- [x] Pruebas y CI local (`make ci`, `.github/workflows/ci.yml`).
+- [x] Catálogos en BD (`ticket_status` y técnicos desde `users`).
+- [x] Limpiar código muerto y configuración.
 
 ### F4 — Producto (P3)
 

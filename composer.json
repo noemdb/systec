@@ -8,6 +8,11 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "lint": "find . -name '*.php' -not -path './vendor/*' -not -path './docs/templatesOthersApp/*' -print0 | xargs -0 -n1 php -l",
+        "test": "phpunit",
+        "ci": [
+            "@lint",
+            "@test"
+        ]
     }
 }

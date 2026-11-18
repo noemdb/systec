@@ -17,6 +17,7 @@
 | `CONVENTIONS.md` | Estilo, estructura y patrones | Escribes código |
 | `DECISIONS.md` | ADR reconstruidos y propuestas | Dudas entre alternativas |
 | `TODO.md` | Estado, backlog priorizado y bloqueos | Planificas o retomas |
+| `mejoras/README.md` | Registro detallado de oportunidades de mejora técnicas y de UX | Ejecutas backlog de mejoras |
 | `CHANGELOG.md` | Qué cambió y cuándo | Auditoría documental |
 | `anexos/` | Inventario técnico y trazabilidad del baseline F0/F1 | Consultar como evidencia histórica; usar `TODO.md` para el estado actual |
 

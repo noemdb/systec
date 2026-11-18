@@ -15,23 +15,24 @@ require_role(array('admin', 'operador', 'tecnico'));
 
 $db = db();
 $user = auth_user();
-$conditions = array(array('deleted_at', 'IS', null));
-if (auth_has_role(array('personal'))) {
-    $conditions['created_by'] = (int) $user['id'];
-}
+$createdByFilter = auth_has_role(array('personal')) ? (int) $user['id'] : null;
 
-$tickets = $db->index('tickets', $conditions, '*', 'updated_at DESC');
-$statuses = $db->getTicketStatuses();
-$summaryCounts = array(
-    'total' => count($tickets),
-    'in_progress' => 0,
-    'delayed' => 0,
-    'waiting' => 0,
-    'closed' => 0,
-);
-$properties = array();
-$ticketCreators = array();
-$ticketHistories = array();
+// PERF-02: Una única consulta obtiene los estados activos y sus conteos agregados.
+$dashboardSummary = $db->tickets()->supportTicketDashboardSummary($createdByFilter);
+$statuses = $dashboardSummary['statuses'];
+$summaryCounts = $dashboardSummary['counts'];
+
+$pageSize = 25;
+$matchingCount = $summaryCounts['total'];
+$totalPages = max(1, (int) ceil($matchingCount / $pageSize));
+$page = isset($_GET['page']) ? filter_var($_GET['page'], FILTER_VALIDATE_INT) : 1;
+$page = ($page === false || $page === null) ? 1 : max(1, min((int) $page, $totalPages));
+
+// PERF-02: Segunda y última consulta con JOIN a properties, users, ticket_status e historial JSON.
+$tickets = $matchingCount > 0
+    ? $db->supportTickets($pageSize, ($page - 1) * $pageSize, $createdByFilter)
+    : array();
+
 $statusClasses = array(
     'iniciado' => 'primary',
     'en_progreso' => 'info',
@@ -39,31 +40,9 @@ $statusClasses = array(
     'en_espera' => 'secondary',
     'finalizado' => 'success',
 );
-foreach ($tickets as $ticket) {
-    $property = $db->getFirstForId('properties', (int) $ticket['property_id']);
-    $properties[(int) $ticket['id']] = $property ?: array('description' => 'Bien eliminado');
-    $creator = $db->getFirstForId('users', (int) $ticket['created_by']);
-    $ticketCreators[(int) $ticket['id']] = $creator ?: array('username' => 'Usuario');
-    $ticketHistories[(int) $ticket['id']] = $db->ticketHistoryWithActors((int) $ticket['id']);
-
-    $statusCode = isset($statuses[(int) $ticket['status_id']]['code'])
-        ? (string) $statuses[(int) $ticket['status_id']]['code']
-        : '';
-    switch ($statusCode) {
-        case 'en_progreso':
-            $summaryCounts['in_progress']++;
-            break;
-        case 'con_retraso':
-            $summaryCounts['delayed']++;
-            break;
-        case 'en_espera':
-            $summaryCounts['waiting']++;
-            break;
-        case 'finalizado':
-            $summaryCounts['closed']++;
-            break;
-    }
-}
+$pageUrl = function (int $targetPage): string {
+    return url('tickets.php?' . http_build_query(array('page' => $targetPage)));
+};
 
 $title = 'Tickets';
 $ticketNotice = isset($_SESSION['ticket_notice']) && is_string($_SESSION['ticket_notice'])
@@ -96,7 +75,7 @@ ob_start();
                         <i class="bi bi-ticket-detailed fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Total</p>
+                        <p class="small text-body-secondary mb-1">Total</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['total']) ?></p>
                     </div>
                 </div>
@@ -109,7 +88,7 @@ ob_start();
                         <i class="bi bi-hourglass-split fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">En progreso</p>
+                        <p class="small text-body-secondary mb-1">En progreso</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['in_progress']) ?></p>
                     </div>
                 </div>
@@ -122,7 +101,7 @@ ob_start();
                         <i class="bi bi-exclamation-triangle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Con retraso</p>
+                        <p class="small text-body-secondary mb-1">Con retraso</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['delayed']) ?></p>
                     </div>
                 </div>
@@ -135,7 +114,7 @@ ob_start();
                         <i class="bi bi-pause-circle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">En espera</p>
+                        <p class="small text-body-secondary mb-1">En espera</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['waiting']) ?></p>
                     </div>
                 </div>
@@ -148,7 +127,7 @@ ob_start();
                         <i class="bi bi-check-circle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Finalizados</p>
+                        <p class="small text-body-secondary mb-1">Finalizados</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['closed']) ?></p>
                     </div>
                 </div>
@@ -158,7 +137,7 @@ ob_start();
 
     <?php if ($tickets === array()) : ?>
         <section class="card shadow-sm border-0 text-center" aria-label="Sin tickets">
-            <div class="card-body py-4">
+            <div class="card-body py-4" role="status" aria-live="polite">
                 <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary p-3 mb-3"
                       aria-hidden="true">
                     <i class="bi bi-inbox fs-3"></i>
@@ -173,7 +152,7 @@ ob_start();
                 <h2 class="h5 mb-0" id="tickets-list-title">
                     <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>Registro de tickets
                 </h2>
-                <span class="badge text-bg-light border text-body-secondary"><?= e((string) count($tickets)) ?> registros</span>
+                <span class="badge text-bg-light border text-body-secondary" aria-live="polite"><?= e((string) $matchingCount) ?> registros</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive tickets-table-responsive">
@@ -191,32 +170,28 @@ ob_start();
                         </thead>
                         <tbody>
                         <?php foreach ($tickets as $ticket) :
-                            $property = $properties[(int) $ticket['id']];
-                            $creator = $ticketCreators[(int) $ticket['id']];
-                            $status = $statuses[(int) $ticket['status_id']] ?? array('name' => 'Sin estado');
-                            $statusCode = isset($status['code']) ? (string) $status['code'] : '';
+                            $propertyRow = array(
+                                'grupo' => (string) ($ticket['property_grupo'] ?? ''),
+                                'subgrupo' => (string) ($ticket['property_subgrupo'] ?? ''),
+                                'seccion' => (string) ($ticket['property_seccion'] ?? ''),
+                                'ident' => (string) ($ticket['property_ident'] ?? ''),
+                                'description' => (string) ($ticket['property_description'] ?? 'Bien eliminado'),
+                                'status' => (string) ($ticket['property_status'] ?? ''),
+                            );
+                            $statusCode = (string) ($ticket['status_code'] ?? '');
+                            $statusName = (string) ($ticket['status_name'] ?? 'Sin estado');
                             $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
-                            $historyDetails = array();
-                            foreach ($ticketHistories[(int) $ticket['id']] as $historyEntry) {
-                                $historyDetails[] = array(
-                                    'created_at' => (string) $historyEntry['created_at'],
-                                    'action_type' => (string) $historyEntry['action_type'],
-                                    'description' => (string) $historyEntry['description'],
-                                    'observation' => (string) ($historyEntry['observation'] ?? ''),
-                                    'actor_username' => (string) ($historyEntry['actor_username'] ?? ''),
-                                );
-                            }
                             $ticketDetails = array(
                                 'id' => (int) $ticket['id'],
                                 'title' => (string) $ticket['title'],
-                                'property' => (string) ($property['description'] ?? 'Bien desconocido'),
-                                'property_code' => (string) ($property['ident'] ?? 'Sin código'),
-                                'property_status' => (string) ($property['status'] ?? 'No disponible'),
-                                'property_category' => property_category($property),
-                                'status' => (string) ($status['name'] ?? 'Sin estado'),
+                                'property' => $propertyRow['description'] !== '' ? $propertyRow['description'] : 'Bien desconocido',
+                                'property_code' => $propertyRow['ident'] !== '' ? $propertyRow['ident'] : 'Sin código',
+                                'property_status' => $propertyRow['status'] !== '' ? $propertyRow['status'] : 'No disponible',
+                                'property_category' => property_category($propertyRow),
+                                'status' => $statusName,
                                 'status_id' => (int) $ticket['status_id'],
                                 'status_class' => $statusClass,
-                                'created_by_name' => (string) ($creator['username'] ?? 'Usuario'),
+                                'created_by_name' => (string) ($ticket['creator_username'] ?? '') !== '' ? (string) $ticket['creator_username'] : 'Usuario',
                                 'description' => (string) $ticket['description'],
                                 'observation' => (string) ($ticket['observation'] ?? ''),
                                 'created_at' => (string) ($ticket['created_at'] ?? ''),
@@ -224,19 +199,19 @@ ob_start();
                                 'closed_at' => (string) ($ticket['closed_at'] ?? ''),
                                 'created_by' => (int) $ticket['created_by'],
                                 'assigned_to' => (string) ($ticket['assigned_to'] ?? ''),
-                                'history' => $historyDetails,
+                                'history' => isset($ticket['history']) && is_array($ticket['history']) ? $ticket['history'] : array(),
                             );
                             ?>
                             <tr>
                                 <td><span class="fw-semibold">#<?= e((string) $ticket['id']) ?></span></td>
                                 <td>
-                                    <span class="fw-semibold"><?= e((string) ($property['description'] ?? 'Bien desconocido')) ?></span>
-                                    <div class="small text-body-secondary">Código: <?= e((string) ($property['ident'] ?? '—')) ?></div>
+                                    <span class="fw-semibold"><?= e($ticketDetails['property']) ?></span>
+                                    <div class="small text-body-secondary">Código: <?= e($propertyRow['ident'] !== '' ? $propertyRow['ident'] : '—') ?></div>
                                 </td>
                                 <td><?= e((string) $ticket['title']) ?></td>
                                 <td>
                                     <span class="badge text-bg-<?= e($statusClass) ?>">
-                                        <?= e((string) ($status['name'] ?? 'Sin estado')) ?>
+                                        <?= e($statusName) ?>
                                     </span>
                                 </td>
                                 <td class="text-nowrap"><?= e((string) $ticket['updated_at']) ?></td>
@@ -276,6 +251,27 @@ ob_start();
                         </tbody>
                     </table>
                 </div>
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 p-3 border-top">
+                    <span class="small text-body-secondary">
+                        Mostrando <?= e((string) (($page - 1) * $pageSize + 1)) ?>–<?= e((string) (($page - 1) * $pageSize + count($tickets))) ?>
+                        de <?= e((string) $matchingCount) ?>
+                    </span>
+                    <nav aria-label="Paginación de tickets">
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= e($pageUrl(max(1, $page - 1))) ?>"
+                                   <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>>Anterior</a>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">Página <?= e((string) $page) ?> de <?= e((string) $totalPages) ?></span>
+                            </li>
+                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= e($pageUrl(min($totalPages, $page + 1))) ?>"
+                                   <?= $page >= $totalPages ? 'aria-disabled="true" tabindex="-1"' : '' ?>>Siguiente</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
             </div>
         </section>
     <?php endif; ?>
@@ -294,46 +290,7 @@ $ticketRegisterOptions = array(
 include __DIR__ . '/include/ticket_register_modal.php';
 unset($ticketRegisterOptions);
 ?>
-<?php if (auth_has_role(array('admin', 'operador'))) : ?>
-    <div class="modal fade" id="deleteTicketModal" tabindex="-1"
-         aria-labelledby="deleteTicketModalTitle" aria-describedby="deleteTicketModalHelp" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content text-start">
-                <form method="post" action="<?= e(url('tickets/actions/delete.php')) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="ticket_id" id="deleteTicketId">
-                    <div class="modal-header">
-                        <h2 class="modal-title fs-5" id="deleteTicketModalTitle">Eliminar ticket</h2>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p id="deleteTicketModalHelp">
-                            ¿Confirmas eliminar <strong id="deleteTicketTitle"></strong>?
-                        </p>
-                        <div class="alert alert-warning mb-0" role="note">
-                            El ticket dejará de aparecer en las listas, pero su historial se conservará.
-                            Esta acción no se puede deshacer desde la aplicación.
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash me-1" aria-hidden="true"></i>Confirmar eliminación
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <script nonce="<?= e(systec_csp_nonce()) ?>">
-        document.getElementById('deleteTicketModal').addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            if (!button) return;
-            document.getElementById('deleteTicketId').value = button.dataset.ticketId;
-            document.getElementById('deleteTicketTitle').textContent = `#${button.dataset.ticketId} — ${button.dataset.ticketTitle}`;
-        });
-    </script>
-<?php endif; ?>
+<?php include __DIR__ . '/include/support_ticket_delete_modal.php'; ?>
 <?php
 $main = ob_get_clean();
 include __DIR__ . '/include/layout.php';

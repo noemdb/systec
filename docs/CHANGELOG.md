@@ -1,5 +1,82 @@
 # CHANGELOG docs/ — SysTec GMB
 
+## 2026-11-18 — P2-05 y P2-07: Validación centralizada y rotación de logs
+
+### P2-05 · Validación centralizada por contexto (`create`, `update`, `transition`)
+
+- `include/maintenance_validator.php`: centraliza `validate_maintenance_create()`, `validate_maintenance_update()` y `validate_maintenance_transition()` sin invocaciones a `die()`.
+- `maintenances/validations/register.php`, `maintenances/validations/update.php`, `maintenances/update.php`, `maintenances/actions/status.php`: delegan la validación de campos, fechas, catálogos y transiciones en el validador centralizado, devolviendo códigos HTTP `422`/`400`/`404` consistentes.
+
+### P2-07 · Niveles y rotación automática de logs sin PII
+
+- `include/security.php`: incorpora `systec_rotate_log_file()` (rotación automática a `.1`..`.5` al superar 5 MB) y `systec_log()` (niveles `INFO`, `WARNING`, `ERROR`, `SECURITY` y sanitización de saltos de línea contra log injection).
+- `router.php`, `.htaccess`: extienden la denegación directa de archivos `.log` a copias rotadas `.log.1`..`.log.N`.
+- **Verificación:** `make ci` — 0 errores de sintaxis PHP; PHPUnit: 73 pruebas, 299 aserciones (`tests/Unit/ValidatorAndLogRotationTest.php`), OK.
+
+---
+
+## 2026-11-18 — ARCH-02, OPS-01 y OPS-02 (Cierre del Plan de Mejoras)
+
+### ARCH-02 · Catálogo dinámico de técnicos desde base de datos
+
+- `include/repositories/MaintenanceRepository.php`: `getListMaintenanceTechnician()` consulta los usuarios con `role = 'tecnico'` en la tabla `users`, incorporando automáticamente los técnicos activos (`active = 1`) y retirando los inactivos (`active = 0`) sin romper los registros históricos (`jmedina`, `ndominguez`).
+
+### OPS-01 · Script programable de backup con verificación de integridad y rotación 30/12/12
+
+- `bin/backup.sh`: crea snapshots consistentes en caliente mediante `SQLite3::backup()`, verifica `PRAGMA integrity_check = ok`, adjunta `storage/*.csv` y `manifest.json`, soporta cifrado AES-256-CBC (PBKDF2) con `SYSTEC_BACKUP_KEY_FILE` (`--require-encryption`), promueve copias semanales/mensuales y rota conservando 30 diarias, 12 semanales y 12 mensuales, registrando resultados en `storage/logs/backup.log`.
+
+### OPS-02 · Gestión web de usuarios y cambio de contraseña
+
+- `users.php`, `users/actions/save.php`, `include/user_manage_modal.php`: módulo administrativo exclusivo del rol `admin` para listar cuentas, crear usuarios, asignar roles, activar/desactivar cuentas y restablecer contraseñas, con protección contra auto-desactivación o auto-degradación de la cuenta en sesión.
+- `include/password_change_modal.php`, `personal/actions/password.php`, `include/header.php`, `include/layout.php`, `router.php`: cambio de contraseña autoservicio accesible desde la barra de navegación para todos los roles autenticados (`admin`, `operador`, `tecnico`, `consulta`, `personal`).
+- **Verificación:** `make ci` — 0 errores de sintaxis PHP; PHPUnit: 70 pruebas, 269 aserciones, OK; `audit-page.sh users.php`: 0 fallos, 0 advertencias.
+
+---
+
+## 2026-11-18 — PERF-02, ARCH-01, TEST-01 y TEST-02
+
+### PERF-02 · Consulta JOIN única y paginación en servidor en `tickets.php`
+
+- `include/repositories/TicketRepository.php`, `conn.php`, `tickets.php`: reemplazado el bucle N+1 (que ejecutaba 3 consultas por cada ticket para obtener bien, usuario creador e historial) por dos consultas constantes por petición:
+  1. `supportTicketDashboardSummary()` / `supportTicketStatusCounts()`: obtiene en una sola consulta `LEFT JOIN` los estados activos y sus conteos agregados.
+  2. `supportTickets($limit, $offset)`: obtiene la página de 25 registros mediante `LEFT JOIN` con `properties`, `users`, `ticket_status` y una subconsulta `json_group_array` ordenada para el historial con actores.
+- `include/support_ticket_status_modal.php`: reutiliza el catálogo `$statuses` ya cargado en la vista sin repetir consulta a `ticket_status`.
+- `tickets.php`: agregada paginación en servidor (`?page=N`, 25 tickets por página) consistente con `personal/index.php`.
+
+### ARCH-01 · Modularización en repositorios y desacoplamiento de vistas (ADR-014)
+
+- Extraídos `include/repositories/PropertyRepository.php`, `include/repositories/MaintenanceRepository.php` y `include/repositories/TicketRepository.php`.
+- `conn.php`: `DB` conserva los métodos fachada por compatibilidad y expone `$db->properties()`, `$db->maintenances()`, `$db->tickets()` y métricas de consultas (`queryCount()`, `resetQueryCount()`).
+- Extraídos controladores JS y parciales de vista (`assets/js/dashboard.js`, `assets/js/maintenances.js`, `dashboard/filter_bar.php`, `include/dashboard_register_maintenance_modal.php`, `include/support_ticket_delete_modal.php`, `maintenances/form/create_drawer.php`, `maintenances/form/edit_card.php`), reduciendo `dashboard.php` (291 líneas), `maintenances.php` (279 líneas) y `tickets.php` (296 líneas) por debajo de las 300 líneas y pasando `audit-page.sh` con 0 fallos y 0 advertencias.
+
+### TEST-01 y TEST-02 · Suite de pruebas de seguridad/transiciones y pipeline CI
+
+- `tests/Unit/SecurityAndTransitionsTest.php`: pruebas automatizadas de matriz de roles (`admin`, `operador`, `tecnico`, `consulta`, `personal`), respuestas HTTP 403 en `require_role()`, HTTP 405 y 419 en `verify_csrf()`, prevención de open-redirect en `auth_intended_url()` y validación de máquina de estados y catálogos en triggers SQLite.
+- `tests/Unit/SupportTicketQueryTest.php`: verifica la paginación, los JOINs de soporte, el límite constante de 2 consultas SQL (PERF-02) y los resúmenes de repositorios (ARCH-01).
+- `.github/workflows/ci.yml`, `Makefile`, `composer.json`: pipeline CI automatizado para lint (`php -l`) y suite PHPUnit (`make ci` / `composer ci`).
+- **Verificación:** `make ci` — 0 errores de sintaxis en 84 archivos PHP; PHPUnit: 67 pruebas, 240 aserciones, OK.
+
+---
+
+## 2026-11-18 — Rendimiento: PERF-01 y PERF-03
+
+### PERF-01 · Dashboard desacoplado de PostgreSQL legacy en GET
+
+- `dashboard.php`: eliminado el bloque `try { legacy_postgres_inventory_snapshot(...) }` que conectaba a PostgreSQL en cada petición GET.
+- Nueva función `legacy_postgres_read_local_cache()` en `include/inventory_import.php`: lee el archivo JSON de cache más reciente de `storage/cache/inventory-adscriptions-*.json` sin abrir ninguna conexión de red.
+- La tarjeta de "Datos de inventario legacy" ahora muestra adscripciones del último sync local y la fecha del cache; ya no bloquea el dashboard si PostgreSQL está caído o lento.
+- La sincronización activa (escritura en SQLite + consulta a PostgreSQL) queda exclusivamente en `updates.php` y `sync-assignments.php`.
+- `property_adscription_assignment()` en `include/helpers.php` ya tenía fallback a columna local `adscription` — sin cambios en ese helper.
+
+### PERF-03 · `ensureSchema()` omitido cuando las tablas ya existen
+
+- `conn.php`: `ensureSchema()` ahora verifica primero con `SELECT name FROM sqlite_master WHERE type='table' AND name='users' LIMIT 1` antes de ejecutar los 6 `CREATE TABLE IF NOT EXISTS` + 5 `INSERT OR IGNORE`.
+- En producción (tablas existentes): un solo `querySingle()` ligero en lugar de 11 sentencias DDL por request.
+- En BD nueva o tests `:memory:`: comportamiento idéntico al anterior (DDL se ejecuta normalmente).
+- **Verificación:** `composer test` — 57 pruebas, 148 aserciones, OK.
+
+---
+
 > **Nota:** antes del baseline del **2026-11-09** no había bitácora de cambios. Las cifras son snapshots de su fecha; el estado vigente vive en `TODO.md` y `DATABASE.md`.
 >
 > Convención: cada entrada lleva fecha, alcance y evidencia. No se reescriben entradas pasadas; se agrega una nueva.

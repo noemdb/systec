@@ -33,7 +33,14 @@ foreach ($tickets as $ticket) {
         'history' => $db->ticketHistoryWithActors($ticketId),
     );
 }
+$user = auth_user();
+$lastMaintenance = !empty($maintenances) ? end($maintenances) : null;
 $technician = '';
+if ($lastMaintenance && !empty($lastMaintenance['technician'])) {
+    $technician = (string) $lastMaintenance['technician'];
+} elseif (is_array($user) && !empty($user['username'])) {
+    $technician = (string) $user['username'];
+}
 
 if (isset($_GET['embed']) && $_GET['embed'] === '1') {
     if (!$property) {

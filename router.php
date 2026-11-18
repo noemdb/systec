@@ -13,7 +13,7 @@ $path = parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/'
 $path = rawurldecode((string) $path);
 $path = '/' . ltrim($path, '/');
 
-$blockedPrefixes = array('/storage', '/bck', '/docs', '/grafo', '/spec', '/bin', '/include', '/.git');
+$blockedPrefixes = array('/storage', '/bck', '/docs', '/grafo', '/spec', '/bin', '/include', '/.git', '/.github', '/dataFile', '/tests', '/migrations');
 $blockedFiles = array('/router.php', '/conn.php');
 
 foreach ($blockedPrefixes as $prefix) {
@@ -46,12 +46,12 @@ if ($userRole === 'personal' && !$isPublicAsset) {
     }
 }
 
-if (strpos($path, '/personal') === 0 && $userRole !== 'personal') {
+if (strpos($path, '/personal') === 0 && $userRole !== 'personal' && $path !== '/personal/actions/password.php') {
     header('Location: /login.php');
     exit();
 }
 
-if (preg_match('/\.(db|sqlite|sqlite3|csv|log|md|env)$/i', $path)) {
+if (preg_match('/\.(db|sqlite|sqlite3|csv|xls|xlsx|log(\.[0-9]+)?|md|env|sql)$/i', $path)) {
     http_response_code(403);
     header('Content-Type: text/plain; charset=UTF-8');
     echo 'Acceso no permitido';

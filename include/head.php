@@ -11,12 +11,33 @@
 <link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/app.css')) ?>">
 <link rel="stylesheet" href="<?= e(url('vendor/bootstrap/5.3.2/css/cover.css')) ?>">
 <link rel="stylesheet" href="<?= e(url('responsive.css')) ?>">
-
-<link rel="stylesheet" href="<?= e(url('vendor/datatables/datatables.min.css')) ?>" />
-<script src="<?= e(url('vendor/datatables/datatables.min.js')) ?>"></script>
+<script nonce="<?= e(systec_csp_nonce()) ?>" src="<?= e(url('assets/js/table-paginator.js')) ?>"></script>
 
 
 <style nonce="<?= e(systec_csp_nonce()) ?>">
+    th[aria-sort] {
+        user-select: none;
+        position: relative;
+        padding-right: 1.25rem !important;
+    }
+
+    th[aria-sort]::after {
+        content: "⇅";
+        position: absolute;
+        right: 0.35rem;
+        opacity: 0.3;
+        font-size: 0.75em;
+    }
+
+    th[aria-sort="ascending"]::after {
+        content: "↑";
+        opacity: 0.85;
+    }
+
+    th[aria-sort="descending"]::after {
+        content: "↓";
+        opacity: 0.85;
+    }
     .property-action-btn {
         display: inline-flex;
         align-items: center;

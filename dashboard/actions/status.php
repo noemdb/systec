@@ -28,9 +28,26 @@ if (!$property) {
 }
 
 try {
-    $db->update('properties', $propertyId, array('status' => mb_strtoupper($status)));
-
+    $currentStatus = mb_strtoupper(trim((string) $property['status']));
+    $targetStatus = mb_strtoupper($status);
     $search = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
+    $user = auth_user();
+    $username = is_array($user) ? ($user['username'] ?? 'usuario') : 'usuario';
+
+    if ($currentStatus !== $targetStatus) {
+        $db->update('properties', $propertyId, array('status' => $targetStatus));
+        error_log("Usuario '{$username}' actualizó el estado del bien #{$propertyId} ({$search}) de '{$currentStatus}' a '{$targetStatus}'.");
+        $_SESSION['dashboard_maintenance_feedback'] = array(
+            'type' => 'success',
+            'message' => 'Se actualizó el estado del bien ' . $search . ' a ' . ($validStatuses[$status] ?? $targetStatus) . '.',
+        );
+    } else {
+        $_SESSION['dashboard_maintenance_feedback'] = array(
+            'type' => 'info',
+            'message' => 'El bien ' . $search . ' ya se encontraba en estado ' . ($validStatuses[$status] ?? $targetStatus) . '.',
+        );
+    }
+
     header('Location: ' . url('dashboard.php?search=' . urlencode($search)));
     exit();
 } catch (Exception $e) {

@@ -21,6 +21,21 @@ if (auth_check() && auth_has_role(array('personal')) && !auth_is_personal_area()
     header('Location: ' . url('personal/index.php'));
     exit();
 }
+
+if (isset($_SESSION['auth_password_feedback']) && is_array($_SESSION['auth_password_feedback'])) {
+    $pwdFeedback = $_SESSION['auth_password_feedback'];
+    unset($_SESSION['auth_password_feedback']);
+    if (!isset($notifications) || !is_array($notifications)) {
+        $notifications = array();
+    }
+    $pwdType = isset($pwdFeedback['type']) && in_array($pwdFeedback['type'], array('success', 'info', 'warning', 'danger'), true)
+        ? $pwdFeedback['type']
+        : 'info';
+    $pwdMessage = isset($pwdFeedback['message']) && is_string($pwdFeedback['message']) ? $pwdFeedback['message'] : '';
+    if ($pwdMessage !== '') {
+        $notifications[] = toast_notification($pwdType, $pwdMessage);
+    }
+}
 ?>
 <html lang="es" data-bs-theme="light">
 <head>
@@ -55,6 +70,8 @@ if (auth_check() && auth_has_role(array('personal')) && !auth_is_personal_area()
         <?php endif; ?>
 
     </div>
+
+    <?php include(__DIR__ . '/password_change_modal.php'); ?>
 
 </body>
 </html>

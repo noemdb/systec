@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../conn.php';
 require_once __DIR__ . '/../../include/auth.php';
+require_once __DIR__ . '/../../include/maintenance_validator.php';
 
 require_role(array('admin', 'operador', 'tecnico'));
 verify_csrf();
@@ -15,20 +16,16 @@ if ($id === false || $id === null || $status === '') {
     exit('Datos incompletos.');
 }
 
-if (!array_key_exists($status, $db->getListMaintenanceStatus())) {
-    http_response_code(422);
-    exit('Estado de mantenimiento inválido.');
-}
-
 $maintenance = $db->getFirstForId($table, $id);
 if (!$maintenance) {
     http_response_code(404);
     exit('Mantenimiento no encontrado.');
 }
 
-if (!maintenance_transition_allowed((string) $maintenance['status'], $status)) {
+$transitionError = validate_maintenance_transition($id, $status, $db, $maintenance);
+if ($transitionError !== null) {
     http_response_code(422);
-    exit('La transición de estado no está permitida.');
+    exit($transitionError);
 }
 
 try {

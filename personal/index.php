@@ -166,7 +166,7 @@ ob_start();
     <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
             <h1 class="h3 mb-1">Mi área de tickets</h1>
-            <p class="text-muted mb-0">Seguimiento y registro de incidencias del personal.</p>
+            <p class="text-body-secondary mb-0">Seguimiento y registro de incidencias del personal.</p>
         </div>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Nuevo ticket
@@ -182,7 +182,7 @@ ob_start();
                         <i class="bi bi-ticket-detailed fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Total</p>
+                        <p class="small text-body-secondary mb-1">Total</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['total']) ?></p>
                     </div>
                 </div>
@@ -196,7 +196,7 @@ ob_start();
                         <i class="bi bi-hourglass-split fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">En progreso</p>
+                        <p class="small text-body-secondary mb-1">En progreso</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['in_progress']) ?></p>
                     </div>
                 </div>
@@ -210,7 +210,7 @@ ob_start();
                         <i class="bi bi-exclamation-triangle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Con retraso</p>
+                        <p class="small text-body-secondary mb-1">Con retraso</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['delayed']) ?></p>
                     </div>
                 </div>
@@ -224,7 +224,7 @@ ob_start();
                         <i class="bi bi-pause-circle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">En espera</p>
+                        <p class="small text-body-secondary mb-1">En espera</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['waiting']) ?></p>
                     </div>
                 </div>
@@ -238,7 +238,7 @@ ob_start();
                         <i class="bi bi-check-circle fs-4"></i>
                     </span>
                     <div>
-                        <p class="small text-muted mb-1">Finalizados</p>
+                        <p class="small text-body-secondary mb-1">Finalizados</p>
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['closed']) ?></p>
                     </div>
                 </div>
@@ -347,6 +347,7 @@ ob_start();
             <div class="card-body p-0">
                 <div class="table-responsive personal-ticket-table-responsive">
                     <table class="table table-hover align-middle mb-0">
+                        <caption class="visually-hidden">Listado de tickets personales registrados</caption>
                         <thead class="table-light">
                         <tr>
                             <th scope="col">Ticket</th>

@@ -5,6 +5,9 @@ date_default_timezone_set('America/Caracas');
 require_once __DIR__ . '/include/config.php';
 require_once __DIR__ . '/include/security.php';
 require_once __DIR__ . '/include/helpers.php';
+require_once __DIR__ . '/include/repositories/PropertyRepository.php';
+require_once __DIR__ . '/include/repositories/MaintenanceRepository.php';
+require_once __DIR__ . '/include/repositories/TicketRepository.php';
 
 /**
  * Capa de datos de SysTec GMB.
@@ -14,6 +17,8 @@ require_once __DIR__ . '/include/helpers.php';
  * - Los valores siempre viajan como parámetros vinculados.
  * - La conexión no se cierra dentro de los métodos; la cierra el llamador
  *   o el final del request.
+ * - La lógica de dominio por entidad se delega en PropertyRepository,
+ *   MaintenanceRepository y TicketRepository (ARCH-01 / ADR-014).
  */
 class DB extends SQLite3
 {
@@ -44,16 +49,74 @@ class DB extends SQLite3
         ),
     );
 
+    /** @var PropertyRepository|null */
+    private $propertyRepository = null;
+
+    /** @var MaintenanceRepository|null */
+    private $maintenanceRepository = null;
+
+    /** @var TicketRepository|null */
+    private $ticketRepository = null;
+
+    /** @var int */
+    private $executedQueries = 0;
+
     public function __construct($filename = null)
     {
-        $this->open($filename ?: SYSTEC_DB);
+        $resolvedFile = $filename ?: SYSTEC_DB;
+        $this->open($resolvedFile);
         $this->busyTimeout(5000);
         $this->exec('PRAGMA foreign_keys = ON');
-        $this->ensureSchema();
+        $this->ensureSchema($resolvedFile);
     }
 
-    private function ensureSchema()
+    public function properties(): PropertyRepository
     {
+        if ($this->propertyRepository === null) {
+            $this->propertyRepository = new PropertyRepository($this);
+        }
+
+        return $this->propertyRepository;
+    }
+
+    public function maintenances(): MaintenanceRepository
+    {
+        if ($this->maintenanceRepository === null) {
+            $this->maintenanceRepository = new MaintenanceRepository($this);
+        }
+
+        return $this->maintenanceRepository;
+    }
+
+    public function tickets(): TicketRepository
+    {
+        if ($this->ticketRepository === null) {
+            $this->ticketRepository = new TicketRepository($this);
+        }
+
+        return $this->ticketRepository;
+    }
+
+    public function queryCount(): int
+    {
+        return $this->executedQueries;
+    }
+
+    public function resetQueryCount(): void
+    {
+        $this->executedQueries = 0;
+    }
+
+    private function ensureSchema($dbFile = null)
+    {
+        // PERF-03: Evita los 6 CREATE TABLE + 5 INSERT de inicio en cada request
+        // cuando las tablas ya existen.
+        $exists = $this->querySingle(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users' LIMIT 1"
+        );
+        if ($exists !== null) {
+            return;
+        }
         $this->exec('CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             grupo STRING,
@@ -177,7 +240,7 @@ class DB extends SQLite3
         return implode(', ', $columns);
     }
 
-    private function orderSql($table, $sort)
+    public function buildOrderClause($table, $sort): string
     {
         if ($sort === null || trim((string) $sort) === '') {
             return '';
@@ -249,7 +312,7 @@ class DB extends SQLite3
         }
     }
 
-    private function fetchAll($query, array $params = array())
+    public function fetchAllQuery(string $query, array $params = array()): array
     {
         $stmt = $this->prepare($query);
 
@@ -258,6 +321,7 @@ class DB extends SQLite3
         }
 
         $this->bindValues($stmt, $params);
+        $this->executedQueries++;
         $result = $stmt->execute();
 
         if (!$result) {
@@ -270,56 +334,6 @@ class DB extends SQLite3
         }
 
         return $rows;
-    }
-
-    private function formatCode($row)
-    {
-        if (!$row) {
-            return null;
-        }
-
-        return property_code($row);
-    }
-
-    public function createOrUpdate($dataCsv, bool $preserveExistingStatus = false)
-    {
-        if (!is_array($dataCsv) || count($dataCsv) < 11) {
-            throw new InvalidArgumentException('Fila CSV incompleta');
-        }
-
-        $ident = str_pad(trim((string) $dataCsv[3]), 4, '0', STR_PAD_LEFT);
-        $property = $this->getFirstForConditions('properties', array('ident' => $ident));
-
-        if (!$property) {
-            $modelParts = array_filter(array_map(function ($value) {
-                return trim((string) $value);
-            }, array($dataCsv[5], $dataCsv[6])), function ($value) {
-                return $value !== '';
-            });
-            $data = array(
-                'grupo' => $dataCsv[0],
-                'subgrupo' => str_pad((string) $dataCsv[1], 4, '0', STR_PAD_LEFT),
-                'seccion' => str_pad((string) $dataCsv[2], 3, '0', STR_PAD_LEFT),
-                'ident' => $ident,
-                'description' => $dataCsv[4],
-                'model' => implode(' - ', $modelParts),
-                'serial' => $dataCsv[7],
-                'color' => $dataCsv[9],
-                'status' => $dataCsv[10],
-            );
-            $this->create('properties', $data);
-            return 'inserted';
-        } else {
-            if ($preserveExistingStatus
-                && (string) $property['status'] !== trim((string) $dataCsv[10])) {
-                return 'preserved';
-            }
-            if ((string) $property['status'] === trim((string) $dataCsv[10])) {
-                return 'unchanged';
-            }
-            $this->update('properties', $property['id'], array('status' => $dataCsv[10]));
-            return 'updated';
-        }
     }
 
     public function create($table, array $data)
@@ -349,6 +363,7 @@ class DB extends SQLite3
         }
 
         $this->bindValues($stmt, $params);
+        $this->executedQueries++;
 
         if (!$stmt->execute()) {
             throw new RuntimeException('Error insertando en la base local SysTec (SQLite): ' . $this->lastErrorMsg());
@@ -388,6 +403,7 @@ class DB extends SQLite3
         }
 
         $this->bindValues($stmt, $params);
+        $this->executedQueries++;
 
         if (!$stmt->execute()) {
             throw new RuntimeException('Error actualizando la base local SysTec (SQLite): ' . $this->lastErrorMsg());
@@ -396,42 +412,13 @@ class DB extends SQLite3
         return $this->changes();
     }
 
-    public function indexWithMaintenances($fields = 'properties.*', $sort = null)
-    {
-        if ($fields !== '*' && $fields !== 'properties.*') {
-            throw new InvalidArgumentException('Campos no permitidos para el reporte');
-        }
-
-        $query = "
-            SELECT DISTINCT $fields
-            FROM properties
-            INNER JOIN maintenances ON properties.id = maintenances.property_id
-            WHERE TRIM(maintenances.notes) != ''
-            AND maintenances.notes LIKE '%desincorporación%'
-            AND (properties.status = 'MALO' OR properties.status = 'MUY MALO')
-        ";
-
-        $query .= $this->orderSql('maintenances', $sort);
-
-        $stmt = $this->query($query);
-        $rows = array();
-
-        if ($stmt) {
-            while ($row = $stmt->fetchArray(SQLITE3_ASSOC)) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
-
     public function index($table, array $conditions = array(), $fields = '*', $sort = null, $limit = null)
     {
         $table = $this->tableName($table);
         $fields = $this->fieldsSql($table, $fields);
         $params = array();
         $where = $this->whereSql($table, $conditions, $params);
-        $order = $this->orderSql($table, $sort);
+        $order = $this->buildOrderClause($table, $sort);
         $limitSql = '';
 
         if ($limit !== null) {
@@ -440,7 +427,7 @@ class DB extends SQLite3
 
         $query = 'SELECT ' . $fields . ' FROM ' . $table . $where . $order . $limitSql;
 
-        return $this->fetchAll($query, $params);
+        return $this->fetchAllQuery($query, $params);
     }
 
     public function countRows($table, array $conditions = array()): int
@@ -455,6 +442,7 @@ class DB extends SQLite3
         }
 
         $this->bindValues($stmt, $params);
+        $this->executedQueries++;
         $result = $stmt->execute();
         if (!$result) {
             throw new RuntimeException('Error ejecutando conteo: ' . $this->lastErrorMsg());
@@ -465,162 +453,12 @@ class DB extends SQLite3
         return (int) ($row['row_count'] ?? 0);
     }
 
-    public function maintenanceCountsByProperty(): array
-    {
-        $rows = $this->fetchAll(
-            'SELECT property_id, COUNT(*) AS maintenance_count
-             FROM maintenances
-             GROUP BY property_id'
-        );
-        $counts = array();
-
-        foreach ($rows as $row) {
-            $counts[(int) $row['property_id']] = (int) $row['maintenance_count'];
-        }
-
-        return $counts;
-    }
-
-    public function syncPropertyAdscriptions(array $properties, array $adscriptionsByIdent): int
-    {
-        $updates = array();
-        foreach ($properties as $property) {
-            $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
-            $assignment = $adscriptionsByIdent[$ident] ?? null;
-            if (!is_array($assignment) || !isset($assignment['label']) || !is_string($assignment['label'])) {
-                continue;
-            }
-
-            $label = trim($assignment['label']);
-            if ($label === '' || $label === trim((string) ($property['adscription'] ?? ''))) {
-                continue;
-            }
-
-            $propertyId = (int) ($property['id'] ?? 0);
-            if ($propertyId < 1) {
-                throw new InvalidArgumentException('No se puede sincronizar una adscripción sin ID de bien.');
-            }
-            $updates[$propertyId] = $label;
-        }
-
-        if ($updates === array()) {
-            return 0;
-        }
-        if (!$this->exec('BEGIN IMMEDIATE')) {
-            throw new RuntimeException('No se pudo iniciar la sincronización de adscripciones: ' . $this->lastErrorMsg());
-        }
-
-        try {
-            foreach ($updates as $propertyId => $label) {
-                if ($this->update('properties', $propertyId, array('adscription' => $label)) !== 1) {
-                    throw new RuntimeException('No se pudo guardar la adscripción del bien #' . $propertyId . '.');
-                }
-            }
-            if (!$this->exec('COMMIT')) {
-                throw new RuntimeException('No se pudo confirmar la sincronización de adscripciones: ' . $this->lastErrorMsg());
-            }
-        } catch (Throwable $e) {
-            $this->exec('ROLLBACK');
-            throw $e;
-        }
-
-        return count($updates);
-    }
-
-    public function syncPropertyAssignments(array $properties, array $assignmentsByIdent): int
-    {
-        $fields = array('responsible_name', 'responsible_status', 'assigned_name', 'assigned_status');
-        $updates = array();
-
-        foreach ($properties as $property) {
-            $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
-            if (!isset($assignmentsByIdent[$ident]) || !is_array($assignmentsByIdent[$ident])) {
-                continue;
-            }
-
-            $propertyId = (int) ($property['id'] ?? 0);
-            if ($propertyId < 1) {
-                throw new InvalidArgumentException('No se puede sincronizar una asignación sin ID de bien.');
-            }
-
-            foreach ($fields as $field) {
-                $value = $assignmentsByIdent[$ident][$field] ?? null;
-                if (!is_string($value)) {
-                    throw new InvalidArgumentException('La asignación del bien no contiene el campo esperado: ' . $field);
-                }
-
-                $value = trim($value);
-                if ($value !== trim((string) ($property[$field] ?? ''))) {
-                    $updates[$propertyId][$field] = $value;
-                }
-            }
-        }
-
-        if ($updates === array()) {
-            return 0;
-        }
-        if (!$this->exec('BEGIN IMMEDIATE')) {
-            throw new RuntimeException('No se pudo iniciar la sincronización de asignaciones: ' . $this->lastErrorMsg());
-        }
-
-        try {
-            foreach ($updates as $propertyId => $values) {
-                if ($this->update('properties', $propertyId, $values) !== 1) {
-                    throw new RuntimeException('No se pudo guardar la asignación del bien #' . $propertyId . '.');
-                }
-            }
-            if (!$this->exec('COMMIT')) {
-                throw new RuntimeException('No se pudo confirmar la sincronización de asignaciones: ' . $this->lastErrorMsg());
-            }
-        } catch (Throwable $e) {
-            $this->exec('ROLLBACK');
-            throw $e;
-        }
-
-        return count($updates);
-    }
-
-    public function ticketCountsByProperty(): array
-    {
-        $rows = $this->fetchAll(
-            'SELECT property_id, COUNT(*) AS ticket_count
-             FROM tickets
-             WHERE deleted_at IS NULL
-             GROUP BY property_id'
-        );
-        $counts = array();
-
-        foreach ($rows as $row) {
-            $counts[(int) $row['property_id']] = (int) $row['ticket_count'];
-        }
-
-        return $counts;
-    }
-
-    public function getListProperties($table = 'properties')
-    {
-        $rows = $this->index($table, array(), '*', 'id ASC');
-        $list = array();
-
-        foreach ($rows as $row) {
-            $list[$row['id']] = $this->formatCode($row);
-        }
-
-        return $list;
-    }
-
-    public function getCodeId($id)
-    {
-        $row = $this->getFirstForId('properties', $id);
-
-        return $this->formatCode($row);
-    }
-
     /**
      * Solo para SQL estático interno. Nunca pasar entrada de usuario.
      */
     public function select(string $query)
     {
+        $this->executedQueries++;
         $stmt = $this->query($query);
         $result = array();
 
@@ -651,31 +489,6 @@ class DB extends SQLite3
         return $rows ? $rows[0] : null;
     }
 
-    public function getListPropertyStatus()
-    {
-        return array('bueno' => 'Bueno', 'regular' => 'Regular', 'malo' => 'Malo', 'muy malo' => 'Muy malo');
-    }
-
-    public function getListMaintenanceStatus()
-    {
-        return array('iniciado' => 'Iniciado', 'revision' => 'Revisión', 'finalizado' => 'Finalizado');
-    }
-
-    public function getListMaintenanceType()
-    {
-        return array(
-            'preventivo' => 'Preventivo',
-            'correctivo' => 'Correctivo',
-            'predictivo' => 'Predictivo',
-            'evaluativo' => 'Evaluativo',
-        );
-    }
-
-    public function getListMaintenanceTechnician()
-    {
-        return array('jmedina' => 'jmedina', 'ndominguez' => 'ndominguez');
-    }
-
     public function getListRoles()
     {
         return array(
@@ -687,267 +500,128 @@ class DB extends SQLite3
         );
     }
 
-    public function getTicketStatuses(): array
+    // -------------------------------------------------------------------------
+    // Delegación a repositorios especializados (compatibilidad hacia atrás)
+    // -------------------------------------------------------------------------
+
+    public function createOrUpdate($dataCsv, bool $preserveExistingStatus = false)
     {
-        $rows = $this->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');
-        $statuses = array();
-
-        foreach ($rows as $row) {
-            $statuses[(int) $row['id']] = $row;
-        }
-
-        return $statuses;
+        return $this->properties()->createOrUpdate($dataCsv, $preserveExistingStatus);
     }
 
-    public function ticketHistoryWithActors(int $ticketId): array
+    public function syncPropertyAdscriptions(array $properties, array $adscriptionsByIdent): int
     {
-        if ($ticketId < 1) {
-            return array();
-        }
-
-        return $this->fetchAll(
-            'SELECT ticket_histories.*, users.username AS actor_username
-             FROM ticket_histories
-             LEFT JOIN users ON users.id = ticket_histories.actor_user_id
-             WHERE ticket_histories.ticket_id = :ticket_id
-             ORDER BY ticket_histories.created_at ASC, ticket_histories.id ASC',
-            array(':ticket_id' => $ticketId)
-        );
+        return $this->properties()->syncPropertyAdscriptions($properties, $adscriptionsByIdent);
     }
 
-    private function personalTicketWhere(int $userId, array $filters, array &$params): string
+    public function syncPropertyAssignments(array $properties, array $assignmentsByIdent): int
     {
-        $params = array(':created_by' => $userId);
-        $clauses = array('t.created_by = :created_by', 't.deleted_at IS NULL');
-
-        if (!empty($filters['search'])) {
-            $clauses[] = "INSTR(LOWER(COALESCE(t.title, '') || ' ' || COALESCE(p.ident, '') || ' ' || COALESCE(p.description, '')), LOWER(:search)) > 0";
-            $params[':search'] = trim((string) $filters['search']);
-        }
-        if (!empty($filters['status'])) {
-            $clauses[] = 's.code = :status';
-            $params[':status'] = trim((string) $filters['status']);
-        }
-        if (!empty($filters['category'])) {
-            $groupCode = "CAST(COALESCE(p.grupo, '') AS INTEGER)";
-            $subgroupCode = "printf('%04d', CAST(COALESCE(p.subgrupo, '') AS INTEGER))";
-            $sectionCode = "printf('%03d', CAST(COALESCE(p.seccion, '') AS INTEGER))";
-            $informatics = "({$groupCode} = 2 AND ({$subgroupCode} = '0101' OR ({$subgroupCode} = '0012' AND {$sectionCode} = '005')))";
-            $networks = "({$groupCode} = 2 AND {$subgroupCode} = '0005' AND {$sectionCode} IN ('003', '008', '037'))";
-            if ($filters['category'] === 'informatica') {
-                $clauses[] = $informatics;
-            } elseif ($filters['category'] === 'redes') {
-                $clauses[] = $networks;
-            } elseif ($filters['category'] === 'otros') {
-                $clauses[] = 'NOT (' . $informatics . ' OR ' . $networks . ')';
-            } else {
-                throw new InvalidArgumentException('Categoría de bien inválida.');
-            }
-        }
-        if (array_key_exists('adscription_property_ids', $filters)) {
-            $propertyIds = array_values(array_unique(array_filter(array_map('intval', (array) $filters['adscription_property_ids']), function ($id) {
-                return $id > 0;
-            })));
-            if (!$propertyIds) {
-                $clauses[] = '0 = 1';
-            } else {
-                $encodedIds = json_encode($propertyIds);
-                if ($encodedIds === false) {
-                    throw new RuntimeException('No se pudieron preparar los bienes de la adscripción seleccionada.');
-                }
-                $clauses[] = 't.property_id IN (SELECT CAST(value AS INTEGER) FROM json_each(:adscription_property_ids))';
-                $params[':adscription_property_ids'] = $encodedIds;
-            }
-        }
-        if (!empty($filters['date_from'])) {
-            $clauses[] = "t.created_at >= :date_from || ' 00:00:00'";
-            $params[':date_from'] = (string) $filters['date_from'];
-        }
-        if (!empty($filters['date_to'])) {
-            $clauses[] = "t.created_at < DATE(:date_to, '+1 day')";
-            $params[':date_to'] = (string) $filters['date_to'];
-        }
-
-        return ' WHERE ' . implode(' AND ', $clauses);
+        return $this->properties()->syncPropertyAssignments($properties, $assignmentsByIdent);
     }
 
-    public function personalTicketStatusCounts(int $userId, array $filters = array()): array
+    public function getListProperties($table = 'properties')
     {
-        if ($userId < 1) {
-            throw new InvalidArgumentException('Identificador de usuario inválido.');
-        }
-
-        unset($filters['status']);
-        $params = array();
-        $where = $this->personalTicketWhere($userId, $filters, $params);
-        return $this->fetchAll(
-            'SELECT s.code, COUNT(*) AS ticket_count
-            FROM tickets t
-            LEFT JOIN properties p ON p.id = t.property_id
-            LEFT JOIN ticket_status s ON s.id = t.status_id
-            ' . $where . '
-            GROUP BY s.code',
-            $params
-        );
+        return $this->properties()->getListProperties((string) $table);
     }
 
-    public function personalTicketCount(int $userId, array $filters = array()): int
+    public function getCodeId($id)
     {
-        if ($userId < 1) {
-            throw new InvalidArgumentException('Identificador de usuario inválido.');
-        }
-
-        $params = array();
-        $where = $this->personalTicketWhere($userId, $filters, $params);
-        $rows = $this->fetchAll(
-            'SELECT COUNT(*) AS ticket_count
-            FROM tickets t
-            LEFT JOIN properties p ON p.id = t.property_id
-            LEFT JOIN ticket_status s ON s.id = t.status_id' . $where,
-            $params
-        );
-
-        return (int) ($rows[0]['ticket_count'] ?? 0);
+        return $this->properties()->getCodeId($id);
     }
 
-    public function personalTickets(int $userId, array $filters, int $limit, int $offset): array
+    public function getListPropertyStatus()
     {
-        if ($userId < 1) {
-            throw new InvalidArgumentException('Identificador de usuario inválido.');
-        }
-        if ($limit < 1 || $offset < 0) {
-            throw new InvalidArgumentException('Paginación inválida.');
-        }
-
-        $params = array();
-        $where = $this->personalTicketWhere($userId, $filters, $params);
-        $params[':limit'] = $limit;
-        $params[':offset'] = $offset;
-
-        return $this->fetchAll(
-            'SELECT t.id, t.property_id, t.status_id, t.title, t.description, t.observation,
-                   t.created_by, t.assigned_to, t.created_at, t.updated_at, t.closed_at,
-                   p.ident AS property_ident, p.description AS property_description,
-                   p.status AS property_status, p.grupo AS property_grupo,
-                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
-                   s.code AS status_code, s.name AS status_name
-            FROM tickets t
-            LEFT JOIN properties p ON p.id = t.property_id
-            LEFT JOIN ticket_status s ON s.id = t.status_id' . $where . '
-            ORDER BY t.updated_at DESC, t.id DESC
-            LIMIT :limit OFFSET :offset',
-            $params
-        );
+        return $this->properties()->getListPropertyStatus();
     }
 
-    public function personalTicketDetails(int $ticketId, int $userId): ?array
+    public function indexWithMaintenances($fields = 'properties.*', $sort = null)
     {
-        if ($ticketId < 1 || $userId < 1) {
-            return null;
-        }
-
-        $rows = $this->fetchAll(
-            'SELECT t.id, t.property_id, t.status_id, t.title, t.description, t.observation,
-                   t.created_by, t.assigned_to, t.created_at, t.updated_at, t.closed_at,
-                   p.ident AS property_ident, p.description AS property_description,
-                   p.status AS property_status, p.grupo AS property_grupo,
-                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
-                   s.code AS status_code, s.name AS status_name
-            FROM tickets t
-            LEFT JOIN properties p ON p.id = t.property_id
-            LEFT JOIN ticket_status s ON s.id = t.status_id
-            WHERE t.id = :ticket_id AND t.created_by = :created_by AND t.deleted_at IS NULL
-            LIMIT 1',
-            array(':ticket_id' => $ticketId, ':created_by' => $userId)
-        );
-
-        if (!$rows) {
-            return null;
-        }
-
-        $ticket = $rows[0];
-        $ticket['property_category'] = property_category(array(
-            'grupo' => (string) ($ticket['property_grupo'] ?? ''),
-            'subgrupo' => (string) ($ticket['property_subgrupo'] ?? ''),
-            'seccion' => (string) ($ticket['property_seccion'] ?? ''),
-        ));
-        $ticket['history'] = $this->ticketHistoryWithActors($ticketId);
-        return $ticket;
+        return $this->maintenances()->indexWithMaintenances($fields, $sort);
     }
 
-    public function getTicketStatusByCode(string $code): ?array
+    public function maintenanceCountsByProperty(): array
     {
-        $code = trim($code);
-        if ($code === '') {
-            return null;
-        }
-
-        $row = $this->getFirstForConditions('ticket_status', array(array('code', '=', $code), array('active', '=', 1)));
-        return $row ?: null;
+        return $this->maintenances()->maintenanceCountsByProperty();
     }
 
-    public function softDeleteTicket(int $ticketId, int $actorUserId, string $deletedAt): bool
+    public function getListMaintenanceStatus()
     {
-        if ($ticketId < 1 || $actorUserId < 1) {
-            throw new InvalidArgumentException('Identificadores de ticket o usuario inválidos.');
-        }
+        return $this->maintenances()->getListMaintenanceStatus();
+    }
 
-        if (!$this->exec('BEGIN IMMEDIATE')) {
-            throw new RuntimeException('No se pudo iniciar la eliminación lógica del ticket: ' . $this->lastErrorMsg());
-        }
+    public function getListMaintenanceType()
+    {
+        return $this->maintenances()->getListMaintenanceType();
+    }
 
-        try {
-            $ticket = $this->getFirstForConditions(
-                'tickets',
-                array(array('id', '=', $ticketId), array('deleted_at', 'IS', null))
-            );
-            if (!$ticket) {
-                $this->exec('ROLLBACK');
-                return false;
-            }
-
-            $stmt = $this->prepare(
-                'UPDATE tickets SET deleted_at = :deleted_at WHERE id = :id AND deleted_at IS NULL'
-            );
-            if (!$stmt) {
-                throw new RuntimeException('Error preparando eliminación lógica: ' . $this->lastErrorMsg());
-            }
-            $stmt->bindValue(':deleted_at', $deletedAt, SQLITE3_TEXT);
-            $stmt->bindValue(':id', $ticketId, SQLITE3_INTEGER);
-            if (!$stmt->execute()) {
-                throw new RuntimeException('Error eliminando ticket: ' . $this->lastErrorMsg());
-            }
-
-            if ($this->changes() !== 1) {
-                $this->exec('ROLLBACK');
-                return false;
-            }
-
-            $this->create('ticket_histories', array(
-                'ticket_id' => $ticketId,
-                'actor_user_id' => $actorUserId,
-                'action_type' => 'deleted',
-                'description' => 'Ticket eliminado; el historial se conserva.',
-                'observation' => null,
-                'from_status_id' => (int) $ticket['status_id'],
-                'to_status_id' => (int) $ticket['status_id'],
-                'created_at' => $deletedAt,
-            ));
-
-            if (!$this->exec('COMMIT')) {
-                throw new RuntimeException('No se pudo confirmar la eliminación lógica: ' . $this->lastErrorMsg());
-            }
-
-            return true;
-        } catch (Throwable $e) {
-            $this->exec('ROLLBACK');
-            throw $e;
-        }
+    public function getListMaintenanceTechnician()
+    {
+        return $this->maintenances()->getListMaintenanceTechnician();
     }
 
     public function restarFechasEnHoras(DateTime $fecha1, DateTime $fecha2)
     {
-        return (int) round(abs($fecha1->getTimestamp() - $fecha2->getTimestamp()) / 3600);
+        return $this->maintenances()->restarFechasEnHoras($fecha1, $fecha2);
+    }
+
+    public function ticketCountsByProperty(): array
+    {
+        return $this->tickets()->ticketCountsByProperty();
+    }
+
+    public function getTicketStatuses(): array
+    {
+        return $this->tickets()->getTicketStatuses();
+    }
+
+    public function getTicketStatusByCode(string $code): ?array
+    {
+        return $this->tickets()->getTicketStatusByCode($code);
+    }
+
+    public function ticketHistoryWithActors(int $ticketId): array
+    {
+        return $this->tickets()->ticketHistoryWithActors($ticketId);
+    }
+
+    public function supportTicketStatusCounts(?int $createdBy = null): array
+    {
+        return $this->tickets()->supportTicketStatusCounts($createdBy);
+    }
+
+    public function supportTicketCount(?int $createdBy = null): int
+    {
+        return $this->tickets()->supportTicketCount($createdBy);
+    }
+
+    public function supportTickets(int $limit, int $offset, ?int $createdBy = null): array
+    {
+        return $this->tickets()->supportTickets($limit, $offset, $createdBy);
+    }
+
+    public function personalTicketStatusCounts(int $userId, array $filters = array()): array
+    {
+        return $this->tickets()->personalTicketStatusCounts($userId, $filters);
+    }
+
+    public function personalTicketCount(int $userId, array $filters = array()): int
+    {
+        return $this->tickets()->personalTicketCount($userId, $filters);
+    }
+
+    public function personalTickets(int $userId, array $filters, int $limit, int $offset): array
+    {
+        return $this->tickets()->personalTickets($userId, $filters, $limit, $offset);
+    }
+
+    public function personalTicketDetails(int $ticketId, int $userId): ?array
+    {
+        return $this->tickets()->personalTicketDetails($ticketId, $userId);
+    }
+
+    public function softDeleteTicket(int $ticketId, int $actorUserId, string $deletedAt): bool
+    {
+        return $this->tickets()->softDeleteTicket($ticketId, $actorUserId, $deletedAt);
     }
 }
 

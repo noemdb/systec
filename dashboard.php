@@ -20,19 +20,11 @@ $ticketCount = $canViewTickets
     : 0;
 $maintenanceCountsByProperty = $db->maintenanceCountsByProperty();
 $ticketCountsByProperty = $db->ticketCountsByProperty();
-$propertyCount = count($properties);
-$goodPropertyCount = 0;
-$attentionPropertyCount = 0;
 
-foreach ($properties as $property) {
-    $status = mb_strtoupper(trim((string) $property['status']));
-    if ($status === 'BUENO') {
-        $goodPropertyCount++;
-    }
-    if ($status === 'MALO' || $status === 'MUY MALO') {
-        $attentionPropertyCount++;
-    }
-}
+$statusSummary = $db->properties()->summarizeStatuses($properties);
+$propertyCount = $statusSummary['total'];
+$goodPropertyCount = $statusSummary['good'];
+$attentionPropertyCount = $statusSummary['attention'];
 
 $canImportInventory = auth_has_role(array('admin', 'operador'));
 $maintenanceFeedback = isset($_SESSION['dashboard_maintenance_feedback'])
@@ -67,102 +59,58 @@ foreach ($properties as $property) {
         break;
     }
 }
-$legacySyncAvailable = false;
-$legacySyncPendingCount = 0;
-$legacySyncSourceCount = 0;
-$legacySyncCheckedAt = date('d/m/Y H:i');
-$localPropertiesByIdent = array();
-$legacyAdscriptionsByIdent = array();
-$legacyAssignmentsByIdent = array();
+// PERF-01: Las adscripciones y asignaciones se leen del cache local en lugar de
+// consultar PostgreSQL en cada GET.
+$localCache = legacy_postgres_read_local_cache();
+$legacyAdscriptionsByIdent = $localCache['adscriptions'];
+$legacyAssignmentsByIdent  = $localCache['assignments'];
+$legacySyncAvailable       = $localCache['found'];
+$legacySyncCheckedAt       = $localCache['cached_at'] !== null
+    ? date('d/m/Y H:i', $localCache['cached_at'])
+    : '—';
 
-foreach ($properties as $property) {
-    $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
-    if (!isset($localPropertiesByIdent[$ident])) {
-        $localPropertiesByIdent[$ident] = $property;
-    }
-}
-
-try {
-    $localPropertyIdentifiers = array_map(function ($property) {
-        return trim((string) $property['ident']);
-    }, $properties);
-    $legacySnapshot = legacy_postgres_inventory_snapshot(
-        $localPropertyIdentifiers,
-        true,
-        $canViewAssignments
-    );
-    $legacyRows = $legacySnapshot['rows'];
-    $legacyAdscriptionsByIdent = $legacySnapshot['adscriptions'];
-    $legacyAssignmentsByIdent = $legacySnapshot['assignments'];
-    $legacySyncSourceCount = count($legacyRows);
-    foreach ($legacyRows as $row) {
-        $ident = str_pad(trim((string) $row[3]), 4, '0', STR_PAD_LEFT);
-        if (!isset($localPropertiesByIdent[$ident])) {
-            $legacySyncPendingCount++;
-        }
-    }
-    $legacySyncAvailable = true;
-
-    if ($canViewAssignments) {
-        try {
-            $db->syncPropertyAssignments($properties, $legacyAssignmentsByIdent);
-        } catch (Throwable $e) {
-            error_log('Dashboard no pudo guardar las asignaciones locales: ' . $e->getMessage());
-            $notifications[] = toast_notification(
-                'warning',
-                'Se consultaron las asignaciones, pero no se pudieron guardar para uso local.'
-            );
-        }
-
-        foreach ($properties as $index => $property) {
-            $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
-            if (isset($legacyAssignmentsByIdent[$ident])) {
-                $properties[$index] = array_merge($property, $legacyAssignmentsByIdent[$ident]);
-            }
-        }
-    }
-} catch (Throwable $e) {
-    error_log('Dashboard no pudo verificar la sincronización con PostgreSQL legacy: ' . $e->getMessage());
-}
-
-$adscriptionsByPropertyId = array();
-$adscriptionOptions = array();
-$assignmentFilterOptions = array('responsible' => array(), 'assigned' => array());
-$assignmentFilterKeysByPropertyId = array();
-foreach ($properties as $property) {
-    $propertyId = (int) $property['id'];
-    $adscription = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
-    $adscriptionsByPropertyId[$propertyId] = $adscription;
-    $adscriptionOptions[$adscription['key']] = $adscription['label'];
-    if ($canViewAssignments) {
-        foreach (array('responsible' => 'responsible', 'assigned' => 'assigned') as $filterKey => $fieldPrefix) {
-            $name = trim((string) ($property[$fieldPrefix . '_name'] ?? ''));
-            $status = trim((string) ($property[$fieldPrefix . '_status'] ?? ''));
-            $key = property_assignment_filter_key($name, $status);
-            $assignmentFilterOptions[$filterKey][$key] = property_assignment_filter_label($name, $status);
-            $assignmentFilterKeysByPropertyId[$propertyId][$filterKey] = $key;
+if ($canViewAssignments && $legacySyncAvailable && $legacyAssignmentsByIdent) {
+    foreach ($properties as $index => $property) {
+        $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
+        if (isset($legacyAssignmentsByIdent[$ident])) {
+            $properties[$index] = array_merge($property, $legacyAssignmentsByIdent[$ident]);
         }
     }
 }
-asort($adscriptionOptions, SORT_NATURAL | SORT_FLAG_CASE);
-foreach ($assignmentFilterOptions as &$options) {
-    asort($options, SORT_NATURAL | SORT_FLAG_CASE);
-}
-unset($options);
 
-$legacySyncCardClass = $legacySyncAvailable
-    ? ($legacySyncPendingCount === 0 ? 'success' : 'warning')
-    : 'secondary';
-$legacySyncIcon = $legacySyncAvailable
-    ? ($legacySyncPendingCount === 0 ? 'bi-check-circle' : 'bi-exclamation-circle')
-    : 'bi-question-circle';
+$filterMetadata = $db->properties()->buildFilterMetadata(
+    $properties,
+    $legacyAdscriptionsByIdent,
+    $canViewAssignments
+);
+$adscriptionsByPropertyId = $filterMetadata['adscriptions_by_property_id'];
+$adscriptionOptions = $filterMetadata['adscription_options'];
+$assignmentFilterOptions = $filterMetadata['assignment_filter_options'];
+$assignmentFilterKeysByPropertyId = $filterMetadata['assignment_filter_keys_by_property_id'];
+
+$legacySyncCardClass = $legacySyncAvailable ? 'success' : 'secondary';
+$legacySyncIcon      = $legacySyncAvailable ? 'bi-clock-history' : 'bi-question-circle';
+$legacySyncStale     = $localCache['stale'] ?? false;
 
 ob_start(); ?>
 
-    <div class="container-fluid">
+    <div class="container-fluid text-start">
 
-        <h2 class="">Dashboard</h2>
-        <p class="">Bienvenido!</p>
+        <section class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-3 mb-3"
+                 aria-labelledby="dashboard-page-title">
+            <div>
+                <h1 class="h3 mb-1" id="dashboard-page-title">Dashboard</h1>
+                <p class="text-body-secondary mb-0">Resumen general del inventario, condición física de bienes y mantenimientos.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2 flex-shrink-0">
+                <a href="<?= e(url('maintenances.php')) ?>" class="btn btn-outline-primary">
+                    <i class="bi bi-tools me-1" aria-hidden="true"></i>Mantenimientos
+                </a>
+                <a href="<?= e(url('report.php')) ?>" class="btn btn-outline-danger">
+                    <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Bienes dañados
+                </a>
+            </div>
+        </section>
 
         <section class="row g-3 mb-4" aria-label="Indicadores del inventario y tickets">
             <div class="col-12 col-sm-6 col-xl">
@@ -174,8 +122,8 @@ ob_start(); ?>
                             <i class="bi bi-box-seam fs-4"></i>
                         </span>
                         <div>
-                            <p class="small text-muted mb-1">Bienes registrados</p>
-                            <p class="h3 mb-0"><?= e($propertyCount) ?></p>
+                            <p class="small text-body-secondary mb-1">Bienes registrados</p>
+                            <p class="h3 mb-0"><?= e((string) $propertyCount) ?></p>
                         </div>
                     </div>
                 </button>
@@ -189,8 +137,8 @@ ob_start(); ?>
                             <i class="bi bi-check-circle fs-4"></i>
                         </span>
                         <div>
-                            <p class="small text-muted mb-1">En buen estado</p>
-                            <p class="h3 mb-0"><?= e($goodPropertyCount) ?></p>
+                            <p class="small text-body-secondary mb-1">En buen estado</p>
+                            <p class="h3 mb-0"><?= e((string) $goodPropertyCount) ?></p>
                         </div>
                     </div>
                 </button>
@@ -204,9 +152,9 @@ ob_start(); ?>
                             <i class="bi bi-exclamation-triangle fs-4"></i>
                         </span>
                         <div>
-                            <p class="small text-muted mb-1">Requieren atención</p>
-                            <p class="h3 mb-0"><?= e($attentionPropertyCount) ?></p>
-                            <p class="small text-muted mb-0">Malo o muy malo</p>
+                            <p class="small text-body-secondary mb-1">Requieren atención</p>
+                            <p class="h3 mb-0"><?= e((string) $attentionPropertyCount) ?></p>
+                            <p class="small text-body-secondary mb-0">Malo o muy malo</p>
                         </div>
                     </div>
                 </button>
@@ -218,9 +166,9 @@ ob_start(); ?>
                             <i class="bi bi-wrench-adjustable-circle fs-4"></i>
                         </span>
                         <div>
-                            <p class="small text-muted mb-1">Mantenimientos realizados</p>
-                            <p class="h3 mb-0"><?= e($completedMaintenanceCount) ?></p>
-                            <p class="small text-muted mb-0">Finalizados</p>
+                            <p class="small text-body-secondary mb-1">Mantenimientos realizados</p>
+                            <p class="h3 mb-0"><?= e((string) $completedMaintenanceCount) ?></p>
+                            <p class="small text-body-secondary mb-0">Finalizados</p>
                         </div>
                     </div>
                 </article>
@@ -233,8 +181,8 @@ ob_start(); ?>
                                 <i class="bi bi-ticket-detailed fs-4"></i>
                             </span>
                             <div>
-                                <p class="small text-muted mb-1">Tickets registrados</p>
-                                <p class="h3 mb-1"><?= e($ticketCount) ?></p>
+                                <p class="small text-body-secondary mb-1">Tickets registrados</p>
+                                <p class="h3 mb-1"><?= e((string) $ticketCount) ?></p>
                                 <a class="small fw-semibold" href="<?= e(url('tickets.php')) ?>">
                                     Consultar tickets <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </a>
@@ -250,33 +198,25 @@ ob_start(); ?>
                             <i class="bi <?= e($legacySyncIcon) ?> fs-4"></i>
                         </span>
                         <div class="flex-grow-1">
-                            <p class="small text-muted mb-1">Sincronización con legacy</p>
+                            <p class="small text-body-secondary mb-1">Datos de inventario legacy</p>
                             <?php if (!$legacySyncAvailable) : ?>
-                                <p class="h5 mb-1">No disponible</p>
-                                <p class="small text-muted mb-2">
-                                    No se pudo consultar PostgreSQL. Último intento: <?= e($legacySyncCheckedAt) ?>.
-                                    <a href="<?= e(url('dashboard.php')) ?>">Volver a comprobar</a>.
-                                </p>
-                            <?php elseif ($legacySyncPendingCount === 0) : ?>
-                                <p class="h5 mb-1">Sin faltantes por identificador</p>
-                                <p class="small text-muted mb-2">
-                                    Los <?= e($legacySyncSourceCount) ?> bienes del origen ya existen en SysTec.
-                                    Esta comprobación solo compara identificadores; los estados locales se conservan.
-                                    Verificado: <?= e($legacySyncCheckedAt) ?>.
+                                <p class="h5 mb-1">Sin datos locales</p>
+                                <p class="small text-body-secondary mb-2">
+                                    Aún no se ha importado un inventario. Importa el inventario para que
+                                    las adscripciones y asignaciones estén disponibles sin conexión a PostgreSQL.
                                 </p>
                             <?php else : ?>
-                                <p class="h5 mb-1">Faltan bienes en SysTec</p>
-                                <p class="small text-muted mb-2">
-                                    <?= e($legacySyncPendingCount) ?> identificadores del origen aún no están registrados.
-                                    Verificado: <?= e($legacySyncCheckedAt) ?>.
+                                <p class="h5 mb-1">
+                                    <?= e((string) count($legacyAdscriptionsByIdent)) ?> adscripciones<?= $legacySyncStale ? ' <span class="badge text-bg-warning ms-1">Desactualizado</span>' : '' ?>
                                 </p>
-                            <?php endif; ?>
-                            <?php if ($legacySyncAvailable && $legacySyncPendingCount > 0 && !$canImportInventory) : ?>
-                                <p class="small text-muted mb-0">Solicita a un administrador u operador que importe los bienes pendientes.</p>
+                                <p class="small text-body-secondary mb-2">
+                                    Datos locales del último sync.
+                                    <?= $legacySyncCheckedAt !== '—' ? 'Sincronizado: ' . e($legacySyncCheckedAt) . '.' : '' ?>
+                                </p>
                             <?php endif; ?>
                             <?php if ($canImportInventory) : ?>
                                 <a class="small fw-semibold" href="<?= e(url('updates.php')) ?>">
-                                    Importar bienes <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                    Importar / actualizar <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </a>
                             <?php endif; ?>
                         </div>
@@ -285,67 +225,7 @@ ob_start(); ?>
             </div>
         </section>
 
-        <section class="card mb-4 shadow-sm text-start" aria-labelledby="inventory-filters-title">
-            <div class="card-body">
-                <h3 class="h6 mb-3" id="inventory-filters-title">Filtrar inventario</h3>
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-4">
-                        <label class="form-label fw-semibold" for="filterCategory">Categoría</label>
-                        <select class="form-select" id="filterCategory">
-                            <option value="">Todas las categorías</option>
-                            <option value="informatica">Informática</option>
-                            <option value="redes">Redes y telecomunicaciones</option>
-                            <option value="otros">Otros bienes</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label fw-semibold" for="filterStatus">Estado</label>
-                        <select class="form-select" id="filterStatus">
-                            <option value="">Todos los estados</option>
-                            <option value="__attention__">Requieren atención</option>
-                            <option value="BUENO">Bueno</option>
-                            <option value="REGULAR">Regular</option>
-                            <option value="MALO">Malo</option>
-                            <option value="MUY MALO">Muy malo</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label fw-semibold" for="filterAdscription">Adscripción / unidad operativa</label>
-                        <select class="form-select" id="filterAdscription">
-                            <option value="">Todas las unidades</option>
-                            <?php foreach ($adscriptionOptions as $key => $label) : ?>
-                                <option value="<?= e($key) ?>"><?= e($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <?php if ($canViewAssignments) : ?>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold" for="filterResponsible">Responsable del bien</label>
-                            <select class="form-select" id="filterResponsible">
-                                <option value="">Todos los responsables</option>
-                                <?php foreach ($assignmentFilterOptions['responsible'] as $key => $label) : ?>
-                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold" for="filterAssigned">Usuario asignado al bien</label>
-                            <select class="form-select" id="filterAssigned">
-                                <option value="">Todos los usuarios asignados</option>
-                                <?php foreach ($assignmentFilterOptions['assigned'] as $key => $label) : ?>
-                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    <?php endif; ?>
-                    <div class="col-12 col-md-4">
-                        <button type="button" class="btn btn-outline-secondary" id="resetInventoryFilters">
-                            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Limpiar filtros
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <?php include __DIR__ . '/dashboard/filter_bar.php'; ?>
 
         <div class="card" id="inventoryTableSection">
             <div class="card-body">
@@ -395,457 +275,17 @@ ob_start(); ?>
         }
     </style>
 
-    <div class="modal fade" id="registerMaintenanceModal" tabindex="-1"
-         aria-labelledby="registerMaintenanceModalTitle" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content text-start">
-                <form class="maintenance-modal-form" action="<?= e(url('maintenances/register.php')) ?>" method="POST">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="property_id" id="maintenancePropertyId"
-                           value="<?= e($maintenanceFormPropertyId) ?>">
-                    <input type="hidden" name="return_to" value="dashboard">
-                    <input type="hidden" name="return_category" value="">
-                    <input type="hidden" name="return_status" value="">
-                    <input type="hidden" name="return_adscription" value="">
-                    <?php if ($canViewAssignments) : ?>
-                        <input type="hidden" name="return_responsible" value="">
-                        <input type="hidden" name="return_assigned" value="">
-                    <?php endif; ?>
-                    <input type="hidden" name="return_search" value="">
-                    <div class="modal-header">
-                        <div>
-                            <h3 class="modal-title fs-5" id="registerMaintenanceModalTitle">Registrar mantenimiento</h3>
-                            <p class="small text-muted mb-0">Bien: <span id="maintenancePropertyCode"><?= e($maintenanceFormPropertyCode) ?></span></p>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceType">Tipo de mantenimiento</label>
-                            <select class="form-select" name="type" id="dashboardMaintenanceType" required>
-                                <option value="">Seleccione</option>
-                                <?php foreach ($db->getListMaintenanceType() as $key => $value) : ?>
-                                    <option value="<?= e($key) ?>"<?= ($maintenanceFormValues['type'] ?? '') === (string) $key ? ' selected' : '' ?>><?= e($value) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceTechnician">Técnico</label>
-                            <select class="form-select" name="technician" id="dashboardMaintenanceTechnician" required>
-                                <option value="">Seleccione</option>
-                                <?php foreach ($db->getListMaintenanceTechnician() as $key => $value) : ?>
-                                    <option value="<?= e($key) ?>"<?= ($maintenanceFormValues['technician'] ?? '') === (string) $key ? ' selected' : '' ?>><?= e($value) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceDate">Fecha de inicio</label>
-                            <input class="form-control" type="datetime-local" name="date" id="dashboardMaintenanceDate"
-                                   value="<?= e($maintenanceFormValues['date'] ?? date('Y-m-d\TH:i')) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceReason">Razón del mantenimiento</label>
-                            <input class="form-control" type="text" name="failure_reason" id="dashboardMaintenanceReason"
-                                   value="<?= e($maintenanceFormValues['failure_reason'] ?? '') ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceDescription">Descripción</label>
-                            <textarea class="form-control" name="description" id="dashboardMaintenanceDescription"
-                                      rows="4" required><?= e($maintenanceFormValues['description'] ?? '') ?></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardMaintenanceNotes">Notas</label>
-                            <textarea class="form-control" name="notes" id="dashboardMaintenanceNotes" rows="3"><?= e($maintenanceFormValues['notes'] ?? '') ?></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="dashboardNextMaintenanceDate">Siguiente mantenimiento</label>
-                            <input class="form-control" type="date" name="next_maintenance_date" id="dashboardNextMaintenanceDate"
-                                   value="<?= e($maintenanceFormValues['next_maintenance_date'] ?? '') ?>">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary" name="register" value="Registrar">
-                            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Registrar mantenimiento
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <?php include __DIR__ . '/include/dashboard_register_maintenance_modal.php'; ?>
 
-    <script type="text/javascript" nonce="<?= e(systec_csp_nonce()) ?>">
-        const search = <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>;
-        const dashboardParams = new URLSearchParams(window.location.search);
-        const categoryFilter = document.getElementById('filterCategory');
-        const statusFilter = document.getElementById('filterStatus');
-        const adscriptionFilter = document.getElementById('filterAdscription');
-        const responsibleFilter = document.getElementById('filterResponsible');
-        const assignedFilter = document.getElementById('filterAssigned');
-        categoryFilter.value = dashboardParams.get('category') ?? '';
-        statusFilter.value = dashboardParams.get('status') ?? '';
-        adscriptionFilter.value = dashboardParams.get('adscription') ?? '';
-        if (responsibleFilter) responsibleFilter.value = dashboardParams.get('responsible') ?? '';
-        if (assignedFilter) assignedFilter.value = dashboardParams.get('assigned') ?? '';
-
-        const table = new DataTable('#myTable', {
-            search: {
-                search: dashboardParams.get('search') ?? search ?? ''
-            },
-            order: [4, 'asc'],
-            language: {
-                search: 'Buscar bienes: _INPUT_',
-                searchPlaceholder: 'Código, descripción, modelo, color, serial...',
-                emptyTable: 'No hay bienes registrados.',
-                zeroRecords: 'Ningún bien coincide con los filtros aplicados.'
-            }
-        });
-
-        const inventoryIndicators = document.querySelectorAll('.js-inventory-indicator');
-        const activeFiltersContainer = document.getElementById('activeInventoryFilters');
-        const resultCount = document.getElementById('inventoryResultCount');
-        const totalPropertyCount = <?= js($propertyCount) ?>;
-
-        const updateFilterFeedback = () => {
-            const activeFilters = [];
-            if (categoryFilter.value) {
-                activeFilters.push({
-                    key: 'category',
-                    label: `Categoría: ${categoryFilter.selectedOptions[0].textContent}`
-                });
-            }
-            if (statusFilter.value) {
-                activeFilters.push({
-                    key: 'status',
-                    label: `Estado: ${statusFilter.selectedOptions[0].textContent}`
-                });
-            }
-            if (adscriptionFilter.value) {
-                activeFilters.push({
-                    key: 'adscription',
-                    label: `Adscripción: ${adscriptionFilter.selectedOptions[0].textContent}`
-                });
-            }
-            if (responsibleFilter && responsibleFilter.value) {
-                activeFilters.push({
-                    key: 'responsible',
-                    label: `Responsable: ${responsibleFilter.selectedOptions[0].textContent}`
-                });
-            }
-            if (assignedFilter && assignedFilter.value) {
-                activeFilters.push({
-                    key: 'assigned',
-                    label: `Usuario asignado: ${assignedFilter.selectedOptions[0].textContent}`
-                });
-            }
-            if (table.search().trim()) {
-                activeFilters.push({
-                    key: 'search',
-                    label: `Búsqueda: ${table.search().trim()}`
-                });
-            }
-
-            activeFiltersContainer.replaceChildren();
-            activeFilters.forEach((filter) => {
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'btn btn-sm btn-outline-secondary rounded-pill';
-                chip.dataset.filterKey = filter.key;
-                chip.setAttribute('aria-label', `Quitar filtro ${filter.label}`);
-                chip.textContent = `${filter.label} ×`;
-                activeFiltersContainer.appendChild(chip);
-            });
-
-            const filteredCount = table.rows({search: 'applied'}).count();
-            resultCount.textContent = `Mostrando ${filteredCount} de ${totalPropertyCount} bienes`;
+    <script nonce="<?= e(systec_csp_nonce()) ?>">
+        window.SystecDashboardConfig = {
+            search: <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>,
+            totalPropertyCount: <?= js($propertyCount) ?>,
+            openMaintenanceModalOnLoad: <?= js(($maintenanceFeedback['type'] ?? '') === 'danger') ?>,
+            cspNonce: <?= js(systec_csp_nonce()) ?>
         };
-
-        activeFiltersContainer.addEventListener('click', (event) => {
-            const chip = event.target.closest('button[data-filter-key]');
-            if (!chip) return;
-
-            if (chip.dataset.filterKey === 'category') categoryFilter.value = '';
-            if (chip.dataset.filterKey === 'status') statusFilter.value = '';
-            if (chip.dataset.filterKey === 'adscription') adscriptionFilter.value = '';
-            if (chip.dataset.filterKey === 'responsible' && responsibleFilter) responsibleFilter.value = '';
-            if (chip.dataset.filterKey === 'assigned' && assignedFilter) assignedFilter.value = '';
-            if (chip.dataset.filterKey === 'search') table.search('');
-
-            table.draw();
-            syncInventoryUrl();
-            syncIndicatorState();
-        });
-
-        const syncInventoryUrl = () => {
-            const url = new URL(window.location.href);
-            const filters = {
-                category: categoryFilter.value,
-                status: statusFilter.value,
-                adscription: adscriptionFilter.value,
-                responsible: responsibleFilter?.value ?? '',
-                assigned: assignedFilter?.value ?? '',
-                search: table.search().trim()
-            };
-
-            Object.entries(filters).forEach(([key, value]) => {
-                if (value) {
-                    url.searchParams.set(key, value);
-                } else {
-                    url.searchParams.delete(key);
-                }
-            });
-
-            history.replaceState(null, '', url.pathname + url.search + url.hash);
-        };
-
-        const syncIndicatorState = () => {
-            inventoryIndicators.forEach((indicator) => {
-                const status = indicator.dataset.filterStatus;
-                const isActive = status === ''
-                    ? !categoryFilter.value && !statusFilter.value && !adscriptionFilter.value
-                        && !(responsibleFilter?.value) && !(assignedFilter?.value) && !table.search().trim()
-                    : statusFilter.value === status;
-                indicator.setAttribute('aria-pressed', String(isActive));
-            });
-        };
-
-        table.on('draw', updateFilterFeedback);
-
-        $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
-            if (settings.nTable.id !== 'myTable') return true;
-
-            const row = table.row(dataIndex).node();
-            if (!row) return true;
-
-            const categoryMatches = !categoryFilter.value || row.dataset.category === categoryFilter.value;
-            const adscriptionMatches = !adscriptionFilter.value
-                || row.dataset.adscription === adscriptionFilter.value;
-            const rowStatus = row.dataset.status;
-            const statusMatches = !statusFilter.value
-                || (statusFilter.value === '__attention__'
-                    ? rowStatus === 'MALO' || rowStatus === 'MUY MALO'
-                    : rowStatus === statusFilter.value);
-            const responsibleMatches = !responsibleFilter || !responsibleFilter.value
-                || row.dataset.responsible === responsibleFilter.value;
-            const assignedMatches = !assignedFilter || !assignedFilter.value
-                || row.dataset.assigned === assignedFilter.value;
-
-            return categoryMatches && statusMatches && adscriptionMatches
-                && responsibleMatches && assignedMatches;
-        });
-
-        [categoryFilter, statusFilter, adscriptionFilter, responsibleFilter, assignedFilter]
-            .filter(Boolean)
-            .forEach((filter) => {
-                filter.addEventListener('change', () => {
-                    table.draw();
-                    syncInventoryUrl();
-                    syncIndicatorState();
-                });
-            });
-        table.draw();
-        syncIndicatorState();
-
-        inventoryIndicators.forEach((indicator) => {
-            indicator.addEventListener('click', () => {
-                const status = indicator.dataset.filterStatus;
-                if (status === '') {
-                    categoryFilter.value = '';
-                    statusFilter.value = '';
-                    adscriptionFilter.value = '';
-                    if (responsibleFilter) responsibleFilter.value = '';
-                    if (assignedFilter) assignedFilter.value = '';
-                    table.search('');
-                } else {
-                    statusFilter.value = (statusFilter.value === status) ? '' : status;
-                }
-
-                table.draw();
-                syncInventoryUrl();
-                syncIndicatorState();
-                document.getElementById('inventoryTableSection').scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            });
-        });
-
-        document.getElementById('resetInventoryFilters').addEventListener('click', () => {
-            categoryFilter.value = '';
-            statusFilter.value = '';
-            adscriptionFilter.value = '';
-            if (responsibleFilter) responsibleFilter.value = '';
-            if (assignedFilter) assignedFilter.value = '';
-            table.search('');
-            table.draw();
-            syncInventoryUrl();
-            syncIndicatorState();
-        });
-
-        document.getElementById('registerMaintenanceModal').addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            if (button) {
-                document.getElementById('maintenancePropertyId').value = button.dataset.propertyId;
-                document.getElementById('maintenancePropertyCode').textContent = button.dataset.propertyCode;
-            }
-        });
-
-        const maintenanceForm = document.querySelector('.maintenance-modal-form');
-        maintenanceForm.addEventListener('submit', () => {
-            const params = new URLSearchParams(window.location.search);
-            ['category', 'status', 'adscription', 'responsible', 'assigned', 'search'].forEach((key) => {
-                const field = maintenanceForm.elements[`return_${key}`];
-                if (field) field.value = params.get(key) ?? '';
-            });
-        });
-
-        if (<?= js(($maintenanceFeedback['type'] ?? '') === 'danger') ?>) {
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('registerMaintenanceModal')).show();
-        }
-
-        const historyModal = document.getElementById('propertyHistoryModal');
-        if (historyModal) {
-            const historyContent = document.getElementById('propertyHistoryContent');
-            const printHistoryButton = document.getElementById('printPropertyHistory');
-            let historyRequest = null;
-            let historyTrigger = null;
-
-            historyModal.addEventListener('show.bs.modal', (event) => {
-                const button = event.relatedTarget;
-                historyTrigger = button;
-                document.getElementById('historyPropertyCode').textContent = button.dataset.propertyCode;
-                printHistoryButton.disabled = true;
-                historyContent.setAttribute('aria-busy', 'true');
-                historyContent.innerHTML = '<div class="d-flex align-items-center gap-2 text-body-secondary" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Cargando historial...</div>';
-
-                if (historyRequest) historyRequest.abort();
-                historyRequest = new AbortController();
-                const request = historyRequest;
-
-                fetch(button.dataset.historyUrl, {
-                    credentials: 'same-origin',
-                    headers: {'X-Requested-With': 'XMLHttpRequest'},
-                    signal: request.signal
-                })
-                    .then((response) => {
-                        if (response.redirected) {
-                            throw new Error('La sesión expiró o la solicitud fue redirigida.');
-                        }
-                        if (!response.ok) {
-                            throw new Error(`Error HTTP ${response.status}`);
-                        }
-                        return response.text();
-                    })
-                    .then((html) => {
-                        if (!request.signal.aborted) {
-                            historyContent.innerHTML = html;
-                            printHistoryButton.disabled = false;
-                        }
-                    })
-                    .catch((error) => {
-                        if (error.name !== 'AbortError') {
-                            console.error('No se pudo cargar el historial del bien:', error);
-                            historyContent.innerHTML = '<div class="alert alert-danger mb-0" role="alert">No se pudo cargar el historial. Cierra el diálogo e inténtalo de nuevo.</div>';
-                        }
-                    })
-                    .finally(() => {
-                        if (!request.signal.aborted) {
-                            historyContent.setAttribute('aria-busy', 'false');
-                        }
-                    });
-            });
-
-            historyModal.addEventListener('hide.bs.modal', () => {
-                if (historyRequest) historyRequest.abort();
-                if (historyModal.contains(document.activeElement)) {
-                    document.activeElement.blur();
-                }
-            });
-
-            historyModal.addEventListener('hidden.bs.modal', () => {
-                if (historyRequest) historyRequest.abort();
-                historyRequest = null;
-                historyContent.innerHTML = '<p class="text-body-secondary mb-0">Selecciona un bien para consultar su historial.</p>';
-                historyContent.setAttribute('aria-busy', 'false');
-                printHistoryButton.disabled = true;
-                if (historyTrigger && historyTrigger.isConnected) {
-                    historyTrigger.focus();
-                }
-                historyTrigger = null;
-            });
-
-            printHistoryButton.addEventListener('click', () => {
-                const printWindow = window.open('', '_blank');
-                if (!printWindow) {
-                    window.alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes e inténtalo de nuevo.');
-                    return;
-                }
-                printWindow.opener = null;
-
-                const reportTitle = `Historial de mantenimiento - ${document.getElementById('historyPropertyCode').textContent}`;
-                const letterhead = historyContent.querySelector('#historyLetterhead');
-                const reportContent = historyContent.cloneNode(true);
-                reportContent.querySelector('#historyLetterhead')?.remove();
-
-                const printDocument = printWindow.document;
-                printDocument.title = reportTitle;
-                const charset = printDocument.createElement('meta');
-                charset.setAttribute('charset', 'utf-8');
-                printDocument.head.appendChild(charset);
-                const viewport = printDocument.createElement('meta');
-                viewport.name = 'viewport';
-                viewport.content = 'width=device-width, initial-scale=1';
-                printDocument.head.appendChild(viewport);
-
-                const printStyle = printDocument.createElement('style');
-                printStyle.nonce = <?= js(systec_csp_nonce()) ?>;
-                printStyle.textContent = `
-                    body { color: #212529; font: 12px Arial, sans-serif; margin: 20px; }
-                    h1, h2, h3, h4, h5 { margin: 0 0 8px; }
-                    #historyLetterhead { display: block !important; color: #000 !important; margin: 0 0 16px; }
-                    #historyLetterhead, #historyLetterhead * { visibility: visible !important; }
-                    #historyLetterhead h5 { font-size: .9375rem; }
-                    #historyLetterhead .small { font-size: .75rem; }
-                    #historyLetterhead dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 8px 0 0; }
-                    #historyLetterhead dt { color: #495057; font-size: 10px; text-transform: uppercase; }
-                    #historyLetterhead dd { margin: 0; }
-                    table { border-collapse: collapse; width: 100%; }
-                    th, td { border: 1px solid #adb5bd; padding: 6px; text-align: left; vertical-align: top; }
-                    th { background: #e9ecef; }
-                    .badge { border: 1px solid #adb5bd; border-radius: 12px; display: inline-block; padding: 2px 6px; }
-                    .list-group { list-style: none; padding: 0; }
-                    .list-group-item { border-bottom: 1px solid #dee2e6; padding: 4px 0; }
-                    @page { margin: 15mm; }
-                    @media print { body { margin: 0; } }
-                `;
-                printDocument.head.appendChild(printStyle);
-                if (letterhead) printDocument.body.appendChild(letterhead.cloneNode(true));
-                printDocument.body.appendChild(reportContent);
-                printWindow.addEventListener('load', () => {
-                    printWindow.focus();
-                    printWindow.print();
-                }, {once: true});
-            });
-        }
-
-        const statusModal = document.getElementById('updatePropertyStatusModal');
-        if (statusModal) {
-            statusModal.addEventListener('show.bs.modal', (event) => {
-                const button = event.relatedTarget;
-                document.getElementById('statusPropertyId').value = button.dataset.propertyId;
-                document.getElementById('statusPropertyCode').textContent = button.dataset.propertyCode;
-                document.getElementById('propertyStatus').value = button.dataset.propertyStatus;
-            });
-        }
-
-        table.on('search', () => {
-            syncInventoryUrl();
-            syncIndicatorState();
-        });
-
-        syncIndicatorState();
-        updateFilterFeedback();
     </script>
+    <script nonce="<?= e(systec_csp_nonce()) ?>" src="<?= e(url('assets/js/dashboard.js')) ?>"></script>
 
 <?php $main = ob_get_clean();
 include __DIR__ . '/include/layout.php';

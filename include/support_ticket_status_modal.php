@@ -1,5 +1,7 @@
 <?php
-$supportTicketStatuses = $db->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');
+$supportTicketStatuses = isset($statuses) && is_array($statuses)
+    ? array_values($statuses)
+    : $db->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');
 ?>
 <div class="modal fade" id="supportTicketStatusModal" tabindex="-1"
      aria-labelledby="supportTicketStatusModalTitle" aria-hidden="true">

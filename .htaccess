@@ -1,7 +1,7 @@
 Options -Indexes
 
-<FilesMatch "\.(db|sqlite|sqlite3|csv|log|md|env)$">
+<FilesMatch "\.(db|sqlite|sqlite3|csv|xls|xlsx|log(\.[0-9]+)?|md|env|sql|json|lock)$">
     Require all denied
 </FilesMatch>
 
-RedirectMatch 403 ^/(storage|bck|docs|grafo|spec|bin|include)(/|$)
+RedirectMatch 403 ^/(storage|bck|docs|grafo|spec|bin|include|dataFile|tests|\.git|\.github|\.agents|\.skills)(/|$)

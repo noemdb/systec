@@ -77,8 +77,8 @@ Si una prueba falla, abrir incidencia, conservar la copia fallida para diagnóst
 - [ ] TI confirmó la definición de semana para promoción y retención.
 - [ ] Se confirmó host, usuario, ruta de almacenamiento y zona horaria.
 - [ ] TI aprobó la política y el canal de alertas de fallos.
-- [ ] El wrapper cifra, verifica integridad, devuelve errores y aplica retención después del éxito.
+- [x] El wrapper (`bin/backup.sh`) cifra, verifica integridad (`PRAGMA integrity_check`), devuelve errores y aplica retención 30/12/12 después del éxito.
 - [ ] El cron diario a las 02:00 está instalado y su ejecución se monitoriza.
 - [ ] La primera restauración aislada trimestral se completó y el RPO/RTO se revisaron.
 
-**Estado F2:** los parámetros están registrados como propuesta; el cron no puede habilitarse con seguridad mientras falten aprobación TI, destino fuera del host y método/custodia de cifrado.
+**Estado F2 / OPS-01:** `bin/backup.sh` está implementado y cubierto por pruebas automatizadas (`tests/Unit/BackupAndUsersTest.php`); el cron en el servidor de producción se habilitará cuando TI asigne el destino fuera del host y el archivo de clave (`SYSTEC_BACKUP_KEY_FILE`).

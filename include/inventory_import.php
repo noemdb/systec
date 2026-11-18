@@ -2,6 +2,71 @@
 
 require_once __DIR__ . '/csv_import.php';
 
+/**
+ * Lee el último cache local de adscripciones del inventario legacy sin conectarse a PostgreSQL.
+ *
+ * Devuelve un array con:
+ *   - adscriptions: array<string, array{key:string, label:string}>  (vacío si no hay cache)
+ *   - assignments:  array<string, array{...}>                       (vacío si no hay cache)
+ *   - rows:         array                                           (siempre vacío; solo para compatibilidad)
+ *   - cached_at:    int|null  (timestamp UNIX del cache, o null)
+ *   - stale:        bool
+ *   - found:        bool  (true si se encontró y leyó un archivo de cache)
+ */
+function legacy_postgres_read_local_cache(): array
+{
+    $empty = array(
+        'adscriptions' => array(),
+        'assignments'  => array(),
+        'rows'         => array(),
+        'cached_at'    => null,
+        'stale'        => false,
+        'found'        => false,
+    );
+
+    $cacheDirectory = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
+    if (!is_dir($cacheDirectory)) {
+        return $empty;
+    }
+
+    // Busca el archivo de cache más reciente (puede haber varios para distintos conjuntos de idents).
+    $pattern = $cacheDirectory . DIRECTORY_SEPARATOR . 'inventory-adscriptions-*.json';
+    $files   = glob($pattern);
+    if (!$files) {
+        return $empty;
+    }
+
+    // Ordena por mtime descendente y toma el más reciente.
+    usort($files, static function ($a, $b) {
+        return filemtime($b) - filemtime($a);
+    });
+
+    $contents = @file_get_contents($files[0]);
+    if ($contents === false) {
+        return $empty;
+    }
+
+    $decoded = json_decode($contents, true);
+    if (!is_array($decoded)) {
+        return $empty;
+    }
+
+    return array(
+        'adscriptions' => isset($decoded['adscriptions']) && is_array($decoded['adscriptions'])
+            ? $decoded['adscriptions']
+            : array(),
+        'assignments'  => isset($decoded['assignments']) && is_array($decoded['assignments'])
+            ? $decoded['assignments']
+            : array(),
+        'rows'         => array(),   // no se usa en la tarjeta; evita cargar datos voluminosos
+        'cached_at'    => isset($decoded['cached_at']) && is_numeric($decoded['cached_at'])
+            ? (int) $decoded['cached_at']
+            : null,
+        'stale'        => isset($decoded['stale']) && $decoded['stale'] === true,
+        'found'        => true,
+    );
+}
+
 function property_assignment_filter_key(string $name, string $status): string
 {
     $name = trim($name);
