@@ -201,7 +201,6 @@
                 if (th.dataset.orderable === 'false' || label === 'acciones' || label === 'acción') {
                     return;
                 }
-                th.style.cursor = 'pointer';
                 th.setAttribute('aria-sort', 'none');
                 th.addEventListener('click', (event) => {
                     if (event.target.closest('input, button, a, select')) return;

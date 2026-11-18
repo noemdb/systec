@@ -15,28 +15,31 @@
 
 
 <style nonce="<?= e(systec_csp_nonce()) ?>">
+    .table-responsive {
+        overflow-y: hidden;
+    }
+
     th[aria-sort] {
+        cursor: pointer;
         user-select: none;
-        position: relative;
-        padding-right: 1.25rem !important;
     }
 
     th[aria-sort]::after {
         content: "⇅";
-        position: absolute;
-        right: 0.35rem;
-        opacity: 0.3;
+        display: inline-block;
+        margin-left: 0.25rem;
+        opacity: 0.35;
         font-size: 0.75em;
     }
 
     th[aria-sort="ascending"]::after {
         content: "↑";
-        opacity: 0.85;
+        opacity: 0.9;
     }
 
     th[aria-sort="descending"]::after {
         content: "↓";
-        opacity: 0.85;
+        opacity: 0.9;
     }
     .property-action-btn {
         display: inline-flex;

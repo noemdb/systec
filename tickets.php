@@ -22,15 +22,11 @@ $dashboardSummary = $db->tickets()->supportTicketDashboardSummary($createdByFilt
 $statuses = $dashboardSummary['statuses'];
 $summaryCounts = $dashboardSummary['counts'];
 
-$pageSize = 25;
 $matchingCount = $summaryCounts['total'];
-$totalPages = max(1, (int) ceil($matchingCount / $pageSize));
-$page = isset($_GET['page']) ? filter_var($_GET['page'], FILTER_VALIDATE_INT) : 1;
-$page = ($page === false || $page === null) ? 1 : max(1, min((int) $page, $totalPages));
 
 // PERF-02: Segunda y última consulta con JOIN a properties, users, ticket_status e historial JSON.
 $tickets = $matchingCount > 0
-    ? $db->supportTickets($pageSize, ($page - 1) * $pageSize, $createdByFilter)
+    ? $db->supportTickets($matchingCount, 0, $createdByFilter)
     : array();
 
 $statusClasses = array(
@@ -40,9 +36,6 @@ $statusClasses = array(
     'en_espera' => 'secondary',
     'finalizado' => 'success',
 );
-$pageUrl = function (int $targetPage): string {
-    return url('tickets.php?' . http_build_query(array('page' => $targetPage)));
-};
 
 $title = 'Tickets';
 $ticketNotice = isset($_SESSION['ticket_notice']) && is_string($_SESSION['ticket_notice'])
@@ -154,9 +147,9 @@ ob_start();
                 </h2>
                 <span class="badge text-bg-light border text-body-secondary" aria-live="polite"><?= e((string) $matchingCount) ?> registros</span>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body">
                 <div class="table-responsive tickets-table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle mb-0" id="ticketsTable">
                         <caption class="visually-hidden">Tickets registrados</caption>
                         <thead class="table-light">
                         <tr>
@@ -251,29 +244,20 @@ ob_start();
                         </tbody>
                     </table>
                 </div>
-                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 p-3 border-top">
-                    <span class="small text-body-secondary">
-                        Mostrando <?= e((string) (($page - 1) * $pageSize + 1)) ?>–<?= e((string) (($page - 1) * $pageSize + count($tickets))) ?>
-                        de <?= e((string) $matchingCount) ?>
-                    </span>
-                    <nav aria-label="Paginación de tickets">
-                        <ul class="pagination pagination-sm mb-0">
-                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                <a class="page-link" href="<?= e($pageUrl(max(1, $page - 1))) ?>"
-                                   <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>>Anterior</a>
-                            </li>
-                            <li class="page-item disabled">
-                                <span class="page-link">Página <?= e((string) $page) ?> de <?= e((string) $totalPages) ?></span>
-                            </li>
-                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                <a class="page-link" href="<?= e($pageUrl(min($totalPages, $page + 1))) ?>"
-                                   <?= $page >= $totalPages ? 'aria-disabled="true" tabindex="-1"' : '' ?>>Siguiente</a>
-                            </li>
-                        </ul>
-                    </nav>
-                </div>
             </div>
         </section>
+        <script nonce="<?= e(systec_csp_nonce()) ?>">
+            new window.Systec.TablePaginator('#ticketsTable', {
+                pageLength: 10,
+                language: {
+                    search: 'Buscar tickets:',
+                    searchPlaceholder: 'ID, bien, código, título, estado…',
+                    emptyTable: 'No hay tickets registrados.',
+                    zeroRecords: 'Ningún ticket coincide con la búsqueda.',
+                    unitLabel: 'tickets'
+                }
+            });
+        </script>
     <?php endif; ?>
 </div>
 <?php include __DIR__ . '/include/support_ticket_details_modal.php'; ?>

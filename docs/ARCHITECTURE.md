@@ -25,7 +25,7 @@ La simplicidad es deliberada: el sistema debe funcionar en un servidor PHP bási
 | Autenticación | Sesión PHP + `password_hash` | `include/auth.php`, `login.php` | Roles y CSRF sin framework |
 | Configuración | Constantes + variables de entorno | `include/config.php` (`SYSTEC_STORAGE`, `SYSTEC_DB`, `SYSTEC_DEBUG`) | Rutas fuera del webroot |
 | UI | Bootstrap | 5.3.2 (CSS + bundle JS) | Componentes y tema claro/oscuro |
-| Tablas | DataTables + jQuery | 1.13.7 + 3.7.0 | Búsqueda, orden y paginación en cliente |
+| Tablas y paginación | Vanilla JS (`TablePaginator`) | `assets/js/table-paginator.js` (sin jQuery) | Búsqueda, ordenamiento y paginación numérica con ventana deslizante en cliente |
 | Iconos | Bootstrap Icons | Incluido en `vendor/bootstrap/5.3.2/icon/` | Badges y acciones |
 | Plantillas | PHP + output buffering | `include/layout.php` | Layout reutilizable sin motor de plantillas |
 | Dependencias | Vendorizadas | `vendor/` (17 MB) | Sin Composer ni red en ejecución |

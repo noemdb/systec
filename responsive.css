@@ -400,6 +400,7 @@ table.table.table-striped.table-sm,
 
 .app-main .table-responsive {
     -webkit-overflow-scrolling: touch;
+    overflow-y: hidden;
 }
 
 .tickets-table-responsive {

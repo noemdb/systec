@@ -1,5 +1,16 @@
 # CHANGELOG docs/ — SysTec GMB
 
+## 2026-11-18 — Paginador Vanilla JS (sin jQuery) con estilo numérico clásico
+
+- `assets/js/table-paginator.js`: nuevo componente reutilizable `window.Systec.TablePaginator` en JavaScript nativo (ES6), sin dependencias de jQuery ni DataTables.
+- Implementa el **Estilo 1 · Clásico completo**:
+  - Barra superior con selector `Mostrar [10 / 25 / 50 / 100] registros` y buscador instantáneo accesible.
+  - Encabezados `<th aria-sort="ascending|descending|none">` ordenables con `Intl.Collator` numérico en español.
+  - Barra inferior con contador `Mostrando X–Y de Z` (`aria-live="polite"`) y paginación numérica con ventana deslizante (`[«] [‹] [1] … [p-1] [p] [p+1] … [N] [›] [»]`).
+- `include/head.php`, `assets/js/dashboard.js`, `assets/js/maintenances.js`, `tickets.php`: migradas las tablas de Dashboard, Mantenimientos y Tickets al nuevo paginador nativo, retirando la carga de `vendor/datatables/datatables.min.js` y `datatables.min.css` (eliminando jQuery del frontend).
+
+---
+
 ## 2026-11-18 — P2-05 y P2-07: Validación centralizada y rotación de logs
 
 ### P2-05 · Validación centralizada por contexto (`create`, `update`, `transition`)
