@@ -13,25 +13,24 @@ $assignmentStatusLabels = array(
     'SIN ESTADO' => 'Estado no registrado',
 );
 ?>
-<div class="container-fluid text-start">
-    <div class="table-responsive">
-    <table class="table table-striped table-sm table-hover" id="myTable">
+<div class="table-responsive">
+    <table class="table table-striped table-sm table-hover align-middle mb-0 is-compact-view" id="myTable">
         <thead>
             <tr class="table-secondary">
-                <th scope="col">N</th>
-                <th scope="col">Gr</th>
-                <th scope="col">SG</th>
-                <th scope="col">Sec</th>
+                <th scope="col" class="col-extended-detail">N</th>
+                <th scope="col" class="col-extended-detail">Gr</th>
+                <th scope="col" class="col-extended-detail">SG</th>
+                <th scope="col" class="col-extended-detail">Sec</th>
                 <th scope="col">Ident.</th>
                 <th scope="col">Adscripción / unidad operativa</th>
                 <?php if ($canViewAssignments) : ?>
-                    <th scope="col">Responsable</th>
+                    <th scope="col" class="col-extended-detail">Responsable</th>
                     <th scope="col">Usuario asignado</th>
                 <?php endif; ?>
                 <th scope="col">Descripción</th>
-                <th scope="col">Modelo</th>
-                <th scope="col">Color</th>
-                <th scope="col">Serial</th>
+                <th scope="col" class="col-extended-detail">Modelo</th>
+                <th scope="col" class="col-extended-detail">Color</th>
+                <th scope="col" class="col-extended-detail">Serial</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Mant.</th>
                 <th scope="col">Tickets</th>
@@ -45,10 +44,17 @@ $assignmentStatusLabels = array(
                 $group = trim((string) $property['grupo']);
                 $subgroup = str_pad(trim((string) $property['subgrupo']), 4, '0', STR_PAD_LEFT);
                 $section = str_pad(trim((string) $property['seccion']), 3, '0', STR_PAD_LEFT);
+                $identPadded = str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT);
                 $propertyCategory = property_category($property);
                 $propertyCode = property_code($property);
                 $propertyModel = trim((string) ($property['model'] ?? ''));
                 $propertyColor = trim((string) ($property['color'] ?? ''));
+                $propertySerial = trim((string) ($property['serial'] ?? ''));
+                $compactMetaParts = array_values(array_filter(array(
+                    $propertyModel !== '' ? 'Mod: ' . $propertyModel : '',
+                    $propertyColor !== '' ? 'Color: ' . $propertyColor : '',
+                    $propertySerial !== '' ? 'S/N: ' . $propertySerial : '',
+                )));
                 $propertyAdscription = $adscriptionsByPropertyId[(int) $property['id']]
                     ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
                 $responsibleName = trim((string) ($property['responsible_name'] ?? ''));
@@ -77,14 +83,17 @@ $assignmentStatusLabels = array(
                         data-responsible="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['responsible'] ?? '') ?>"
                         data-assigned="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['assigned'] ?? '') ?>"
                     <?php endif; ?>>
-                    <td><?= e($property['id']) ?></td>
-                    <td><?= e($property['grupo']) ?></td>
-                    <td><?= e($subgroup) ?></td>
-                    <td><?= e($section) ?></td>
-                    <td><?= e(str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT)) ?></td>
+                    <td class="col-extended-detail"><?= e($property['id']) ?></td>
+                    <td class="col-extended-detail"><?= e($property['grupo']) ?></td>
+                    <td class="col-extended-detail"><?= e($subgroup) ?></td>
+                    <td class="col-extended-detail"><?= e($section) ?></td>
+                    <td class="text-nowrap">
+                        <span class="fw-semibold"><?= e($identPadded) ?></span>
+                        <small class="d-block text-body-secondary compact-only-detail"><?= e($group . '-' . $subgroup . '-' . $section) ?></small>
+                    </td>
                     <td><?= e($propertyAdscription['label']) ?></td>
                     <?php if ($canViewAssignments) : ?>
-                        <td class="text-break">
+                        <td class="text-break col-extended-detail">
                             <span><?= e($responsibleDisplay) ?></span>
                             <?php if ($responsibleName !== '') : ?>
                                 <small class="d-block text-body-secondary"><?= e($responsibleStatusLabel) ?></small>
@@ -95,16 +104,26 @@ $assignmentStatusLabels = array(
                             <?php if ($assignedName !== '') : ?>
                                 <small class="d-block text-body-secondary"><?= e($assignedStatusLabel) ?></small>
                             <?php endif; ?>
+                            <?php if ($responsibleName !== '' && $responsibleName !== $assignedName) : ?>
+                                <small class="d-block text-body-secondary compact-only-detail">Resp.: <?= e($responsibleName) ?></small>
+                            <?php endif; ?>
                         </td>
                     <?php endif; ?>
-                    <td><?= e($property['description']) ?></td>
-                    <td class="text-break">
+                    <td>
+                        <span><?= e($property['description']) ?></span>
+                        <?php if ($compactMetaParts !== array()) : ?>
+                            <small class="d-block text-body-secondary text-break compact-only-detail">
+                                <?= e(implode(' · ', $compactMetaParts)) ?>
+                            </small>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-break col-extended-detail">
                         <?= $propertyModel !== '' ? e($propertyModel) : '<span class="text-body-secondary">No registrado</span>' ?>
                     </td>
-                    <td>
+                    <td class="col-extended-detail">
                         <?= $propertyColor !== '' ? e($propertyColor) : '<span class="text-body-secondary">No registrado</span>' ?>
                     </td>
-                    <td><?= e($property['serial']) ?></td>
+                    <td class="col-extended-detail"><?= e($property['serial']) ?></td>
                     <td><?= sat_badge(badge_clase_bien((string) $property['status']), property_status_label((string) $property['status'])) ?></td>
                     <td><?= e($maintenanceCountsByProperty[(int) $property['id']] ?? 0) ?></td>
                     <td><?= e($ticketCountsByProperty[(int) $property['id']] ?? 0) ?></td>
@@ -144,7 +163,6 @@ $assignmentStatusLabels = array(
             <?php endforeach; ?>
         </tbody>
     </table>
-    </div>
 </div>
 
 <div class="modal fade" id="propertyHistoryModal" tabindex="-1"

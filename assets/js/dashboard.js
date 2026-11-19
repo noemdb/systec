@@ -394,6 +394,26 @@
         syncIndicatorState();
     });
 
+    const toggleDensityButton = document.getElementById('toggleTableDensity');
+    const toggleDensityLabel = document.getElementById('toggleTableDensityLabel');
+    const inventoryTableElement = document.getElementById('myTable');
+    if (toggleDensityButton && toggleDensityLabel && inventoryTableElement) {
+        const applyTableDensity = (isCompact) => {
+            inventoryTableElement.classList.toggle('is-compact-view', isCompact);
+            toggleDensityButton.setAttribute('aria-pressed', String(isCompact));
+            toggleDensityLabel.textContent = isCompact
+                ? 'Mostrar todas las columnas'
+                : 'Vista compacta';
+        };
+
+        applyTableDensity(true);
+
+        toggleDensityButton.addEventListener('click', () => {
+            const nextCompact = !inventoryTableElement.classList.contains('is-compact-view');
+            applyTableDensity(nextCompact);
+        });
+    }
+
     syncIndicatorState();
     updateFilterFeedback();
 })();

@@ -118,7 +118,7 @@ ob_start(); ?>
                         class="card h-100 w-100 border-start border-4 border-primary shadow-sm text-start text-body js-inventory-indicator"
                         data-filter-status="" aria-controls="myTable" aria-pressed="false" title="Mostrar todos los bienes">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <span class="rounded-circle bg-primary-subtle text-primary p-3" aria-hidden="true">
+                        <span class="rounded-circle bg-primary-subtle text-primary p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi bi-box-seam fs-4"></i>
                         </span>
                         <div>
@@ -133,7 +133,7 @@ ob_start(); ?>
                         class="card h-100 w-100 border-start border-4 border-success shadow-sm text-start text-body js-inventory-indicator"
                         data-filter-status="BUENO" aria-controls="myTable" aria-pressed="false" title="Filtrar bienes en buen estado">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <span class="rounded-circle bg-success-subtle text-success p-3" aria-hidden="true">
+                        <span class="rounded-circle bg-success-subtle text-success p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi bi-check-circle fs-4"></i>
                         </span>
                         <div>
@@ -148,7 +148,7 @@ ob_start(); ?>
                         class="card h-100 w-100 border-start border-4 border-danger shadow-sm text-start text-body js-inventory-indicator"
                         data-filter-status="__attention__" aria-controls="myTable" aria-pressed="false" title="Filtrar bienes que requieren atención">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <span class="rounded-circle bg-danger-subtle text-danger p-3" aria-hidden="true">
+                        <span class="rounded-circle bg-danger-subtle text-danger p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi bi-exclamation-triangle fs-4"></i>
                         </span>
                         <div>
@@ -162,7 +162,7 @@ ob_start(); ?>
             <div class="col-12 col-sm-6 col-xl">
                 <article class="card h-100 border-start border-4 border-info shadow-sm">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <span class="rounded-circle bg-info-subtle text-info p-3" aria-hidden="true">
+                        <span class="rounded-circle bg-info-subtle text-info p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi bi-wrench-adjustable-circle fs-4"></i>
                         </span>
                         <div>
@@ -177,13 +177,13 @@ ob_start(); ?>
                 <div class="col-12 col-sm-6 col-xl">
                     <article class="card h-100 border-start border-4 border-primary shadow-sm">
                         <div class="card-body d-flex align-items-center gap-3">
-                            <span class="rounded-circle bg-primary-subtle text-primary p-3" aria-hidden="true">
+                            <span class="rounded-circle bg-primary-subtle text-primary p-2 flex-shrink-0" aria-hidden="true">
                                 <i class="bi bi-ticket-detailed fs-4"></i>
                             </span>
                             <div>
                                 <p class="small text-body-secondary mb-1">Tickets registrados</p>
                                 <p class="h3 mb-1"><?= e((string) $ticketCount) ?></p>
-                                <a class="small fw-semibold" href="<?= e(url('tickets.php')) ?>">
+                                <a class="small fw-semibold text-decoration-none" href="<?= e(url('tickets.php')) ?>">
                                     Consultar tickets <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </a>
                             </div>
@@ -194,28 +194,26 @@ ob_start(); ?>
             <div class="col-12 col-sm-6 col-xl">
                 <article class="card h-100 border-start border-4 border-<?= e($legacySyncCardClass) ?> shadow-sm">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <span class="rounded-circle bg-<?= e($legacySyncCardClass) ?>-subtle text-<?= e($legacySyncCardClass) ?> p-3" aria-hidden="true">
+                        <span class="rounded-circle bg-<?= e($legacySyncCardClass) ?>-subtle text-<?= e($legacySyncCardClass) ?> p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi <?= e($legacySyncIcon) ?> fs-4"></i>
                         </span>
                         <div class="flex-grow-1">
-                            <p class="small text-body-secondary mb-1">Datos de inventario legacy</p>
+                            <p class="small text-body-secondary mb-1">Inventario institucional</p>
                             <?php if (!$legacySyncAvailable) : ?>
-                                <p class="h5 mb-1">Sin datos locales</p>
-                                <p class="small text-body-secondary mb-2">
-                                    Aún no se ha importado un inventario. Importa el inventario para que
-                                    las adscripciones y asignaciones estén disponibles sin conexión a PostgreSQL.
+                                <p class="h6 mb-1">Sin caché local</p>
+                                <p class="small text-body-secondary mb-1">
+                                    Pendiente de importar o sincronizar.
                                 </p>
                             <?php else : ?>
                                 <p class="h5 mb-1">
                                     <?= e((string) count($legacyAdscriptionsByIdent)) ?> adscripciones<?= $legacySyncStale ? ' <span class="badge text-bg-warning ms-1">Desactualizado</span>' : '' ?>
                                 </p>
-                                <p class="small text-body-secondary mb-2">
-                                    Datos locales del último sync.
-                                    <?= $legacySyncCheckedAt !== '—' ? 'Sincronizado: ' . e($legacySyncCheckedAt) . '.' : '' ?>
+                                <p class="small text-body-secondary mb-1">
+                                    <?= $legacySyncCheckedAt !== '—' ? 'Sync: ' . e($legacySyncCheckedAt) : 'Datos locales disponibles' ?>
                                 </p>
                             <?php endif; ?>
                             <?php if ($canImportInventory) : ?>
-                                <a class="small fw-semibold" href="<?= e(url('updates.php')) ?>">
+                                <a class="small fw-semibold text-decoration-none" href="<?= e(url('updates.php')) ?>">
                                     Importar / actualizar <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </a>
                             <?php endif; ?>
@@ -227,19 +225,34 @@ ob_start(); ?>
 
         <?php include __DIR__ . '/dashboard/filter_bar.php'; ?>
 
-        <div class="card" id="inventoryTableSection">
-            <div class="card-body">
-                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
-                    <h3 class="h5 mb-0">Lista de bienes registrados</h3>
-                    <p class="small text-body-secondary mb-0" id="inventoryResultCount" aria-live="polite"></p>
+        <section class="card shadow-sm border-0" id="inventoryTableSection" aria-labelledby="inventory-table-title">
+            <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <h2 class="h5 mb-0" id="inventory-table-title">
+                        <i class="bi bi-box-seam text-primary me-2" aria-hidden="true"></i>Lista de bienes registrados
+                    </h2>
+                    <p class="small text-body-secondary mb-0" id="inventoryResultCount" role="status" aria-live="polite"></p>
                 </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            id="toggleTableDensity"
+                            aria-pressed="true"
+                            aria-controls="myTable"
+                            title="Alternar entre vista compacta y vista con todas las columnas">
+                        <i class="bi bi-layout-three-columns me-1" aria-hidden="true"></i>
+                        <span id="toggleTableDensityLabel">Mostrar todas las columnas</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
                 <div id="activeInventoryFilters" class="d-flex flex-wrap gap-2 mb-2"
                      aria-label="Filtros activos"></div>
 
                 <?php include __DIR__ . '/dashboard/table/index.php'; ?>
 
             </div>
-        </div>
+        </section>
 
     </div>
 
@@ -259,6 +272,24 @@ ob_start(); ?>
         .js-inventory-indicator[aria-pressed="true"] {
             outline: 0;
             box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .2), var(--bs-box-shadow-sm);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .js-inventory-indicator {
+                transition: none;
+            }
+
+            .js-inventory-indicator:hover {
+                transform: none;
+            }
+        }
+
+        #myTable.is-compact-view .col-extended-detail {
+            display: none;
+        }
+
+        #myTable:not(.is-compact-view) .compact-only-detail {
+            display: none;
         }
 
         .maintenance-modal-form {

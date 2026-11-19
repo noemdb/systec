@@ -197,7 +197,29 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 ? (string) $maintenance['time_taken']
                 : '—';
 
-            $propertyAdscription = $adscriptionsByPropertyId[(int) $maintenance['property_id']]
+            $propertyId = (int) $maintenance['property_id'];
+            $maintenanceProperty = $propertiesById[$propertyId] ?? null;
+            if (is_array($maintenanceProperty)) {
+                $propGroup = trim((string) ($maintenanceProperty['grupo'] ?? ''));
+                $propSubgroup = str_pad(trim((string) ($maintenanceProperty['subgrupo'] ?? '')), 4, '0', STR_PAD_LEFT);
+                $propSection = str_pad(trim((string) ($maintenanceProperty['seccion'] ?? '')), 3, '0', STR_PAD_LEFT);
+                $codeIdent = str_pad(trim((string) ($maintenanceProperty['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
+                $codePrefix = $propGroup . '-' . $propSubgroup . '-' . $propSection;
+            } else {
+                $rawCode = trim((string) $maintenance['code']);
+                $codeParts = explode('-', $rawCode);
+                if (count($codeParts) === 4) {
+                    $codeIdent = str_pad(trim((string) $codeParts[3]), 4, '0', STR_PAD_LEFT);
+                    $codePrefix = trim((string) $codeParts[0])
+                        . '-' . str_pad(trim((string) $codeParts[1]), 4, '0', STR_PAD_LEFT)
+                        . '-' . str_pad(trim((string) $codeParts[2]), 3, '0', STR_PAD_LEFT);
+                } else {
+                    $codeIdent = $rawCode !== '' ? $rawCode : '—';
+                    $codePrefix = '';
+                }
+            }
+
+            $propertyAdscription = $adscriptionsByPropertyId[$propertyId]
                 ?? array('key' => '__unassigned__');
             $statusKey = mb_strtolower(trim((string) $maintenance['status']));
             $vencido = ($statusKey !== 'finalizado' && $nextTimestamp !== false && $nextTimestamp < time());
@@ -266,7 +288,12 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                                aria-label="Seleccionar mantenimiento <?= e($maintenance['code']) ?>">
                     </td>
                 <?php endif; ?>
-                <td class="text-nowrap fw-semibold"><?= e($maintenance['code']) ?></td>
+                <td class="text-nowrap" data-code="<?= e($maintenance['code']) ?>">
+                    <span class="fw-semibold"><?= e($codeIdent) ?></span>
+                    <?php if ($codePrefix !== '') : ?>
+                        <small class="d-block text-body-secondary"><?= e($codePrefix) ?></small>
+                    <?php endif; ?>
+                </td>
                 <?php $ticketCount = $ticketCountsByProperty[(int) $maintenance['property_id']] ?? 0; ?>
                 <td class="text-center" data-order="<?= (int) $ticketCount ?>"><?= (int) $ticketCount ?></td>
                 <td class="d-none d-sm-table-cell"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>

@@ -1,6 +1,6 @@
 <section class="card mb-4 shadow-sm text-start" aria-labelledby="inventory-filters-title">
     <div class="card-body">
-        <h3 class="h6 mb-3" id="inventory-filters-title">Filtrar inventario</h3>
+        <h2 class="h6 mb-3" id="inventory-filters-title">Filtrar inventario</h2>
         <div class="row g-3 align-items-end">
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold" for="filterCategory">Categoría</label>

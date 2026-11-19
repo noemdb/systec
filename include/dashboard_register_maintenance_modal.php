@@ -17,7 +17,7 @@
                 <input type="hidden" name="return_search" value="">
                 <div class="modal-header">
                     <div>
-                        <h3 class="modal-title fs-5" id="registerMaintenanceModalTitle">Registrar mantenimiento</h3>
+                        <h2 class="modal-title fs-5" id="registerMaintenanceModalTitle">Registrar mantenimiento</h2>
                         <p class="small text-body-secondary mb-0">Bien: <span id="maintenancePropertyCode"><?= e($maintenanceFormPropertyCode) ?></span></p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>

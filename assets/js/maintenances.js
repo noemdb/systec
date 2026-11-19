@@ -742,7 +742,7 @@
                 const values = Array.from(row.cells)
                     .filter((cell) => !cell.classList.contains('maintenance-select-cell'))
                     .slice(0, headers.length)
-                    .map((cell) => cell.textContent.replace(/\s+/g, ' ').trim());
+                    .map((cell) => (cell.dataset.code || cell.textContent).replace(/\s+/g, ' ').trim());
                 lines.push(values.map(csvEscape).join(';'));
             });
 
