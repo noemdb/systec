@@ -17,7 +17,10 @@
 
 require_once __DIR__ . '/auth.php';
 
-if (auth_check() && auth_has_role(array('personal')) && !auth_is_personal_area()) {
+if (auth_check()
+    && auth_has_role(array('personal'))
+    && !auth_is_personal_area()
+    && basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'documentation.php') {
     header('Location: ' . url('personal/index.php'));
     exit();
 }

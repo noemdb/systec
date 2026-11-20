@@ -62,6 +62,26 @@ class NvidiaMaintenanceNarrativeTest extends TestCase
         self::assertSame('Queda pendiente verificar su funcionamiento.', $result['notes']);
     }
 
+    public function testMaintenanceValidationKeepsNotesInTheirOwnField(): void
+    {
+        $original = array(
+            'description' => 'Se revisó la memoria RAM.',
+            'failure_reason' => 'Uno de los zócalos no funciona.',
+            'notes' => 'Queda pendiente revisar el navegador.',
+        );
+        $content = json_encode(array(
+            'description' => 'Se realizó la revisión de la memoria RAM.',
+            'failure_reason' => 'Uno de los zócalos de la memoria RAM no funciona.',
+            'notes' => 'Aún queda pendiente revisar el navegador.',
+        ), JSON_UNESCAPED_UNICODE);
+
+        $result = systec_validate_nvidia_maintenance_texts($original, $content);
+
+        self::assertSame('Aún queda pendiente revisar el navegador.', $result['notes']);
+        self::assertStringNotContainsString('navegador', $result['description']);
+        self::assertStringNotContainsString('navegador', $result['failure_reason']);
+    }
+
     public function testTicketNarrativeValidationKeepsItsFieldsAndPreservesEmptyObservation(): void
     {
         $result = systec_validate_nvidia_texts(

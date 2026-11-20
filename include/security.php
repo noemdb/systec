@@ -111,5 +111,17 @@ if (PHP_SAPI !== 'cli' && !headers_sent()) {
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
     header('Cache-Control: no-store, private');
     $nonce = systec_csp_nonce();
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . $nonce . "'; style-src 'self' 'nonce-" . $nonce . "'; style-src-attr 'unsafe-inline'; object-src 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    $isDocumentationPage = basename($_SERVER['SCRIPT_NAME'] ?? '') === 'documentation.php';
+    $documentationCsp = $isDocumentationPage
+        ? " https://cdn.jsdelivr.net"
+        : '';
+    // Mermaid injects SVG style blocks; nonce sources suppress unsafe-inline in CSP.
+    $stylePolicy = $isDocumentationPage
+        ? "style-src 'self' 'unsafe-inline';"
+        : "style-src 'self' 'nonce-" . $nonce . "';";
+    header(
+        "Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . $nonce . "'" . $documentationCsp
+        . "; " . $stylePolicy
+        . " style-src-attr 'unsafe-inline'; object-src 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    );
 }

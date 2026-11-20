@@ -84,6 +84,11 @@ $importPageActive = in_array($currentPage, array('updates.php', 'imports.php', '
                         </ul>
                     </div>
                 <?php endif; ?>
+                <a class="nav-link d-inline-flex align-items-center gap-1 px-2 py-1 small<?= $currentPage === 'documentation.php' ? ' active' : '' ?>"
+                   href="<?= e(url('documentation.php')) ?>"<?= $currentPage === 'documentation.php' ? ' aria-current="page"' : '' ?>>
+                    <i class="bi bi-journal-text" aria-hidden="true"></i>
+                    <span>Documentación</span>
+                </a>
             </div>
 
             <?php if ($currentUser) :

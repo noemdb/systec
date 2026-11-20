@@ -4,8 +4,65 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f4b6ed97cfa968038a957898ca974f18",
-    "packages": [],
+    "content-hash": "916f06b9560db1b227daa3c929b389c4",
+    "packages": [
+        {
+            "name": "jbzoo/mermaid-php",
+            "version": "7.2.6",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/JBZoo/Mermaid-PHP.git",
+                "reference": "969fa14f989bac8235b780291ae816643bad6455"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/JBZoo/Mermaid-PHP/zipball/969fa14f989bac8235b780291ae816643bad6455",
+                "reference": "969fa14f989bac8235b780291ae816643bad6455",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "jbzoo/toolbox-dev": "^7.3"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "7.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "JBZoo\\MermaidPHP\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Denis Smetannikov",
+                    "email": "admin@jbzoo.com",
+                    "role": "lead"
+                }
+            ],
+            "description": "Generate diagrams and flowcharts with the help of the mermaid script language",
+            "keywords": [
+                "diagrams",
+                "flowcharts",
+                "mermaid",
+                "mermaid-js"
+            ],
+            "support": {
+                "issues": "https://github.com/JBZoo/Mermaid-PHP/issues",
+                "source": "https://github.com/JBZoo/Mermaid-PHP/tree/7.2.6"
+            },
+            "time": "2026-02-06T17:49:17+00:00"
+        }
+    ],
     "packages-dev": [
         {
             "name": "doctrine/instantiator",

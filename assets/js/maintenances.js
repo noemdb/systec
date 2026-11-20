@@ -385,7 +385,7 @@
             button.disabled = true;
             icon.className = 'spinner-border spinner-border-sm me-2';
             label.textContent = 'Generando…';
-            setStatus('Enviando razón, descripción y notas con contenido para su mejora…', 'text-body-secondary');
+            setStatus('Enviando razón, descripción y notas existentes para su mejora…', 'text-body-secondary');
 
             try {
                 const response = await fetch(improveMaintenanceNarrativeUrl, {

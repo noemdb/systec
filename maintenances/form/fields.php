@@ -154,7 +154,7 @@ $selectedNext = isset($selectedMaintenance['next_maintenance_date']) ? $selected
                 <span id="createImproveMaintenanceNarrativeLabel">Mejorar con IA</span>
             </button>
             <span class="form-text" id="createImproveMaintenanceNarrativeStatus" role="status" aria-live="polite">
-                Mejora razón, descripción y notas con contenido; no se guarda hasta registrar el mantenimiento.
+                Mejora razón, descripción y el contenido de notas; no se guarda hasta registrar o actualizar el mantenimiento.
             </span>
         </div>
     <?php endif; ?>

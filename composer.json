@@ -14,5 +14,8 @@
             "@lint",
             "@test"
         ]
+    },
+    "require": {
+        "jbzoo/mermaid-php": "^7.2.6"
     }
 }
