@@ -1041,10 +1041,6 @@ ob_start();
         }
 
         .documentation-print-mode .documentation-flowchart-print-page {
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            height: 85vh;
             break-before: page;
             break-after: page;
             break-inside: avoid;
@@ -1059,20 +1055,23 @@ ob_start();
         }
 
         .documentation-print-mode .documentation-flowchart-print-page .mermaid {
-            display: flex;
-            flex: 1 1 auto;
-            align-items: center;
-            justify-content: center;
-            min-height: 0;
             overflow: visible;
         }
 
         .documentation-print-mode .documentation-flowchart-print-page .mermaid svg {
             width: auto;
             max-width: 100%;
-            max-height: calc(78vh - 2rem);
+            max-height: 72vh;
             height: auto;
-            margin: auto;
+            margin: 0 auto;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-portrait .mermaid svg {
+            max-height: 78vh;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-landscape .mermaid svg {
+            max-height: 68vh;
         }
     }
 
