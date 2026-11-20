@@ -5,6 +5,8 @@
     const search = config.search || '';
     const totalPropertyCount = Number(config.totalPropertyCount || 0);
     const openMaintenanceModalOnLoad = Boolean(config.openMaintenanceModalOnLoad);
+    const improveTicketNarrativeUrl = config.improveTicketNarrativeUrl || '';
+    const processTicketNarrativeUrl = config.processTicketNarrativeUrl || '';
     const cspNonce = config.cspNonce || '';
 
     const dashboardParams = new URLSearchParams(window.location.search);
@@ -237,6 +239,235 @@
 
     if (openMaintenanceModalOnLoad && registerMaintenanceModal) {
         bootstrap.Modal.getOrCreateInstance(registerMaintenanceModal).show();
+    }
+
+    const ticketDrawer = document.getElementById('dashboardTicketDrawer');
+    if (ticketDrawer) {
+        const ticketForm = ticketDrawer.querySelector('form');
+        const ticketTitle = document.getElementById('dashboardTicketTitle');
+        const improveTicketButton = document.getElementById('dashboardImproveTicketNarrative');
+        const improveTicketIcon = document.getElementById('dashboardImproveTicketNarrativeIcon');
+        const improveTicketLabel = document.getElementById('dashboardImproveTicketNarrativeLabel');
+        const improveTicketStatus = document.getElementById('dashboardImproveTicketNarrativeStatus');
+        const ticketNarrative = document.getElementById('dashboardTicketNarrative');
+        const processNarrativeButton = document.getElementById('dashboardProcessTicketNarrative');
+        const processNarrativeIcon = document.getElementById('dashboardProcessTicketNarrativeIcon');
+        const processNarrativeLabel = document.getElementById('dashboardProcessTicketNarrativeLabel');
+        const processNarrativeStatus = document.getElementById('dashboardProcessTicketNarrativeStatus');
+        const ticketNarrativeFields = {
+            title: ticketTitle,
+            description: document.getElementById('dashboardTicketDescription'),
+            observation: document.getElementById('dashboardTicketObservation')
+        };
+        let improveTicketRequest = 0;
+        let processNarrativeRequest = 0;
+        const resetImproveTicketButton = () => {
+            improveTicketRequest++;
+            improveTicketButton.disabled = false;
+            improveTicketIcon.className = 'bi bi-magic me-1';
+            improveTicketLabel.textContent = 'Mejorar con IA';
+            improveTicketStatus.textContent =
+                'Los textos se envían a NVIDIA Build. La propuesta no se guarda hasta registrar el ticket.';
+            improveTicketStatus.className = 'form-text';
+        };
+        const resetProcessNarrativeButton = () => {
+            processNarrativeRequest++;
+            processNarrativeButton.disabled = false;
+            processNarrativeIcon.className = 'bi bi-magic me-1';
+            processNarrativeLabel.textContent = 'Procesar relato';
+            processNarrativeStatus.textContent =
+                'El relato se envía a NVIDIA Build para proponer título, descripción y observación.';
+            processNarrativeStatus.className = 'form-text';
+        };
+
+        ticketDrawer.addEventListener('show.bs.offcanvas', (event) => {
+            const button = event.relatedTarget;
+            if (!(button instanceof Element)) return;
+
+            ticketForm.reset();
+            resetImproveTicketButton();
+            resetProcessNarrativeButton();
+            document.getElementById('dashboardTicketPropertyId').value = button.dataset.propertyId || '';
+            document.getElementById('dashboardTicketPropertyContext').textContent = [
+                button.dataset.propertyCode || 'Bien seleccionado',
+                button.dataset.propertyDescription || ''
+            ].filter(Boolean).join(' — ');
+        });
+        ticketDrawer.addEventListener('shown.bs.offcanvas', () => ticketTitle.focus());
+
+        processNarrativeButton.addEventListener('click', async () => {
+            const originalNarrative = ticketNarrative.value.trim();
+            if (!originalNarrative) {
+                processNarrativeStatus.textContent = 'Escribe el relato de la incidencia antes de procesarlo.';
+                processNarrativeStatus.className = 'form-text text-danger';
+                return;
+            }
+
+            const originalFields = Object.fromEntries(
+                Object.entries(ticketNarrativeFields).map(([field, input]) => [field, input.value])
+            );
+            if (Object.values(originalFields).some((value) => value.trim() !== '')
+                && !window.confirm('Procesar el relato reemplazará el título, la descripción y la observación actuales. ¿Continuar?')) {
+                return;
+            }
+
+            const requestId = ++processNarrativeRequest;
+            processNarrativeButton.disabled = true;
+            processNarrativeIcon.className = 'spinner-border spinner-border-sm me-2';
+            processNarrativeLabel.textContent = 'Procesando…';
+            processNarrativeStatus.textContent = 'Analizando el relato y preparando los campos del ticket…';
+            processNarrativeStatus.className = 'form-text text-body-secondary';
+
+            try {
+                const response = await fetch(processTicketNarrativeUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                    },
+                    body: new URLSearchParams({
+                        csrf_token: ticketForm.querySelector('[name="csrf_token"]').value,
+                        narrative: originalNarrative
+                    })
+                });
+                let result;
+                try {
+                    result = await response.json();
+                } catch {
+                    throw new Error('El servidor devolvió una respuesta inválida.');
+                }
+                if (!result || typeof result !== 'object' || Array.isArray(result)) {
+                    throw new Error('El servidor devolvió una respuesta inválida.');
+                }
+                if (!response.ok) {
+                    throw new Error(typeof result.error === 'string'
+                        ? result.error
+                        : 'No se pudo procesar el relato.');
+                }
+                if (!['title', 'description', 'observation'].every((field) => typeof result[field] === 'string')
+                    || !result.title.trim() || !result.description.trim()) {
+                    throw new Error('No se pudo extraer un título y una descripción del relato.');
+                }
+
+                const valuesUnchanged = Object.entries(ticketNarrativeFields).every(
+                    ([field, input]) => input.value === originalFields[field]
+                );
+                if (!ticketDrawer.classList.contains('show')
+                    || ticketNarrative.value.trim() !== originalNarrative
+                    || !valuesUnchanged) {
+                    processNarrativeStatus.textContent =
+                        'El relato o los campos cambiaron durante la solicitud; la propuesta se descartó.';
+                    processNarrativeStatus.className = 'form-text text-warning';
+                    return;
+                }
+
+                Object.entries(ticketNarrativeFields).forEach(([field, input]) => {
+                    input.value = result[field];
+                });
+                processNarrativeStatus.textContent =
+                    'Campos propuestos. Revísalos y ajústalos antes de registrar el ticket.';
+                processNarrativeStatus.className = 'form-text text-success';
+            } catch (error) {
+                processNarrativeStatus.textContent = error instanceof Error
+                    ? error.message
+                    : 'No se pudo procesar el relato.';
+                processNarrativeStatus.className = 'form-text text-danger';
+            } finally {
+                if (requestId === processNarrativeRequest) {
+                    processNarrativeButton.disabled = false;
+                    processNarrativeIcon.className = 'bi bi-magic me-1';
+                    processNarrativeLabel.textContent = 'Procesar relato';
+                }
+            }
+        });
+
+        improveTicketButton.addEventListener('click', async () => {
+            const originalTexts = Object.fromEntries(
+                Object.entries(ticketNarrativeFields).map(([field, input]) => [field, input.value])
+            );
+            if (!Object.values(originalTexts).some((text) => text.trim() !== '')) {
+                improveTicketStatus.textContent = 'Completa al menos un campo antes de solicitar una propuesta.';
+                improveTicketStatus.className = 'form-text text-danger';
+                return;
+            }
+
+            const requestId = ++improveTicketRequest;
+            improveTicketButton.disabled = true;
+            improveTicketIcon.className = 'spinner-border spinner-border-sm me-2';
+            improveTicketLabel.textContent = 'Generando…';
+            improveTicketStatus.textContent = 'Enviando título, descripción y observación para su mejora…';
+            improveTicketStatus.className = 'form-text text-body-secondary';
+
+            try {
+                const response = await fetch(improveTicketNarrativeUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                    },
+                    body: new URLSearchParams({
+                        csrf_token: ticketForm.querySelector('[name="csrf_token"]').value,
+                        ...originalTexts
+                    })
+                });
+                let result;
+                try {
+                    result = await response.json();
+                } catch {
+                    throw new Error('El servidor devolvió una respuesta inválida.');
+                }
+                if (!result || typeof result !== 'object' || Array.isArray(result)) {
+                    throw new Error('El servidor devolvió una respuesta inválida.');
+                }
+                if (!response.ok) {
+                    throw new Error(typeof result.error === 'string'
+                        ? result.error
+                        : 'No se pudo generar la propuesta para el ticket.');
+                }
+                if (!Object.keys(ticketNarrativeFields).every((field) => typeof result[field] === 'string')) {
+                    throw new Error('La respuesta no contiene todos los textos esperados.');
+                }
+
+                const valuesUnchanged = Object.entries(ticketNarrativeFields).every(
+                    ([field, input]) => input.value === originalTexts[field]
+                );
+                if (!ticketDrawer.classList.contains('show') || !valuesUnchanged) {
+                    improveTicketStatus.textContent =
+                        'Los campos cambiaron durante la solicitud; la propuesta se descartó.';
+                    improveTicketStatus.className = 'form-text text-warning';
+                    return;
+                }
+
+                if (!Object.keys(ticketNarrativeFields).some(
+                    (field) => result[field] !== originalTexts[field]
+                )) {
+                    improveTicketStatus.textContent =
+                        'No hubo cambios: el texto no aporta contexto suficiente para mejorarlo sin inventar información.';
+                    improveTicketStatus.className = 'form-text text-warning';
+                    return;
+                }
+
+                Object.entries(ticketNarrativeFields).forEach(([field, input]) => {
+                    input.value = result[field];
+                });
+                improveTicketStatus.textContent =
+                    'Propuesta generada. Revísala antes de registrar el ticket.';
+                improveTicketStatus.className = 'form-text text-success';
+            } catch (error) {
+                improveTicketStatus.textContent = error instanceof Error
+                    ? error.message
+                    : 'No se pudo generar la propuesta para el ticket.';
+                improveTicketStatus.className = 'form-text text-danger';
+            } finally {
+                if (requestId === improveTicketRequest) {
+                    improveTicketButton.disabled = false;
+                    improveTicketIcon.className = 'bi bi-magic me-1';
+                    improveTicketLabel.textContent = 'Mejorar con IA';
+                }
+            }
+        });
     }
 
     const historyModal = document.getElementById('propertyHistoryModal');

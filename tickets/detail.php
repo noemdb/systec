@@ -110,12 +110,25 @@ ob_start();
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header">Seguimiento</div>
                 <div class="card-body">
-                    <form method="post" action="<?= e(url('tickets/actions/history.php')) ?>">
+                    <form method="post" action="<?= e(url('tickets/actions/history.php')) ?>"
+                          id="ticketHistoryForm"
+                          data-improve-url="<?= e(url('tickets/actions/improve-history-note.php')) ?>">
                         <?= csrf_field() ?>
                         <input type="hidden" name="ticket_id" value="<?= e((string) $ticket['id']) ?>">
                         <div class="mb-3">
                             <label for="history_description" class="form-label">Nueva nota</label>
-                            <textarea class="form-control" id="history_description" name="description" rows="4" required></textarea>
+                            <textarea class="form-control" id="history_description" name="description"
+                                      rows="4" required aria-describedby="historyImproveStatus"></textarea>
+                        </div>
+                        <div class="mb-3 d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm align-self-start"
+                                    id="improveHistoryNote">
+                                <i class="bi bi-magic me-1" id="improveHistoryNoteIcon" aria-hidden="true"></i>
+                                <span id="improveHistoryNoteLabel">Mejorar con IA</span>
+                            </button>
+                            <span class="form-text" id="historyImproveStatus" role="status" aria-live="polite">
+                                La nota se envía a NVIDIA Build; la propuesta no se guarda hasta registrar el seguimiento.
+                            </span>
                         </div>
                         <button type="submit" class="btn btn-outline-primary w-100">Registrar seguimiento</button>
                     </form>
@@ -147,6 +160,7 @@ ob_start();
         </div>
     </div>
 </div>
+<script nonce="<?= e(systec_csp_nonce()) ?>" src="<?= e(url('assets/js/ticket-detail.js')) ?>"></script>
 <?php
 $main = ob_get_clean();
 include __DIR__ . '/../include/layout.php';

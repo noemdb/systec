@@ -4,6 +4,7 @@
     const config = window.SystecMaintenancesConfig || {};
     const search = config.search || '';
     const improveMaintenanceNarrativeUrl = config.improveMaintenanceNarrativeUrl || '';
+    const propertyTicketsUrl = config.propertyTicketsUrl || '';
     const registerMaintenanceUrl = config.registerMaintenanceUrl || '';
     const updateMaintenanceUrl = config.updateMaintenanceUrl || '';
     const printUrl = config.printUrl || '';
@@ -69,7 +70,101 @@
     const maintenanceDrawerTitleLabel = document.getElementById('createMaintenanceDrawerTitleLabel');
     const maintenanceDrawerTitleIcon = document.getElementById('createMaintenanceDrawerTitleIcon');
     const maintenanceDrawerDescription = document.getElementById('createMaintenanceDrawerDescription');
+    const maintenancePropertySelect = document.getElementById('create_property_id');
+    const maintenanceTicketSelect = document.getElementById('create_ticket_select');
+    const maintenanceTicketId = document.getElementById('create_ticket_id');
+    const maintenanceTicketStatus = document.getElementById('createMaintenanceTicketStatus');
+    const maintenanceTicketProperty = document.getElementById('createMaintenanceTicketProperty');
     let pendingMaintenanceEditTrigger = null;
+    let maintenanceTicketRequest = 0;
+
+    const resetMaintenanceTicket = () => {
+        maintenanceTicketId.value = '';
+        maintenanceTicketSelect.replaceChildren(new Option('Selecciona primero un bien', ''));
+        maintenanceTicketSelect.value = '';
+        maintenanceTicketSelect.disabled = true;
+        maintenanceTicketStatus.textContent = 'Selecciona un bien para buscar sus tickets asociados.';
+        maintenanceTicketStatus.className = 'form-text';
+        maintenanceTicketProperty.textContent = '';
+        maintenanceTicketProperty.classList.add('d-none');
+    };
+
+    const loadPropertyTickets = async (propertyId, selectedTicketId = '') => {
+        const propertyIdValue = String(propertyId ?? '');
+        const requestId = ++maintenanceTicketRequest;
+        resetMaintenanceTicket();
+        if (!propertyIdValue || !propertyTicketsUrl) return;
+
+        maintenanceTicketStatus.textContent = 'Buscando tickets asociados al bien…';
+        try {
+            const endpoint = new URL(propertyTicketsUrl, window.location.href);
+            endpoint.searchParams.set('property_id', propertyIdValue);
+            const response = await fetch(endpoint, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los tickets.');
+            if (requestId !== maintenanceTicketRequest || maintenancePropertySelect.value !== propertyIdValue) return;
+
+            const tickets = Array.isArray(data.tickets) ? data.tickets : [];
+            maintenanceTicketSelect.replaceChildren(new Option('Sin asociar a un ticket', ''));
+            tickets.forEach((ticket) => {
+                const status = ticket.status_name ? ` · ${ticket.status_name}` : '';
+                const title = String(ticket.title || 'Sin título');
+                maintenanceTicketSelect.add(new Option(`#${ticket.id} — ${title}${status}`, ticket.id));
+                const option = maintenanceTicketSelect.options[maintenanceTicketSelect.options.length - 1];
+                option.dataset.propertyId = String(ticket.property_id);
+                option.dataset.propertyCode = String(ticket.property_ident || '');
+                option.dataset.propertyDescription = String(ticket.property_description || '');
+            });
+            maintenanceTicketStatus.textContent = tickets.length
+                ? `${tickets.length} ${tickets.length === 1 ? 'ticket disponible' : 'tickets disponibles'}.`
+                : 'Este bien no tiene tickets registrados; puedes continuar sin asociar uno.';
+            if (selectedTicketId
+                && Array.from(maintenanceTicketSelect.options).some((option) => option.value === String(selectedTicketId))) {
+                maintenanceTicketSelect.value = String(selectedTicketId);
+                maintenanceTicketId.value = String(selectedTicketId);
+                maintenanceTicketSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            maintenanceTicketSelect.disabled = false;
+        } catch (error) {
+            if (requestId !== maintenanceTicketRequest) return;
+            maintenanceTicketSelect.replaceChildren(new Option('Sin asociar a un ticket', ''));
+            maintenanceTicketSelect.disabled = false;
+            maintenanceTicketStatus.textContent = error instanceof Error
+                ? error.message
+                : 'No se pudieron cargar los tickets del bien.';
+            maintenanceTicketStatus.className = 'form-text text-danger';
+        }
+    };
+
+    let loadingMaintenanceForEdit = false;
+    maintenancePropertySelect.addEventListener('change', () => {
+        if (!loadingMaintenanceForEdit) loadPropertyTickets(maintenancePropertySelect.value);
+    });
+
+    maintenanceTicketSelect.addEventListener('change', () => {
+        const option = maintenanceTicketSelect.selectedOptions[0];
+        maintenanceTicketId.value = maintenanceTicketSelect.value;
+        if (!maintenanceTicketSelect.value || !option) {
+            maintenanceTicketProperty.textContent = '';
+            maintenanceTicketProperty.classList.add('d-none');
+            return;
+        }
+
+        const propertyId = option.dataset.propertyId;
+        const propertyOption = Array.from(maintenancePropertySelect.options)
+            .find((candidate) => candidate.value === propertyId);
+        if (propertyOption && maintenancePropertySelect.value !== propertyId) {
+            maintenancePropertySelect.value = propertyId;
+            maintenancePropertySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const propertyCode = option.dataset.propertyCode || 'Bien';
+        const propertyDescription = option.dataset.propertyDescription || 'Sin descripción';
+        maintenanceTicketProperty.textContent = `Bien cargado: ${propertyCode} — ${propertyDescription}`;
+        maintenanceTicketProperty.classList.remove('d-none');
+    });
 
     document.addEventListener('click', (event) => {
         if (!(event.target instanceof Element)) return;
@@ -79,6 +174,8 @@
 
     const resetMaintenanceDrawer = () => {
         createMaintenanceForm.reset();
+        maintenanceTicketRequest++;
+        resetMaintenanceTicket();
         createMaintenanceForm.action = registerMaintenanceUrl;
         createMaintenanceId.value = '';
         createMaintenanceSubmit.name = 'register';
@@ -130,7 +227,10 @@
         createMaintenanceStatusField.classList.remove('d-none');
         createMaintenanceStatusSelect.disabled = false;
 
+        loadingMaintenanceForEdit = true;
         setSelectValue('create_property_id', maintenance.property_id);
+        loadingMaintenanceForEdit = false;
+        loadPropertyTickets(maintenance.property_id, maintenance.ticket_id ?? '');
         setSelectValue('create_type', maintenance.type);
         setSelectValue('create_technician', maintenance.technician);
         document.getElementById('create_date').value = String(maintenance.date ?? '')

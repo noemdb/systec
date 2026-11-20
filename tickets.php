@@ -11,10 +11,11 @@ if (auth_check() && auth_has_role(array('personal'))) {
     exit();
 }
 
-require_role(array('admin', 'operador', 'tecnico'));
+require_role(array('admin', 'operador', 'tecnico', 'consulta'));
 
 $db = db();
 $user = auth_user();
+$canManageTickets = auth_can_manage_all_tickets();
 $createdByFilter = auth_has_role(array('personal')) ? (int) $user['id'] : null;
 
 // PERF-02: Una única consulta obtiene los estados activos y sus conteos agregados.
@@ -54,10 +55,12 @@ ob_start();
             <h1 class="h3 mb-1" id="tickets-page-title">Tickets</h1>
             <p class="text-body-secondary mb-0">Registro y seguimiento de incidencias por bien.</p>
         </div>
-        <button type="button" class="btn btn-primary align-self-md-start flex-shrink-0"
-                data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
-            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Nuevo ticket
-        </button>
+        <?php if ($canManageTickets) : ?>
+            <button type="button" class="btn btn-primary align-self-md-start flex-shrink-0"
+                    data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Nuevo ticket
+            </button>
+        <?php endif; ?>
     </section>
 
     <section class="row g-3 mb-4" aria-label="Indicadores de tickets">
@@ -216,18 +219,20 @@ ob_start();
                                                 data-ticket="<?= e(js($ticketDetails)) ?>">
                                             <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver detalle
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
-                                                aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
-                                                data-bs-toggle="modal" data-bs-target="#supportTicketFollowupModal"
-                                                data-ticket="<?= e(js($ticketDetails)) ?>">
-                                            <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-success text-nowrap"
-                                                aria-label="Cambiar estado del ticket #<?= e((string) $ticket['id']) ?>"
-                                                data-bs-toggle="modal" data-bs-target="#supportTicketStatusModal"
-                                                data-ticket="<?= e(js($ticketDetails)) ?>">
-                                            <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Estado
-                                        </button>
+                                        <?php if ($canManageTickets) : ?>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                                    aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
+                                                    data-bs-toggle="modal" data-bs-target="#supportTicketFollowupModal"
+                                                    data-ticket="<?= e(js($ticketDetails)) ?>">
+                                                <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-success text-nowrap"
+                                                    aria-label="Cambiar estado del ticket #<?= e((string) $ticket['id']) ?>"
+                                                    data-bs-toggle="modal" data-bs-target="#supportTicketStatusModal"
+                                                    data-ticket="<?= e(js($ticketDetails)) ?>">
+                                                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Estado
+                                            </button>
+                                        <?php endif; ?>
                                         <?php if (auth_has_role(array('admin', 'operador'))) : ?>
                                             <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
                                                     aria-label="Eliminar ticket #<?= e((string) $ticket['id']) ?>"
@@ -261,19 +266,21 @@ ob_start();
     <?php endif; ?>
 </div>
 <?php include __DIR__ . '/include/support_ticket_details_modal.php'; ?>
-<?php include __DIR__ . '/include/support_ticket_followup_modal.php'; ?>
-<?php include __DIR__ . '/include/support_ticket_status_modal.php'; ?>
-<?php
-$ticketRegisterOptions = array(
-    'properties_url' => 'tickets/actions/properties.php',
-    'form_action' => 'tickets/actions/register.php',
-    'selected_property_id' => '',
-    'error' => '',
-    'values' => array(),
-);
-include __DIR__ . '/include/ticket_register_modal.php';
-unset($ticketRegisterOptions);
-?>
+<?php if ($canManageTickets) : ?>
+    <?php include __DIR__ . '/include/support_ticket_followup_modal.php'; ?>
+    <?php include __DIR__ . '/include/support_ticket_status_modal.php'; ?>
+    <?php
+    $ticketRegisterOptions = array(
+        'properties_url' => 'tickets/actions/properties.php',
+        'form_action' => 'tickets/actions/register.php',
+        'selected_property_id' => '',
+        'error' => '',
+        'values' => array(),
+    );
+    include __DIR__ . '/include/ticket_register_modal.php';
+    unset($ticketRegisterOptions);
+    ?>
+<?php endif; ?>
 <?php include __DIR__ . '/include/support_ticket_delete_modal.php'; ?>
 <?php
 $main = ob_get_clean();

@@ -29,7 +29,7 @@ class DB extends SQLite3
             'responsible_name', 'responsible_status', 'assigned_name', 'assigned_status',
         ),
         'maintenances' => array(
-            'id', 'property_id', 'code', 'type', 'description', 'date',
+            'id', 'property_id', 'ticket_id', 'code', 'type', 'description', 'date',
             'time_taken', 'technician', 'next_maintenance_date',
             'failure_reason', 'notes', 'status',
         ),

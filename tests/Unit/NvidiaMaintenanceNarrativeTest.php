@@ -62,6 +62,58 @@ class NvidiaMaintenanceNarrativeTest extends TestCase
         self::assertSame('Queda pendiente verificar su funcionamiento.', $result['notes']);
     }
 
+    public function testTicketNarrativeValidationKeepsItsFieldsAndPreservesEmptyObservation(): void
+    {
+        $result = systec_validate_nvidia_texts(
+            array(
+                'title' => 'Equipo lento',
+                'description' => 'El computador tarda en iniciar.',
+                'observation' => '',
+            ),
+            json_encode(array(
+                'title' => 'Lentitud del equipo',
+                'description' => 'El computador presenta demora al iniciar.',
+                'observation' => 'Texto inventado por la respuesta.',
+            ), JSON_UNESCAPED_UNICODE),
+            array('title', 'description', 'observation')
+        );
+
+        self::assertSame('Lentitud del equipo', $result['title']);
+        self::assertSame('El computador presenta demora al iniciar.', $result['description']);
+        self::assertSame('', $result['observation']);
+    }
+
+    public function testNarrativeGenerationAcceptsNewFieldsFromNarrativeInput(): void
+    {
+        $result = systec_validate_nvidia_texts(
+            array('narrative' => 'El computador se apaga al iniciar.'),
+            json_encode(array(
+                'title' => 'El computador se apaga al iniciar',
+                'description' => 'El usuario reporta que el computador se apaga al intentar iniciarlo.',
+                'observation' => '',
+            ), JSON_UNESCAPED_UNICODE),
+            array('title', 'description', 'observation'),
+            false,
+            array('title', 'description'),
+            array('title' => 255, 'description' => 5000, 'observation' => 5000)
+        );
+
+        self::assertSame('El computador se apaga al iniciar', $result['title']);
+        self::assertSame('', $result['observation']);
+    }
+
+    public function testNarrativeGenerationRejectsEmptyRequiredFields(): void
+    {
+        $this->expectException(SystecNvidiaOutputException::class);
+        systec_validate_nvidia_texts(
+            array('narrative' => 'Algo sucedió.'),
+            '{"title":"","description":"","observation":""}',
+            array('title', 'description', 'observation'),
+            false,
+            array('title', 'description')
+        );
+    }
+
     public function testValidationAcceptsJsonFencesAndSurroundingText(): void
     {
         $result = systec_validate_nvidia_maintenance_texts(

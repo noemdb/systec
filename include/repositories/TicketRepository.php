@@ -33,6 +33,44 @@ class TicketRepository
         return $counts;
     }
 
+    public function maintenanceTicketsForProperty(int $propertyId): array
+    {
+        if ($propertyId < 1) {
+            throw new InvalidArgumentException('Identificador de bien inválido.');
+        }
+
+        return $this->db->fetchAllQuery(
+            'SELECT t.id, t.property_id, t.title, t.description, t.observation,
+                    t.created_at, t.updated_at, s.code AS status_code, s.name AS status_name,
+                    p.ident AS property_ident, p.grupo AS property_grupo,
+                    p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
+                    p.description AS property_description
+             FROM tickets t
+             LEFT JOIN ticket_status s ON s.id = t.status_id
+             LEFT JOIN properties p ON p.id = t.property_id
+             WHERE t.property_id = :property_id AND t.deleted_at IS NULL
+             ORDER BY t.updated_at DESC, t.id DESC',
+            array(':property_id' => $propertyId)
+        );
+    }
+
+    public function historyTicketsForProperty(int $propertyId): array
+    {
+        if ($propertyId < 1) {
+            throw new InvalidArgumentException('Identificador de bien inválido.');
+        }
+
+        return $this->db->index(
+            'tickets',
+            array(
+                array('property_id', '=', $propertyId),
+                array('deleted_at', 'IS', null),
+            ),
+            '*',
+            'created_at ASC'
+        );
+    }
+
     public function getTicketStatuses(): array
     {
         $rows = $this->db->index('ticket_status', array('active' => 1), '*', 'sort_order ASC');

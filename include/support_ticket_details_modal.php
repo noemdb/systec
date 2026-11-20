@@ -137,9 +137,15 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <a class="btn btn-outline-primary" id="supportTicketFullLink" href="#">
-                    <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir detalle completo
-                </a>
+                <?php if ($canManageTickets) : ?>
+                    <a class="btn btn-outline-primary" id="supportTicketFullLink" href="#">
+                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir detalle completo
+                    </a>
+                <?php else : ?>
+                    <button type="button" class="btn btn-outline-primary" disabled>
+                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir detalle completo
+                    </button>
+                <?php endif; ?>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
@@ -166,7 +172,10 @@
         document.getElementById('supportTicketAssignedTo').textContent = ticket.assigned_to || 'Sin asignar';
         document.getElementById('supportTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('supportTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
-        document.getElementById('supportTicketFullLink').href = <?= js(url('tickets/detail.php?id=')) ?> + ticket.id;
+        const fullTicketLink = document.getElementById('supportTicketFullLink');
+        if (fullTicketLink) {
+            fullTicketLink.href = <?= js(url('tickets/detail.php?id=')) ?> + ticket.id;
+        }
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';

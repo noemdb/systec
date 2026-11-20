@@ -11,6 +11,9 @@ $table = 'maintenances';
 if (isset($_POST['update'])) {
     $id = isset($_POST['id']) ? filter_var($_POST['id'], FILTER_VALIDATE_INT) : false;
     $property_id = isset($_POST['property_id']) ? filter_var($_POST['property_id'], FILTER_VALIDATE_INT) : false;
+    $ticket_id = array_key_exists('ticket_id', $_POST) && $_POST['ticket_id'] !== ''
+        ? filter_var($_POST['ticket_id'], FILTER_VALIDATE_INT, array('options' => array('min_range' => 1)))
+        : null;
     $type = isset($_POST['type']) ? trim((string) $_POST['type']) : '';
     $description = isset($_POST['description']) ? trim((string) $_POST['description']) : '';
     $date = isset($_POST['date']) ? trim((string) $_POST['date']) : '';
@@ -38,11 +41,33 @@ if (isset($_POST['update'])) {
         exit('El bien seleccionado no existe.');
     }
 
+    if ($ticket_id === false) {
+        http_response_code(422);
+        exit('El ticket seleccionado no es válido.');
+    }
+    if ($ticket_id !== null) {
+        $ticket = $db->getFirstForConditions(
+            'tickets',
+            array(
+                array('id', '=', (int) $ticket_id),
+                array('property_id', '=', (int) $property_id),
+                array('deleted_at', 'IS', null),
+            )
+        );
+        if (!$ticket) {
+            http_response_code(422);
+            exit('El ticket seleccionado no existe o no está asociado al bien elegido.');
+        }
+    } elseif (!array_key_exists('ticket_id', $_POST)) {
+        $ticket_id = isset($existing['ticket_id']) ? (int) $existing['ticket_id'] : null;
+    }
+
     try {
         $code = $db->getCodeId($property_id);
         $data = array(
             'code' => $code,
             'property_id' => $property_id,
+            'ticket_id' => $ticket_id,
             'type' => $type,
             'description' => $description,
             'date' => $date,

@@ -253,6 +253,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 json_encode(array(
                     'id' => (int) $maintenance['id'],
                     'property_id' => (int) $maintenance['property_id'],
+                    'ticket_id' => isset($maintenance['ticket_id']) ? (int) $maintenance['ticket_id'] : null,
                     'code' => (string) $maintenance['code'],
                     'type' => (string) $maintenance['type'],
                     'technician' => (string) $maintenance['technician'],

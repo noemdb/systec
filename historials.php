@@ -10,7 +10,7 @@ $db = db();
 $property_id = isset($_GET['property_id']) ? filter_var($_GET['property_id'], FILTER_VALIDATE_INT) : false;
 $property = ($property_id !== false && $property_id !== null) ? $db->getFirstForId('properties', $property_id) : null;
 $maintenances = $property ? $db->index('maintenances', array('property_id' => $property_id), '*', 'date ASC') : array();
-$tickets = $property ? $db->index('tickets', array('property_id' => (int) $property_id), '*', 'created_at ASC') : array();
+$tickets = $property ? $db->tickets()->historyTicketsForProperty((int) $property_id) : array();
 $ticketDetailsById = array();
 $ticketStatusClasses = array(
     'iniciado' => 'primary',

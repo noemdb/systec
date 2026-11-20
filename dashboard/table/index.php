@@ -139,6 +139,18 @@ $assignmentStatusLabels = array(
                                 </button>
                             <?php endif; ?>
 
+                            <?php if ($canViewTickets) : ?>
+                                <button type="button" class="btn btn-outline-primary btn-sm property-action-btn"
+                                        data-bs-toggle="offcanvas" data-bs-target="#dashboardTicketDrawer"
+                                        aria-controls="dashboardTicketDrawer"
+                                        data-property-id="<?= e($property['id']) ?>"
+                                        data-property-code="<?= e($propertyCode) ?>"
+                                        data-property-description="<?= e($property['description']) ?>"
+                                        aria-label="Registrar ticket para este bien" title="Registrar ticket">
+                                    <i class="bi bi-ticket-detailed" aria-hidden="true"></i>
+                                </button>
+                            <?php endif; ?>
+
                             <button type="button" class="btn btn-secondary btn-sm property-action-btn"
                                     data-bs-toggle="modal" data-bs-target="#propertyHistoryModal"
                                     data-history-url="<?= e(url('historials.php?property_id=' . (int) $property['id'] . '&embed=1')) ?>"

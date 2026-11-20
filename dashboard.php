@@ -304,15 +304,37 @@ ob_start(); ?>
             min-height: 0;
             overflow-y: auto;
         }
+
+        .dashboard-ticket-drawer {
+            --bs-offcanvas-width: min(34rem, 100vw);
+        }
+
+        .dashboard-ticket-drawer-form {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .dashboard-ticket-drawer-form .offcanvas-body {
+            min-height: 0;
+            overflow-y: auto;
+        }
     </style>
 
     <?php include __DIR__ . '/include/dashboard_register_maintenance_modal.php'; ?>
+    <?php if ($canViewTickets) : ?>
+        <?php include __DIR__ . '/include/dashboard_register_ticket_drawer.php'; ?>
+    <?php endif; ?>
 
     <script nonce="<?= e(systec_csp_nonce()) ?>">
         window.SystecDashboardConfig = {
             search: <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>,
             totalPropertyCount: <?= js($propertyCount) ?>,
             openMaintenanceModalOnLoad: <?= js(($maintenanceFeedback['type'] ?? '') === 'danger') ?>,
+            improveTicketNarrativeUrl: <?= js(url('tickets/actions/improve-narrative.php')) ?>,
+            processTicketNarrativeUrl: <?= js(url('tickets/actions/process-narrative.php')) ?>,
             cspNonce: <?= js(systec_csp_nonce()) ?>
         };
     </script>

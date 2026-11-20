@@ -84,6 +84,22 @@ $selectedNext = isset($selectedMaintenance['next_maintenance_date']) ? $selected
         </select>
     </div>
 
+    <?php if ($isMaintenanceCreate) : ?>
+        <input type="hidden" name="ticket_id" id="create_ticket_id" value="">
+        <div class="mb-3" id="createMaintenanceTicketField">
+            <label for="create_ticket_select" class="form-label fw-semibold small">
+                Ticket asociado <span class="text-body-secondary fw-normal">(opcional)</span>
+            </label>
+            <select class="form-select" id="create_ticket_select" aria-describedby="createMaintenanceTicketStatus" disabled>
+                <option value="">Selecciona primero un bien</option>
+            </select>
+            <div class="form-text" id="createMaintenanceTicketStatus" role="status" aria-live="polite">
+                Selecciona un bien para buscar sus tickets asociados.
+            </div>
+            <div class="small text-body-secondary mt-1 d-none" id="createMaintenanceTicketProperty"></div>
+        </div>
+    <?php endif; ?>
+
     <div class="mb-2">
         <label for="<?= e($fieldId('type')) ?>" class="form-label fw-semibold small">Tipo de mantenimiento <span class="text-danger" aria-hidden="true">*</span></label>
         <select class="form-select" name="type" id="<?= e($fieldId('type')) ?>" required>

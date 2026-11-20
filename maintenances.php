@@ -268,6 +268,7 @@ ob_start(); ?>
         window.SystecMaintenancesConfig = {
             search: <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>,
             improveMaintenanceNarrativeUrl: <?= js(url('maintenances/actions/improve-narrative.php')) ?>,
+            propertyTicketsUrl: <?= js(url('maintenances/actions/property-tickets.php')) ?>,
             registerMaintenanceUrl: <?= js(url('maintenances/register.php')) ?>,
             updateMaintenanceUrl: <?= js(url('maintenances/update.php')) ?>,
             printUrl: <?= js(url('maintenances/print.php')) ?>

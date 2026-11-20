@@ -153,4 +153,107 @@ class SupportTicketQueryTest extends TestCase
             $db->close();
         }
     }
+
+    public function testMaintenanceTicketLookupReturnsOnlyTicketsForTheSelectedProperty(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            self::assertTrue($db->exec('ALTER TABLE tickets ADD COLUMN deleted_at DATETIME'));
+            $creatorId = $db->create('users', array(
+                'username' => 'ticketlookup',
+                'password_hash' => 'hash',
+                'role' => 'personal',
+            ));
+            $propertyId = $db->create('properties', array(
+                'ident' => '0088',
+                'description' => 'Impresora',
+                'status' => 'BUENO',
+            ));
+            $otherPropertyId = $db->create('properties', array(
+                'ident' => '0089',
+                'description' => 'Escáner',
+                'status' => 'BUENO',
+            ));
+            $status = $db->getTicketStatusByCode('iniciado');
+            $ticketId = $db->create('tickets', array(
+                'property_id' => $propertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Revisar impresora',
+                'description' => 'No imprime',
+                'created_by' => $creatorId,
+            ));
+            $db->create('tickets', array(
+                'property_id' => $propertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Ticket eliminado',
+                'description' => 'No debe mostrarse',
+                'created_by' => $creatorId,
+                'deleted_at' => '2026-01-01 10:00:00',
+            ));
+            $db->create('tickets', array(
+                'property_id' => $otherPropertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Otro bien',
+                'description' => 'Otro ticket',
+                'created_by' => $creatorId,
+            ));
+
+            $tickets = $db->tickets()->maintenanceTicketsForProperty($propertyId);
+
+            self::assertCount(1, $tickets);
+            self::assertSame($ticketId, (int) $tickets[0]['id']);
+            self::assertSame(88, $tickets[0]['property_ident']);
+            self::assertSame('iniciado', $tickets[0]['status_code']);
+        } finally {
+            $db->close();
+        }
+    }
+
+    public function testPropertyHistoryDoesNotIncludeSoftDeletedTickets(): void
+    {
+        $db = new DB(':memory:');
+
+        try {
+            self::assertTrue($db->exec('ALTER TABLE tickets ADD COLUMN deleted_at DATETIME'));
+            $creatorId = $db->create('users', array(
+                'username' => 'historyowner',
+                'password_hash' => 'hash',
+                'role' => 'personal',
+            ));
+            $propertyId = $db->create('properties', array('ident' => '0090'));
+            $otherPropertyId = $db->create('properties', array('ident' => '0091'));
+            $status = $db->getTicketStatusByCode('iniciado');
+            $activeTicketId = $db->create('tickets', array(
+                'property_id' => $propertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Ticket activo',
+                'description' => 'Se conserva',
+                'created_by' => $creatorId,
+            ));
+            $db->create('tickets', array(
+                'property_id' => $propertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Ticket eliminado',
+                'description' => 'No debe aparecer',
+                'created_by' => $creatorId,
+                'deleted_at' => '2026-03-01 10:00:00',
+            ));
+            $db->create('tickets', array(
+                'property_id' => $otherPropertyId,
+                'status_id' => (int) $status['id'],
+                'title' => 'Ticket de otro bien',
+                'description' => 'No corresponde al historial',
+                'created_by' => $creatorId,
+            ));
+
+            $tickets = $db->tickets()->historyTicketsForProperty($propertyId);
+
+            self::assertCount(1, $tickets);
+            self::assertSame($activeTicketId, (int) $tickets[0]['id']);
+            self::assertNull($tickets[0]['deleted_at']);
+        } finally {
+            $db->close();
+        }
+    }
 }

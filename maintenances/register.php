@@ -52,6 +52,9 @@ if (isset($_POST['register'])) {
         return isset($_POST[$key]) && is_string($_POST[$key]) ? trim($_POST[$key]) : '';
     };
     $property_id = isset($_POST['property_id']) ? filter_var($_POST['property_id'], FILTER_VALIDATE_INT) : false;
+    $ticket_id = isset($_POST['ticket_id']) && $_POST['ticket_id'] !== ''
+        ? filter_var($_POST['ticket_id'], FILTER_VALIDATE_INT, array('options' => array('min_range' => 1)))
+        : null;
     $type = $postText('type');
     $description = $postText('description');
     $date = $postText('date');
@@ -99,6 +102,23 @@ if (isset($_POST['register'])) {
         $respondWithError('El bien seleccionado ya no existe.');
     }
 
+    if ($ticket_id === false) {
+        $respondWithError('El ticket seleccionado no es válido.');
+    }
+    if ($ticket_id !== null) {
+        $ticket = $db->getFirstForConditions(
+            'tickets',
+            array(
+                array('id', '=', (int) $ticket_id),
+                array('property_id', '=', (int) $property_id),
+                array('deleted_at', 'IS', null),
+            )
+        );
+        if (!$ticket) {
+            $respondWithError('El ticket seleccionado no existe o no está asociado al bien elegido.');
+        }
+    }
+
     if (strtotime($date) === false) {
         $respondWithError('La fecha de inicio no es válida.');
     }
@@ -111,6 +131,7 @@ if (isset($_POST['register'])) {
         $code = $db->getCodeId($property_id);
         $data = array(
             'property_id' => $property_id,
+            'ticket_id' => $ticket_id,
             'code' => $code,
             'type' => $type,
             'description' => $description,
