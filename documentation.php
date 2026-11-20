@@ -501,8 +501,10 @@ ob_start();
 
     <?php if ($printMode) : ?>
         <div class="documentation-print-actions d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-primary" id="documentationPrintButton">
-                <i class="bi bi-printer me-1" aria-hidden="true"></i>Imprimir o guardar como PDF
+            <button type="button" class="btn btn-primary" id="documentationPrintButton"
+                    disabled aria-busy="true">
+                <i class="bi bi-printer me-1" aria-hidden="true"></i>
+                <span>Preparando diagramas...</span>
             </button>
         </div>
     <?php else : ?>
@@ -795,8 +797,11 @@ ob_start();
             const error = document.createElement('p');
             error.className = 'alert alert-warning mb-0';
             error.setAttribute('role', 'alert');
-            error.textContent = 'No se pudieron representar los diagramas. Su contenido textual permanece disponible.';
+            error.textContent = 'No se pudieron representar todos los diagramas. Recarga la página para volver a intentarlo; la impresión está deshabilitada para evitar una guía incompleta.';
             document.querySelector('.documentation-print-appendix')?.appendChild(error);
+            const printButton = document.getElementById('documentationPrintButton');
+            printButton.querySelector('span').textContent = 'No se pudo preparar la impresión';
+            printButton.removeAttribute('aria-busy');
         };
 
         if (!window.mermaid) {
@@ -812,14 +817,53 @@ ob_start();
         });
 
         if (documentationPrintMode) {
-            try {
-                await window.mermaid.run({
-                    nodes: document.querySelectorAll('.documentation-print-mode .mermaid')
-                });
-            } catch (error) {
-                console.error('No se pudieron representar los diagramas de la versión imprimible.', error);
-                showPrintDiagramError();
+            const diagramNodes = Array.from(
+                document.querySelectorAll('.documentation-print-mode .mermaid')
+            );
+            const printPageDiagramThreshold = 850;
+            let failedCount = 0;
+            for (const [index, node] of diagramNodes.entries()) {
+                try {
+                    await window.mermaid.run({ nodes: [node] });
+                } catch (error) {
+                    failedCount += 1;
+                    console.error(`No se pudo representar el diagrama imprimible ${index + 1}.`, error);
+                    continue;
+                }
+
+                const svg = node.querySelector('svg');
+                const viewBox = svg?.viewBox.baseVal;
+                if (!svg || !viewBox || viewBox.width <= 0 || viewBox.height <= 0) {
+                    failedCount += 1;
+                    console.error(`El diagrama imprimible ${index + 1} no produjo un SVG válido.`);
+                    continue;
+                }
+
+                if (Math.max(viewBox.width, viewBox.height) >= printPageDiagramThreshold) {
+                    const figure = node.closest('.documentation-flowchart');
+                    if (!figure) continue;
+
+                    const orientation = viewBox.width / viewBox.height >= 1.2
+                        ? 'landscape'
+                        : 'portrait';
+                    figure.classList.add(
+                        'documentation-flowchart-print-page',
+                        `documentation-flowchart-print-${orientation}`
+                    );
+                    figure.closest('.documentation-section, .documentation-print-detail')
+                        ?.classList.add('documentation-has-paged-flowchart');
+                }
             }
+
+            if (diagramNodes.length === 0 || failedCount > 0) {
+                showPrintDiagramError();
+                return;
+            }
+
+            const printButton = document.getElementById('documentationPrintButton');
+            printButton.disabled = false;
+            printButton.removeAttribute('aria-busy');
+            printButton.querySelector('span').textContent = 'Imprimir o guardar como PDF';
         }
     }, { once: true });
 
@@ -865,6 +909,16 @@ ob_start();
     });
 </script>
 <style nonce="<?= e(systec_csp_nonce()) ?>">
+    @page documentation-diagram-portrait {
+        size: portrait;
+        margin: 10mm;
+    }
+
+    @page documentation-diagram-landscape {
+        size: landscape;
+        margin: 10mm;
+    }
+
     .documentation-index {
         position: sticky;
         top: .75rem;
@@ -971,10 +1025,54 @@ ob_start();
             box-shadow: none;
         }
 
+        .documentation-print-mode .documentation-flowchart svg {
+            max-height: 78vh;
+        }
+
         .documentation-print-mode .documentation-section,
         .documentation-print-mode .documentation-print-detail,
         .documentation-print-mode .documentation-flowchart {
             break-inside: avoid;
+        }
+
+        .documentation-print-mode .documentation-section.documentation-has-paged-flowchart,
+        .documentation-print-mode .documentation-print-detail.documentation-has-paged-flowchart {
+            break-inside: auto;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-page {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            height: 85vh;
+            break-before: page;
+            break-after: page;
+            break-inside: avoid;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-portrait {
+            page: documentation-diagram-portrait;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-landscape {
+            page: documentation-diagram-landscape;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-page .mermaid {
+            display: flex;
+            flex: 1 1 auto;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            overflow: visible;
+        }
+
+        .documentation-print-mode .documentation-flowchart-print-page .mermaid svg {
+            width: auto;
+            max-width: 100%;
+            max-height: calc(78vh - 2rem);
+            height: auto;
+            margin: auto;
         }
     }
 
