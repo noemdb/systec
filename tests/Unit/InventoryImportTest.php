@@ -88,4 +88,46 @@ class InventoryImportTest extends TestCase
         self::assertSame('Ana Pérez · Activo', property_assignment_filter_label('Ana Pérez', 'ACTIVO'));
         self::assertSame('Sin ficha', property_assignment_filter_label('', 'SIN FICHA'));
     }
+
+    public function testWriteLocalCacheStoresAdscriptionsAndPreservesAssignments(): void
+    {
+        $cacheDir = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
+        $identifiers = array('9991', '9992');
+        $cachePath = $cacheDir . DIRECTORY_SEPARATOR
+            . 'inventory-adscriptions-' . hash('sha256', implode("\n", $identifiers)) . '.json';
+        $now = time();
+
+        try {
+            $written = legacy_postgres_write_local_cache(
+                array('9991' => array('key' => 'k1', 'label' => 'Unidad A')),
+                array('9991' => array('responsible_name' => 'Ana', 'responsible_status' => 'ACTIVO')),
+                $identifiers,
+                $now
+            );
+            self::assertTrue($written);
+            self::assertFileExists($cachePath);
+
+            // Re-escribir solo adscripciones debe preservar asignaciones existentes
+            $updated = legacy_postgres_write_local_cache(
+                array(
+                    '9991' => array('key' => 'k1', 'label' => 'Unidad A'),
+                    '9992' => array('key' => 'k2', 'label' => 'Unidad B'),
+                ),
+                array(),
+                $identifiers,
+                $now + 10
+            );
+            self::assertTrue($updated);
+
+            $decoded = json_decode((string) file_get_contents($cachePath), true);
+            self::assertIsArray($decoded);
+            self::assertFalse($decoded['stale']);
+            self::assertSame($now + 10, $decoded['cached_at']);
+            self::assertCount(2, $decoded['adscriptions']);
+            self::assertCount(1, $decoded['assignments']);
+        } finally {
+            @unlink($cachePath);
+            @unlink($cachePath . '.lock');
+        }
+    }
 }

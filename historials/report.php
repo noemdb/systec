@@ -3,7 +3,9 @@ $types = array();
 $technician = '';
 $count = 0;
 
-$maintenances = $db->index('maintenances', array('property_id' => $property['id']), '*', 'date ASC');
+$maintenances = (isset($preloadedMaintenances) && is_array($preloadedMaintenances))
+    ? $preloadedMaintenances
+    : $db->index('maintenances', array('property_id' => $property['id']), '*', 'date ASC');
 $count = count($maintenances);
 ?>
 
@@ -20,10 +22,14 @@ $count = count($maintenances);
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($maintenances as $maintenance) : ?>
+            <?php foreach ($maintenances as $maintenance) :
+                $mDateRaw = trim((string) ($maintenance['date'] ?? ''));
+                $mDateTs = $mDateRaw !== '' ? strtotime($mDateRaw) : false;
+                $mDateLabel = $mDateTs !== false ? date('d-m-Y', $mDateTs) : '—';
+                ?>
                 <tr>
                     <td class="small"><?= e($property['id']) ?></td>
-                    <td class="small text-nowrap"><?= e(date('d-m-Y', strtotime($maintenance['date']))) ?></td>
+                    <td class="small text-nowrap"><?= e($mDateLabel) ?></td>
                     <td class="small"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>
                     <td class="small"><?= e($maintenance['technician']) ?></td>
                     <td class="small"><?= sat_badge(badge_clase_mantenimiento((string) $maintenance['status']), texto_mantenimiento((string) $maintenance['status'])) ?></td>
@@ -49,10 +55,14 @@ $count = count($maintenances);
     <?php $hasObservations = false; ?>
     <ul class="list-group list-group-flush">
         <?php foreach ($maintenances as $maintenance) : ?>
-            <?php if (!empty($maintenance['notes'])) : ?>
+            <?php if (!empty($maintenance['notes'])) :
+                $noteDateRaw = trim((string) ($maintenance['date'] ?? ''));
+                $noteDateTs = $noteDateRaw !== '' ? strtotime($noteDateRaw) : false;
+                $noteDateLabel = $noteDateTs !== false ? date('d-m-Y', $noteDateTs) : '—';
+                ?>
                 <li class="list-group-item px-0 d-flex flex-column flex-sm-row align-items-sm-start gap-2">
                     <span class="badge rounded-pill text-bg-light border text-body-secondary flex-shrink-0">
-                        <?= e(date('d-m-Y', strtotime($maintenance['date']))) ?>
+                        <?= e($noteDateLabel) ?>
                     </span>
                     <span class="text-break"><?= e($maintenance['notes']) ?></span>
                 </li>

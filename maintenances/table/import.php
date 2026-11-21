@@ -11,25 +11,27 @@ $errors = 0;
 $i = 1;
 ?>
 
-<div class="alert alert-info">
+<div class="alert alert-info" role="status" aria-live="polite">
     <strong>Resultado:</strong>
     <span id="importInserted"><?= e($inserted) ?></span> insertados,
     <span id="importSkipped"><?= e($skipped) ?></span> omitidos,
     <span id="importErrors"><?= e($errors) ?></span> con error.
 </div>
 
-<table class="table table-sm">
-    <thead>
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle mb-0">
+    <caption class="visually-hidden">Detalle de mantenimientos procesados durante la importación</caption>
+    <thead class="table-light">
         <tr>
-            <th>N</th>
-            <th>Código</th>
-            <th>Tipo</th>
-            <th>Descripción</th>
-            <th>Técnico</th>
-            <th>Razón</th>
-            <th>Fecha</th>
-            <th>Notas</th>
-            <th>Resultado</th>
+            <th scope="col">N</th>
+            <th scope="col">Código</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Descripción</th>
+            <th scope="col">Técnico</th>
+            <th scope="col">Razón</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Notas</th>
+            <th scope="col">Resultado</th>
         </tr>
     </thead>
     <tbody>
@@ -95,6 +97,7 @@ $i = 1;
         <?php endwhile; ?>
     </tbody>
 </table>
+</div>
 
 <script nonce="<?= e(systec_csp_nonce()) ?>">
     document.getElementById('importInserted').textContent = <?= js($inserted) ?>;

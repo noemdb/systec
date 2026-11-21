@@ -1,6 +1,13 @@
 <?php
-$propertyCode = ($property && isset($property['id'])) ? $db->getCodeId($property['id']) : '';
+if (is_array($property) && isset($property['grupo'], $property['subgrupo'], $property['seccion'], $property['ident'])) {
+    $propertyCode = property_code($property);
+} else {
+    $propertyCode = ($property && isset($property['id'])) ? $db->getCodeId($property['id']) : '';
+}
 $propertyDescription = ($property && isset($property['description'])) ? $property['description'] : '';
+$propertyAdscription = isset($propertyAdscriptionLabel) && is_string($propertyAdscriptionLabel)
+    ? $propertyAdscriptionLabel
+    : (($property && isset($property['adscription'])) ? (string) $property['adscription'] : '');
 $propertyModel = ($property && isset($property['model'])) ? $property['model'] : '';
 $propertySerial = ($property && isset($property['serial'])) ? $property['serial'] : '';
 $propertyColor = ($property && isset($property['color'])) ? $property['color'] : '';
@@ -8,14 +15,16 @@ $propertyStatus = ($property && isset($property['status'])) ? $property['status'
 
 $letterheadFields = array(
     'Código' => $propertyCode,
+    'Adscripción' => $propertyAdscription,
     'Descripción' => $propertyDescription,
     'Modelo' => $propertyModel,
     'Serial' => $propertySerial,
     'Color' => $propertyColor,
     'Estado' => $propertyStatus,
 );
+$includeLetterheadId = empty($letterheadOmitId);
 ?>
-<div class="container-fluid text-start" id="historyLetterhead">
+<div class="container-fluid text-start history-letterhead"<?= $includeLetterheadId ? ' id="historyLetterhead"' : '' ?>>
     <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-1">
         <h5 class="mb-0">Oficina de Informática, San Felipe, Edo Yaracuy</h5>
         <p class="small text-body-secondary mb-0 text-md-end">

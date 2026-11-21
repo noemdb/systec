@@ -188,6 +188,25 @@ class PropertyRepository
         );
     }
 
+    public function statusSummaryCounts(): array
+    {
+        $rows = $this->db->fetchAllQuery(
+            "SELECT
+                COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(status, ''))) = 'BUENO' THEN 1 ELSE 0 END), 0) AS good,
+                COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('MALO', 'MUY MALO') THEN 1 ELSE 0 END), 0) AS attention
+             FROM properties"
+        );
+
+        $row = $rows ? $rows[0] : array();
+
+        return array(
+            'total' => (int) ($row['total'] ?? 0),
+            'good' => (int) ($row['good'] ?? 0),
+            'attention' => (int) ($row['attention'] ?? 0),
+        );
+    }
+
     public function summarizeStatuses(array $properties): array
     {
         $summary = array(

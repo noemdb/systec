@@ -138,4 +138,91 @@ class HelpersTest extends TestCase
         self::assertTrue(auth_can_manage_all_tickets());
         self::assertTrue(auth_can_access_ticket_for_user(999));
     }
+
+    public function testAssignmentStatusLabelNormalizesKnownUnknownAndEmptyValues(): void
+    {
+        self::assertSame('Activo', assignment_status_label(' activo '));
+        self::assertSame('Remoción', assignment_status_label('REMOCION'));
+        self::assertSame('Sin ficha', assignment_status_label('sin ficha'));
+        self::assertSame('Comision', assignment_status_label('COMISION'));
+        self::assertSame('Pendiente de sincronizar', assignment_status_label(''));
+        self::assertSame('', assignment_status_label('', ''));
+    }
+
+    public function testDashboardReturnUrlPreservesWhitelistedFiltersAndRejectsInvalidValues(): void
+    {
+        $validHash = hash('sha256', 'ana');
+        $url = dashboard_return_url(array(
+            'return_category' => 'informatica',
+            'return_status' => '__attention__',
+            'return_adscription' => '0001/0002/00000003',
+            'return_responsible' => $validHash,
+            'return_assigned' => 'not-a-sha256',
+            'return_search' => '0042',
+        ), '9999');
+
+        self::assertSame(
+            url('dashboard.php') . '?' . http_build_query(array(
+                'category' => 'informatica',
+                'status' => '__attention__',
+                'adscription' => '0001/0002/00000003',
+                'responsible' => $validHash,
+                'search' => '0042',
+            )),
+            $url
+        );
+
+        // Rechaza categoría/estado/adscripción inválidos y usa fallbackSearch cuando no queda ningún filtro
+        $fallbackUrl = dashboard_return_url(array(
+            'return_category' => '<script>',
+            'return_status' => 'INVALID',
+            'return_adscription' => 'bad value with spaces',
+        ), '0007');
+        self::assertSame(url('dashboard.php') . '?search=0007', $fallbackUrl);
+
+        // Sin filtros ni fallback devuelve dashboard.php limpio
+        self::assertSame(url('dashboard.php'), dashboard_return_url(array()));
+    }
+
+    public function testMaintenancesReturnUrlPreservesAllowedFiltersIncludingAssignments(): void
+    {
+        $validHash = hash('sha256', 'carlos');
+        $rawQuery = '?' . http_build_query(array(
+            'category' => 'informatica',
+            'estado' => 'revision',
+            'responsible' => $validHash,
+            'assigned' => 'invalid-hash',
+            'desde' => '2026-01-01',
+            'hasta' => 'not-a-date',
+            'vencido' => '1',
+            'malicious' => 'drop-me',
+        ));
+
+        $result = maintenances_return_url($rawQuery, array('id' => 42));
+
+        self::assertSame(
+            url('maintenances.php') . '?' . http_build_query(array(
+                'category' => 'informatica',
+                'responsible' => $validHash,
+                'estado' => 'revision',
+                'desde' => '2026-01-01',
+                'vencido' => '1',
+                'id' => '42',
+            )),
+            $result
+        );
+        self::assertSame(url('maintenances.php'), maintenances_return_url(''));
+    }
+
+    public function testTicketsReturnUrlPreservesWhitelistedStatusAndSearchOnly(): void
+    {
+        $valid = tickets_return_url('?status=con_retraso&search=0042&extra=ignore');
+        self::assertSame(url('tickets.php') . '?status=con_retraso&search=0042', $valid);
+
+        $abiertos = tickets_return_url('status=abiertos');
+        self::assertSame(url('tickets.php') . '?status=abiertos', $abiertos);
+
+        $invalid = tickets_return_url('?status=invalid_code&search=');
+        self::assertSame(url('tickets.php'), $invalid);
+    }
 }

@@ -40,7 +40,11 @@ $isPublicAsset = ($staticAssetExtension && (strpos($path, '/vendor/') === 0 || s
     || in_array($path, array('/responsive.css', '/favicon.svg'), true);
 
 if ($userRole === 'personal' && !$isPublicAsset) {
-    if (strpos($path, '/personal') !== 0 && $path !== '/login.php' && $path !== '/logout.php') {
+    if (strpos($path, '/personal') !== 0
+        && $path !== '/login.php'
+        && $path !== '/logout.php'
+        && $path !== '/documentation.php'
+        && $path !== '/documentation') {
         header('Location: /personal/index.php');
         exit();
     }

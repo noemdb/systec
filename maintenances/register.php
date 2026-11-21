@@ -12,41 +12,7 @@ if (isset($_POST['register'])) {
     $returnToDashboard = isset($_POST['return_to'])
         && is_string($_POST['return_to'])
         && $_POST['return_to'] === 'dashboard';
-    $returnQuery = array();
-    $allowedReturnFilters = array(
-        'category' => array('informatica', 'redes', 'otros'),
-        'status' => array('', '__attention__', 'BUENO', 'REGULAR', 'MALO', 'MUY MALO'),
-    );
-    foreach ($allowedReturnFilters as $filter => $allowedValues) {
-        $postKey = 'return_' . $filter;
-        if (isset($_POST[$postKey]) && is_string($_POST[$postKey])) {
-            $value = trim($_POST[$postKey]);
-            if ($value !== '' && in_array($value, $allowedValues, true)) {
-                $returnQuery[$filter] = $value;
-            }
-        }
-    }
-    if (isset($_POST['return_adscription'])
-        && is_string($_POST['return_adscription'])
-        && preg_match('/^[A-Za-z0-9_.:\/-]{1,128}$/D', $_POST['return_adscription'])) {
-        $returnQuery['adscription'] = $_POST['return_adscription'];
-    }
-    foreach (array('responsible', 'assigned') as $filter) {
-        $postKey = 'return_' . $filter;
-        if (isset($_POST[$postKey])
-            && is_string($_POST[$postKey])
-            && preg_match('/^[a-f0-9]{64}$/D', $_POST[$postKey])) {
-            $returnQuery[$filter] = $_POST[$postKey];
-        }
-    }
-    if (isset($_POST['return_search']) && is_string($_POST['return_search'])) {
-        $search = trim($_POST['return_search']);
-        if ($search !== '') {
-            $returnQuery['search'] = $search;
-        }
-    }
-    $dashboardReturnUrl = url('dashboard.php')
-        . ($returnQuery ? '?' . http_build_query($returnQuery) : '');
+    $dashboardReturnUrl = dashboard_return_url($_POST);
 
     $postText = static function (string $key): string {
         return isset($_POST[$key]) && is_string($_POST[$key]) ? trim($_POST[$key]) : '';

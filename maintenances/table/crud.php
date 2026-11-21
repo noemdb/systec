@@ -171,7 +171,9 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 </th>
             <?php endif; ?>
             <th scope="col">Código</th>
-            <th scope="col" class="text-center" title="Tickets activos asociados al bien">Tickets</th>
+            <?php if ($canViewTickets) : ?>
+                <th scope="col" class="text-center" title="Tickets activos asociados al bien">Tickets</th>
+            <?php endif; ?>
             <th scope="col" class="d-none d-sm-table-cell">Tipo</th>
             <th scope="col">Descripción</th>
             <th scope="col">Fecha</th>
@@ -202,7 +204,7 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             if (is_array($maintenanceProperty)) {
                 $propGroup = trim((string) ($maintenanceProperty['grupo'] ?? ''));
                 $propSubgroup = str_pad(trim((string) ($maintenanceProperty['subgrupo'] ?? '')), 4, '0', STR_PAD_LEFT);
-                $propSection = str_pad(trim((string) ($maintenanceProperty['seccion'] ?? '')), 3, '0', STR_PAD_LEFT);
+                $propSection = str_pad(trim((string) ($maintenanceProperty['seccion'] ?? '')), 4, '0', STR_PAD_LEFT);
                 $codeIdent = str_pad(trim((string) ($maintenanceProperty['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
                 $codePrefix = $propGroup . '-' . $propSubgroup . '-' . $propSection;
             } else {
@@ -212,12 +214,15 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                     $codeIdent = str_pad(trim((string) $codeParts[3]), 4, '0', STR_PAD_LEFT);
                     $codePrefix = trim((string) $codeParts[0])
                         . '-' . str_pad(trim((string) $codeParts[1]), 4, '0', STR_PAD_LEFT)
-                        . '-' . str_pad(trim((string) $codeParts[2]), 3, '0', STR_PAD_LEFT);
+                        . '-' . str_pad(trim((string) $codeParts[2]), 4, '0', STR_PAD_LEFT);
                 } else {
                     $codeIdent = $rawCode !== '' ? $rawCode : '—';
                     $codePrefix = '';
                 }
             }
+            $propertyModel = is_array($maintenanceProperty) ? trim((string) ($maintenanceProperty['model'] ?? '')) : '';
+            $propertyColor = is_array($maintenanceProperty) ? trim((string) ($maintenanceProperty['color'] ?? '')) : '';
+            $propertyTicketCount = (int) ($ticketCountsByProperty[$propertyId] ?? 0);
 
             $propertyAdscription = $adscriptionsByPropertyId[$propertyId]
                 ?? array('key' => '__unassigned__');
@@ -281,7 +286,20 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 data-date="<?= e($dateIso) ?>"
                 data-next="<?= e($nextIso) ?>"
                 data-next30="<?= $next30 ? '1' : '0' ?>"
-                data-vencido="<?= $vencido ? '1' : '0' ?>">
+                data-vencido="<?= $vencido ? '1' : '0' ?>"
+                data-export-code="<?= e((string) $maintenance['code']) ?>"
+                data-export-type="<?= e(texto_tipo((string) $maintenance['type'])) ?>"
+                data-export-description="<?= e((string) $maintenance['description']) ?>"
+                data-export-date="<?= e($dateLabel) ?>"
+                data-export-hours="<?= e($hoursLabel) ?>"
+                data-export-technician="<?= e((string) $maintenance['technician']) ?>"
+                data-export-status="<?= e(texto_mantenimiento((string) $maintenance['status'])) ?>"
+                data-export-next="<?= e($nextLabel) ?>"
+                data-export-model="<?= e($propertyModel) ?>"
+                data-export-color="<?= e($propertyColor) ?>"
+                <?php if ($canViewTickets) : ?>
+                    data-export-tickets="<?= e((string) $propertyTicketCount) ?>"
+                <?php endif; ?>>
                 <?php if ($canEditMaintenance) : ?>
                     <td class="maintenance-select-cell">
                         <input class="form-check-input js-bulk-select" type="checkbox"
@@ -295,8 +313,20 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                         <small class="d-block text-body-secondary"><?= e($codePrefix) ?></small>
                     <?php endif; ?>
                 </td>
-                <?php $ticketCount = $ticketCountsByProperty[(int) $maintenance['property_id']] ?? 0; ?>
-                <td class="text-center" data-order="<?= (int) $ticketCount ?>"><?= (int) $ticketCount ?></td>
+                <?php if ($canViewTickets) : ?>
+                    <td class="text-center" data-order="<?= $propertyTicketCount ?>">
+                        <?php if ($propertyTicketCount > 0 && $codeIdent !== '—') : ?>
+                            <a href="<?= e(url('tickets.php?search=' . rawurlencode($codeIdent))) ?>"
+                               class="badge rounded-pill text-bg-primary text-decoration-none"
+                               title="Ver tickets del bien <?= e($codeIdent) ?>"
+                               aria-label="Ver <?= e((string) $propertyTicketCount) ?> tickets del bien <?= e($codeIdent) ?>">
+                                <?= e((string) $propertyTicketCount) ?>
+                            </a>
+                        <?php else : ?>
+                            <span class="text-body-secondary">0</span>
+                        <?php endif; ?>
+                    </td>
+                <?php endif; ?>
                 <td class="d-none d-sm-table-cell"><?= sat_badge(badge_clase_tipo((string) $maintenance['type']), texto_tipo((string) $maintenance['type'])) ?></td>
                 <td class="maintenance-description-cell"><?= e($maintenance['description']) ?></td>
                 <td class="text-nowrap" data-order="<?= e($dateRaw) ?>"><?= e($dateLabel) ?></td>
@@ -376,8 +406,9 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
          aria-labelledby="maintenanceTransitionModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content text-start">
-                <form action="<?= e(url('maintenances/actions/status.php')) ?>" method="POST">
+                <form action="<?= e(url('maintenances/actions/status.php')) ?>" method="POST" id="maintenanceTransitionForm">
                     <?= csrf_field() ?>
+                    <input type="hidden" name="return_query" id="transitionReturnQuery" value="">
                     <input type="hidden" name="id" id="transitionMaintenanceId">
                     <input type="hidden" name="status" id="transitionMaintenanceStatus">
                     <div class="modal-header">

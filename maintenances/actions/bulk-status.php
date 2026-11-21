@@ -29,23 +29,7 @@ if (!$ids) {
     exit('No se recibieron mantenimientos para actualizar.');
 }
 
-$allowedReturnParams = array(
-    'category', 'adscription', 'search', 'estado', 'tipo',
-    'tecnico', 'desde', 'hasta', 'proximo', 'vencido',
-);
-$returnParams = array();
-if (isset($_POST['return_query']) && is_string($_POST['return_query'])) {
-    $parsed = array();
-    parse_str(ltrim($_POST['return_query'], '?'), $parsed);
-    foreach ($allowedReturnParams as $key) {
-        if (isset($parsed[$key]) && is_string($parsed[$key])) {
-            $value = trim($parsed[$key]);
-            if ($value !== '' && strlen($value) <= 200) {
-                $returnParams[$key] = $value;
-            }
-        }
-    }
-}
+$rawReturnQuery = isset($_POST['return_query']) && is_string($_POST['return_query']) ? $_POST['return_query'] : '';
 
 $updated = 0;
 $skipped = 0;
@@ -73,8 +57,12 @@ foreach ($ids as $id) {
     }
 }
 
-$returnParams['bulk_updated'] = $updated;
-$returnParams['bulk_skipped'] = $skipped;
+$message = 'Se actualizaron ' . $updated . ' ' . ($updated === 1 ? 'mantenimiento' : 'mantenimientos') . '.';
+if ($skipped > 0) {
+    $message .= ' Se omitieron ' . $skipped . ' ' . ($skipped === 1 ? 'registro' : 'registros') . ' que no permitían esa transición.';
+}
+$_SESSION['maintenance_notice_type'] = $updated > 0 ? 'success' : 'warning';
+$_SESSION['maintenance_notice'] = $message;
 
-header('Location: ' . url('maintenances.php?' . http_build_query($returnParams)));
+header('Location: ' . maintenances_return_url($rawReturnQuery));
 exit();

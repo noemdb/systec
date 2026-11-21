@@ -189,6 +189,36 @@ class TicketRepository
     }
 
     /**
+     * Obtiene los tickets abiertos más prioritarios (con retraso primero).
+     */
+    public function urgentOpenTickets(int $limit = 5): array
+    {
+        $limit = max(1, min(50, $limit));
+
+        return $this->db->fetchAllQuery(
+            "SELECT
+                t.id,
+                t.property_id,
+                t.title,
+                t.updated_at,
+                s.code AS status_code,
+                s.name AS status_name,
+                p.ident AS property_ident,
+                p.description AS property_description
+             FROM tickets t
+             INNER JOIN ticket_status s ON s.id = t.status_id
+             LEFT JOIN properties p ON p.id = t.property_id
+             WHERE t.deleted_at IS NULL
+               AND s.is_terminal = 0
+             ORDER BY
+                CASE WHEN s.code = 'con_retraso' THEN 0 ELSE 1 END ASC,
+                t.updated_at DESC,
+                t.id DESC
+             LIMIT " . $limit
+        );
+    }
+
+    /**
      * PERF-02: Conteo total de tickets activos para soporte.
      */
     public function supportTicketCount(?int $createdBy = null): int

@@ -3,6 +3,8 @@
 
     const config = window.SystecMaintenancesConfig || {};
     const search = config.search || '';
+    const totalMaintenanceCount = Number(config.totalMaintenanceCount || 0);
+    const canViewTickets = Boolean(config.canViewTickets);
     const improveMaintenanceNarrativeUrl = config.improveMaintenanceNarrativeUrl || '';
     const propertyTicketsUrl = config.propertyTicketsUrl || '';
     const registerMaintenanceUrl = config.registerMaintenanceUrl || '';
@@ -140,112 +142,114 @@
     };
 
     let loadingMaintenanceForEdit = false;
-    maintenancePropertySelect.addEventListener('change', () => {
-        if (!loadingMaintenanceForEdit) loadPropertyTickets(maintenancePropertySelect.value);
-    });
+    if (createMaintenanceDrawer && createMaintenanceForm && maintenancePropertySelect && maintenanceTicketSelect) {
+        maintenancePropertySelect.addEventListener('change', () => {
+            if (!loadingMaintenanceForEdit) loadPropertyTickets(maintenancePropertySelect.value);
+        });
 
-    maintenanceTicketSelect.addEventListener('change', () => {
-        const option = maintenanceTicketSelect.selectedOptions[0];
-        maintenanceTicketId.value = maintenanceTicketSelect.value;
-        if (!maintenanceTicketSelect.value || !option) {
-            maintenanceTicketProperty.textContent = '';
-            maintenanceTicketProperty.classList.add('d-none');
-            return;
-        }
-
-        const propertyId = option.dataset.propertyId;
-        const propertyOption = Array.from(maintenancePropertySelect.options)
-            .find((candidate) => candidate.value === propertyId);
-        if (propertyOption && maintenancePropertySelect.value !== propertyId) {
-            maintenancePropertySelect.value = propertyId;
-            maintenancePropertySelect.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        const propertyCode = option.dataset.propertyCode || 'Bien';
-        const propertyDescription = option.dataset.propertyDescription || 'Sin descripción';
-        maintenanceTicketProperty.textContent = `Bien cargado: ${propertyCode} — ${propertyDescription}`;
-        maintenanceTicketProperty.classList.remove('d-none');
-    });
-
-    document.addEventListener('click', (event) => {
-        if (!(event.target instanceof Element)) return;
-        const trigger = event.target.closest('.js-edit-maintenance');
-        if (trigger) pendingMaintenanceEditTrigger = trigger;
-    }, true);
-
-    const resetMaintenanceDrawer = () => {
-        createMaintenanceForm.reset();
-        maintenanceTicketRequest++;
-        resetMaintenanceTicket();
-        createMaintenanceForm.action = registerMaintenanceUrl;
-        createMaintenanceId.value = '';
-        createMaintenanceSubmit.name = 'register';
-        createMaintenanceSubmit.value = 'Registrar';
-        maintenanceDrawerSubmitLabel.textContent = 'Registrar';
-        maintenanceDrawerSubmitIcon.className = 'bi bi-check-lg me-1';
-        maintenanceDrawerTitleLabel.textContent = 'Registrar mantenimiento';
-        maintenanceDrawerTitleIcon.className = 'bi bi-plus-circle text-primary me-2';
-        maintenanceDrawerDescription.textContent = 'Completa los datos para crear un registro.';
-        createMaintenanceStatusField.classList.add('d-none');
-        createMaintenanceStatusSelect.disabled = true;
-        maintenanceNarrativeButton.disabled = false;
-        maintenanceNarrativeStatus.textContent = 'Mejora razón, descripción y notas con contenido; no se guarda hasta registrar el mantenimiento.';
-        maintenanceNarrativeStatus.className = 'form-text';
-        document.getElementById('create_property_category_filter')
-            .dispatchEvent(new Event('change', { bubbles: true }));
-    };
-
-    createMaintenanceDrawer.addEventListener('show.bs.offcanvas', (event) => {
-        resetMaintenanceDrawer();
-        const relatedTarget = event.relatedTarget;
-        const trigger = relatedTarget instanceof Element
-            && relatedTarget.matches('.js-edit-maintenance')
-            ? relatedTarget
-            : pendingMaintenanceEditTrigger;
-        pendingMaintenanceEditTrigger = null;
-        if (!trigger) return;
-
-        const maintenance = JSON.parse(trigger.dataset.maintenance);
-        const setSelectValue = (id, value) => {
-            const select = document.getElementById(id);
-            const normalizedValue = String(value ?? '');
-            if (!Array.from(select.options).some((option) => option.value === normalizedValue)) {
-                select.add(new Option(normalizedValue, normalizedValue));
+        maintenanceTicketSelect.addEventListener('change', () => {
+            const option = maintenanceTicketSelect.selectedOptions[0];
+            maintenanceTicketId.value = maintenanceTicketSelect.value;
+            if (!maintenanceTicketSelect.value || !option) {
+                maintenanceTicketProperty.textContent = '';
+                maintenanceTicketProperty.classList.add('d-none');
+                return;
             }
-            select.value = normalizedValue;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
+
+            const propertyId = option.dataset.propertyId;
+            const propertyOption = Array.from(maintenancePropertySelect.options)
+                .find((candidate) => candidate.value === propertyId);
+            if (propertyOption && maintenancePropertySelect.value !== propertyId) {
+                maintenancePropertySelect.value = propertyId;
+                maintenancePropertySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            const propertyCode = option.dataset.propertyCode || 'Bien';
+            const propertyDescription = option.dataset.propertyDescription || 'Sin descripción';
+            maintenanceTicketProperty.textContent = `Bien cargado: ${propertyCode} — ${propertyDescription}`;
+            maintenanceTicketProperty.classList.remove('d-none');
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!(event.target instanceof Element)) return;
+            const trigger = event.target.closest('.js-edit-maintenance');
+            if (trigger) pendingMaintenanceEditTrigger = trigger;
+        }, true);
+
+        const resetMaintenanceDrawer = () => {
+            createMaintenanceForm.reset();
+            maintenanceTicketRequest++;
+            resetMaintenanceTicket();
+            createMaintenanceForm.action = registerMaintenanceUrl;
+            createMaintenanceId.value = '';
+            createMaintenanceSubmit.name = 'register';
+            createMaintenanceSubmit.value = 'Registrar';
+            maintenanceDrawerSubmitLabel.textContent = 'Registrar';
+            maintenanceDrawerSubmitIcon.className = 'bi bi-check-lg me-1';
+            maintenanceDrawerTitleLabel.textContent = 'Registrar mantenimiento';
+            maintenanceDrawerTitleIcon.className = 'bi bi-plus-circle text-primary me-2';
+            maintenanceDrawerDescription.textContent = 'Completa los datos para crear un registro.';
+            createMaintenanceStatusField.classList.add('d-none');
+            createMaintenanceStatusSelect.disabled = true;
+            maintenanceNarrativeButton.disabled = false;
+            maintenanceNarrativeStatus.textContent = 'Mejora razón, descripción y notas con contenido; no se guarda hasta registrar el mantenimiento.';
+            maintenanceNarrativeStatus.className = 'form-text';
+            document.getElementById('create_property_category_filter')
+                .dispatchEvent(new Event('change', { bubbles: true }));
         };
 
-        createMaintenanceForm.action = updateMaintenanceUrl;
-        createMaintenanceId.value = maintenance.id;
-        createMaintenanceSubmit.name = 'update';
-        createMaintenanceSubmit.value = 'Actualizar';
-        maintenanceDrawerSubmitLabel.textContent = 'Guardar cambios';
-        maintenanceDrawerSubmitIcon.className = 'bi bi-save me-1';
-        maintenanceDrawerTitleLabel.textContent = 'Editar mantenimiento';
-        maintenanceDrawerTitleIcon.className = 'bi bi-pencil-square text-primary me-2';
-        maintenanceDrawerDescription.textContent = `Actualiza el mantenimiento ${maintenance.code}.`;
-        createMaintenanceStatusField.classList.remove('d-none');
-        createMaintenanceStatusSelect.disabled = false;
+        createMaintenanceDrawer.addEventListener('show.bs.offcanvas', (event) => {
+            resetMaintenanceDrawer();
+            const relatedTarget = event.relatedTarget;
+            const trigger = relatedTarget instanceof Element
+                && relatedTarget.matches('.js-edit-maintenance')
+                ? relatedTarget
+                : pendingMaintenanceEditTrigger;
+            pendingMaintenanceEditTrigger = null;
+            if (!trigger) return;
 
-        loadingMaintenanceForEdit = true;
-        setSelectValue('create_property_id', maintenance.property_id);
-        loadingMaintenanceForEdit = false;
-        loadPropertyTickets(maintenance.property_id, maintenance.ticket_id ?? '');
-        setSelectValue('create_type', maintenance.type);
-        setSelectValue('create_technician', maintenance.technician);
-        document.getElementById('create_date').value = String(maintenance.date ?? '')
-            .replace(' ', 'T').slice(0, 16);
-        document.getElementById('create_failure_reason').value = maintenance.failure_reason ?? '';
-        document.getElementById('create_description').value = maintenance.description ?? '';
-        document.getElementById('create_notes').value = maintenance.notes ?? '';
-        document.getElementById('create_next_maintenance_date').value = maintenance.next_maintenance_date ?? '';
-        setSelectValue('create_status', maintenance.status);
-        maintenanceNarrativeStatus.textContent = 'La propuesta se aplicará al formulario; revisa los cambios antes de guardar.';
-        maintenanceNarrativeStatus.className = 'form-text';
-    });
+            const maintenance = JSON.parse(trigger.dataset.maintenance);
+            const setSelectValue = (id, value) => {
+                const select = document.getElementById(id);
+                const normalizedValue = String(value ?? '');
+                if (!Array.from(select.options).some((option) => option.value === normalizedValue)) {
+                    select.add(new Option(normalizedValue, normalizedValue));
+                }
+                select.value = normalizedValue;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            };
 
-    if (new URLSearchParams(window.location.search).get('modeCreate') === 'true') {
-        bootstrap.Offcanvas.getOrCreateInstance(createMaintenanceDrawer).show();
+            createMaintenanceForm.action = updateMaintenanceUrl;
+            createMaintenanceId.value = maintenance.id;
+            createMaintenanceSubmit.name = 'update';
+            createMaintenanceSubmit.value = 'Actualizar';
+            maintenanceDrawerSubmitLabel.textContent = 'Guardar cambios';
+            maintenanceDrawerSubmitIcon.className = 'bi bi-save me-1';
+            maintenanceDrawerTitleLabel.textContent = 'Editar mantenimiento';
+            maintenanceDrawerTitleIcon.className = 'bi bi-pencil-square text-primary me-2';
+            maintenanceDrawerDescription.textContent = `Actualiza el mantenimiento ${maintenance.code}.`;
+            createMaintenanceStatusField.classList.remove('d-none');
+            createMaintenanceStatusSelect.disabled = false;
+
+            loadingMaintenanceForEdit = true;
+            setSelectValue('create_property_id', maintenance.property_id);
+            loadingMaintenanceForEdit = false;
+            loadPropertyTickets(maintenance.property_id, maintenance.ticket_id ?? '');
+            setSelectValue('create_type', maintenance.type);
+            setSelectValue('create_technician', maintenance.technician);
+            document.getElementById('create_date').value = String(maintenance.date ?? '')
+                .replace(' ', 'T').slice(0, 16);
+            document.getElementById('create_failure_reason').value = maintenance.failure_reason ?? '';
+            document.getElementById('create_description').value = maintenance.description ?? '';
+            document.getElementById('create_notes').value = maintenance.notes ?? '';
+            document.getElementById('create_next_maintenance_date').value = maintenance.next_maintenance_date ?? '';
+            setSelectValue('create_status', maintenance.status);
+            maintenanceNarrativeStatus.textContent = 'La propuesta se aplicará al formulario; revisa los cambios antes de guardar.';
+            maintenanceNarrativeStatus.className = 'form-text';
+        });
+
+        if (new URLSearchParams(window.location.search).get('modeCreate') === 'true') {
+            bootstrap.Offcanvas.getOrCreateInstance(createMaintenanceDrawer).show();
+        }
     }
 
     const selectFilters = {
@@ -558,6 +562,8 @@
             && dateFromMatches && dateToMatches && next30Matches;
     });
 
+    const maintenanceResultCount = document.getElementById('maintenanceResultCount');
+
     const updateKpiCounts = () => {
         const counts = { total: 0, iniciado: 0, revision: 0, finalizado: 0, vencido: 0 };
         table.rows({ search: 'applied' }).nodes().toArray().forEach((row) => {
@@ -574,6 +580,12 @@
         document.querySelectorAll('[data-kpi-count]').forEach((node) => {
             node.textContent = String(counts[node.dataset.kpiCount] ?? 0);
         });
+
+        if (maintenanceResultCount) {
+            maintenanceResultCount.textContent = hasActiveFilters()
+                ? `Mostrando ${counts.total} de ${totalMaintenanceCount} registros`
+                : `${totalMaintenanceCount} registros`;
+        }
 
         document.querySelectorAll('.js-kpi-filter').forEach((button) => {
             const kpi = button.dataset.kpi;
@@ -830,19 +842,36 @@
         applyingHistory = false;
     });
 
-    const csvEscape = (value) => `"${String(value).replace(/"/g, '""')}"`;
+    const transitionForm = document.getElementById('maintenanceTransitionForm');
+    const transitionReturnQuery = document.getElementById('transitionReturnQuery');
+    if (transitionForm && transitionReturnQuery) {
+        transitionForm.addEventListener('submit', () => {
+            transitionReturnQuery.value = window.location.search;
+        });
+    }
+
+    const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     if (exportCsvButton) {
         exportCsvButton.addEventListener('click', () => {
-            const headers = [
-                'Código', 'Tipo', 'Descripción', 'Fecha', 'Horas', 'Técnico',
-                'Estado', 'Próximo mantenimiento', 'Modelo', 'Color'
+            const columns = [
+                { header: 'Código', key: 'exportCode' },
+                { header: 'Tipo', key: 'exportType' },
+                { header: 'Descripción', key: 'exportDescription' },
+                { header: 'Fecha', key: 'exportDate' },
+                { header: 'Horas', key: 'exportHours' },
+                { header: 'Técnico', key: 'exportTechnician' },
+                { header: 'Estado', key: 'exportStatus' },
+                { header: 'Próximo mantenimiento', key: 'exportNext' },
+                { header: 'Modelo', key: 'exportModel' },
+                { header: 'Color', key: 'exportColor' }
             ];
-            const lines = [headers.map(csvEscape).join(';')];
+            if (canViewTickets) {
+                columns.push({ header: 'Tickets', key: 'exportTickets' });
+            }
+
+            const lines = [columns.map((col) => csvEscape(col.header)).join(';')];
             table.rows({ search: 'applied' }).nodes().toArray().forEach((row) => {
-                const values = Array.from(row.cells)
-                    .filter((cell) => !cell.classList.contains('maintenance-select-cell'))
-                    .slice(0, headers.length)
-                    .map((cell) => (cell.dataset.code || cell.textContent).replace(/\s+/g, ' ').trim());
+                const values = columns.map((col) => (row.dataset[col.key] || '').replace(/\s+/g, ' ').trim());
                 lines.push(values.map(csvEscape).join(';'));
             });
 

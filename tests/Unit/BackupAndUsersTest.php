@@ -181,6 +181,103 @@ class BackupAndUsersTest extends TestCase
         self::assertStringContainsString('encrypted=1', $logContent);
     }
 
+    public function testAdminSaveUserRejectsCaseInsensitiveDuplicatesAndClearsThrottleOnPasswordReset(): void
+    {
+        $db = new DB(':memory:');
+        $username = 'tech_case_test_' . bin2hex(random_bytes(4));
+        $testIp = '198.51.100.' . random_int(1, 254);
+
+        try {
+            $adminId = (int) $db->create('users', array(
+                'username' => 'admin_test',
+                'password_hash' => password_hash('secret123', PASSWORD_DEFAULT),
+                'role' => 'admin',
+                'active' => 1,
+            ));
+
+            $created = auth_admin_save_user(array(
+                'username' => $username,
+                'role' => 'tecnico',
+                'active' => '1',
+                'password' => 'initpass1',
+            ), $adminId, $db);
+            self::assertTrue($created['ok']);
+
+            $duplicate = auth_admin_save_user(array(
+                'username' => strtoupper($username),
+                'role' => 'consulta',
+                'active' => '1',
+                'password' => 'initpass2',
+            ), $adminId, $db);
+            self::assertFalse($duplicate['ok']);
+
+            // Simula 5 intentos fallidos para bloquear la cuenta
+            for ($i = 0; $i < 5; $i++) {
+                auth_throttle_record_failure($username, $testIp);
+            }
+            self::assertTrue(auth_throttle_check($username, $testIp)['blocked']);
+
+            // Al restablecer contraseña desde admin, debe limpiar automáticamente el bloqueo
+            $updated = auth_admin_save_user(array(
+                'user_id' => (string) $created['id'],
+                'role' => 'tecnico',
+                'active' => '1',
+                'password' => 'newpass123',
+            ), $adminId, $db);
+            self::assertTrue($updated['ok']);
+            self::assertFalse(auth_throttle_check($username, $testIp)['blocked']);
+        } finally {
+            auth_throttle_clear($username, $testIp);
+            @unlink(auth_throttle_directory() . DIRECTORY_SEPARATOR . 'ip_' . hash('sha256', $testIp) . '.json');
+            $db->close();
+        }
+    }
+
+    public function testAdminDeleteUserEnforcesDoubleConfirmationAndAdminGuards(): void
+    {
+        $db = new DB(':memory:');
+        $victimUsername = 'delete_me_' . bin2hex(random_bytes(4));
+
+        try {
+            $adminId = (int) $db->create('users', array(
+                'username' => 'sole_admin',
+                'password_hash' => password_hash('secret123', PASSWORD_DEFAULT),
+                'role' => 'admin',
+                'active' => 1,
+            ));
+            $victimId = (int) $db->create('users', array(
+                'username' => $victimUsername,
+                'password_hash' => password_hash('secret123', PASSWORD_DEFAULT),
+                'role' => 'consulta',
+                'active' => 1,
+            ));
+
+            // No puede eliminarse a sí mismo
+            $selfAttempt = auth_admin_delete_user($adminId, $adminId, 'sole_admin', true, $db);
+            self::assertFalse($selfAttempt['ok']);
+
+            // Sin confirmación de riesgo falla
+            $noRisk = auth_admin_delete_user($victimId, $adminId, $victimUsername, false, $db);
+            self::assertFalse($noRisk['ok']);
+
+            // Con username incorrecto falla
+            $wrongName = auth_admin_delete_user($victimId, $adminId, 'otro_usuario', true, $db);
+            self::assertFalse($wrongName['ok']);
+
+            // No puede eliminar al último admin activo (aunque lo intente otro actor)
+            $lastAdmin = auth_admin_delete_user($adminId, $victimId, 'sole_admin', true, $db);
+            self::assertFalse($lastAdmin['ok']);
+
+            // Con doble confirmación válida elimina permanentemente
+            $deleted = auth_admin_delete_user($victimId, $adminId, $victimUsername, true, $db);
+            self::assertTrue($deleted['ok']);
+            self::assertNull($db->getFirstForId('users', $victimId));
+        } finally {
+            auth_throttle_clear($victimUsername, '0.0.0.0');
+            $db->close();
+        }
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

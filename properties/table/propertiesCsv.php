@@ -29,23 +29,25 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
 }
 ?>
 
-<table class="table table-sm">
-    <thead>
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle mb-0">
+    <caption class="visually-hidden">Detalle de bienes procesados durante la importación</caption>
+    <thead class="table-light">
         <tr>
-            <th>N</th>
-            <th>Gr</th>
-            <th>SG</th>
-            <th>Sec</th>
-            <th>Ident.</th>
-            <th>Descripción</th>
-            <th>Marca</th>
-            <th>Modelo</th>
-            <th>Serial</th>
-            <th>Material</th>
-            <th>Color</th>
-            <th>Estado de origen</th>
-            <th>Estado en SysTec</th>
-            <th>Resultado</th>
+            <th scope="col">N</th>
+            <th scope="col">Gr</th>
+            <th scope="col">SG</th>
+            <th scope="col">Sec</th>
+            <th scope="col">Ident.</th>
+            <th scope="col">Descripción</th>
+            <th scope="col">Marca</th>
+            <th scope="col">Modelo</th>
+            <th scope="col">Serial</th>
+            <th scope="col">Material</th>
+            <th scope="col">Color</th>
+            <th scope="col">Estado de origen</th>
+            <th scope="col">Estado en SysTec</th>
+            <th scope="col">Resultado</th>
         </tr>
     </thead>
     <tbody>
@@ -117,6 +119,7 @@ if (isset($inventoryImportRows) && is_iterable($inventoryImportRows)) {
         <?php endforeach; ?>
     </tbody>
 </table>
+</div>
 
 <section class="card border-primary-subtle mt-3" aria-labelledby="inventory-import-summary">
     <div class="card-body">

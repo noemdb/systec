@@ -48,7 +48,7 @@ try {
         );
     }
 
-    header('Location: ' . url('dashboard.php?search=' . urlencode($search)));
+    header('Location: ' . dashboard_return_url($_POST, $search));
     exit();
 } catch (Exception $e) {
     error_log('Error actualizando estado del bien: ' . $e->getMessage());

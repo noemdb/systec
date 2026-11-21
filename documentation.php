@@ -11,9 +11,18 @@ require_login();
 $title = 'Documentación';
 $roleLabels = db()->getListRoles();
 $user = auth_user();
-$roleLabel = is_array($user) && isset($user['role'], $roleLabels[$user['role']])
-    ? $roleLabels[$user['role']]
+$userRoleCode = is_array($user) && isset($user['role']) ? (string) $user['role'] : '';
+$roleLabel = isset($roleLabels[$userRoleCode])
+    ? $roleLabels[$userRoleCode]
     : 'Usuario';
+$roleTemplateMap = array(
+    'admin' => 'detail-role-admin',
+    'operador' => 'detail-role-operator',
+    'tecnico' => 'detail-role-technician',
+    'consulta' => 'detail-role-consult',
+    'personal' => 'detail-role-personal',
+);
+$currentRoleTemplate = isset($roleTemplateMap[$userRoleCode]) ? $roleTemplateMap[$userRoleCode] : '';
 $printMode = isset($_GET['print']) && $_GET['print'] === '1';
 $title = $printMode ? 'Documentación imprimible' : $title;
 
@@ -242,17 +251,66 @@ ob_start();
     <section class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3"
              aria-labelledby="documentation-title">
         <div>
-            <h1 class="h3 mb-1" id="documentation-title">
-                <i class="bi bi-journal-text text-primary me-2" aria-hidden="true"></i>Guía de SysTec
-            </h1>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h1 class="h3 mb-0" id="documentation-title">
+                    <i class="bi bi-journal-text text-primary me-2" aria-hidden="true"></i>Guía de SysTec
+                </h1>
+                <span class="badge text-bg-light border text-body-secondary">
+                    Tu perfil: <?= e($roleLabel) ?>
+                </span>
+            </div>
             <p class="text-body-secondary mb-0">
                 Manual funcional para conocer los módulos, el flujo de trabajo y las acciones disponibles según tu rol.
             </p>
         </div>
-        <span class="badge text-bg-light border text-body-secondary align-self-md-start">
-            Tu perfil: <?= e($roleLabel) ?>
-        </span>
+        <?php if (!$printMode) : ?>
+            <div class="d-flex flex-wrap gap-2 align-self-md-start flex-shrink-0">
+                <?php if ($currentRoleTemplate !== '') : ?>
+                    <button type="button" class="btn btn-outline-primary"
+                            data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
+                            data-doc-template="<?= e($currentRoleTemplate) ?>"
+                            data-doc-title="Caso de uso: <?= e($roleLabel) ?>">
+                        <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Guía de mi rol
+                    </button>
+                <?php endif; ?>
+                <a href="<?= e(url('documentation.php?print=1')) ?>"
+                   class="btn btn-outline-secondary"
+                   target="_blank" rel="noopener">
+                    <i class="bi bi-printer me-1" aria-hidden="true"></i>Versión imprimible
+                </a>
+            </div>
+        <?php endif; ?>
     </section>
+
+    <?php if (!$printMode) : ?>
+        <section class="card shadow-sm border-0 mb-3 d-print-none" aria-label="Buscar en la documentación">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md">
+                        <label class="visually-hidden" for="documentationSearch">Buscar en la guía de SysTec</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-body-tertiary text-body-secondary" aria-hidden="true">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="search" class="form-control" id="documentationSearch"
+                                   placeholder="Buscar tema, rol o palabra clave (ej. CSV, TTL, desincorporación, IA)…"
+                                   autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <span class="small text-body-secondary" id="documentationSearchCount" role="status" aria-live="polite">
+                            <?= e((string) count($sections)) ?> secciones
+                        </span>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="resetDocumentationSearch">
+                            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Limpiar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
 
     <div class="row g-3" id="documentationLayout">
         <aside class="col-12 col-lg-3 documentation-index-column">
@@ -282,6 +340,9 @@ ob_start();
         </aside>
 
         <div class="col-12 col-lg-9 documentation-content-column">
+            <div class="alert alert-info d-none d-print-none" id="documentationNoMatches" role="status">
+                Ninguna sección coincide con la búsqueda. Prueba con otra palabra clave o limpia el filtro.
+            </div>
             <div class="d-flex flex-column gap-3">
                 <section class="card shadow-sm border-0 documentation-section" id="overview"
                          aria-labelledby="overview-title">
@@ -318,8 +379,11 @@ ob_start();
                         </p>
                         <div class="row g-3">
                             <article class="col-12 col-sm-6">
-                                <div class="h-100 rounded border p-3">
-                                    <h3 class="h6"><i class="bi bi-shield-fill-check text-danger me-1" aria-hidden="true"></i>Administrador</h3>
+                                <div class="h-100 rounded border p-3<?= $userRoleCode === 'admin' ? ' border-primary border-2 bg-primary-subtle bg-opacity-10' : '' ?>">
+                                    <h3 class="h6">
+                                        <i class="bi bi-shield-fill-check text-danger me-1" aria-hidden="true"></i>Administrador
+                                        <?php if ($userRoleCode === 'admin') : ?><span class="badge text-bg-primary ms-1">Tu rol actual</span><?php endif; ?>
+                                    </h3>
                                     <p class="small mb-2">Administra usuarios y roles; además, puede acceder a la gestión operativa, importaciones y sincronización.</p>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
@@ -327,8 +391,11 @@ ob_start();
                                 </div>
                             </article>
                             <article class="col-12 col-sm-6">
-                                <div class="h-100 rounded border p-3">
-                                    <h3 class="h6"><i class="bi bi-person-gear text-primary me-1" aria-hidden="true"></i>Operador</h3>
+                                <div class="h-100 rounded border p-3<?= $userRoleCode === 'operador' ? ' border-primary border-2 bg-primary-subtle bg-opacity-10' : '' ?>">
+                                    <h3 class="h6">
+                                        <i class="bi bi-person-gear text-primary me-1" aria-hidden="true"></i>Operador
+                                        <?php if ($userRoleCode === 'operador') : ?><span class="badge text-bg-primary ms-1">Tu rol actual</span><?php endif; ?>
+                                    </h3>
                                     <p class="small mb-2">Opera el inventario, las importaciones y los registros de mantenimiento y tickets.</p>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
@@ -336,8 +403,11 @@ ob_start();
                                 </div>
                             </article>
                             <article class="col-12 col-sm-6">
-                                <div class="h-100 rounded border p-3">
-                                    <h3 class="h6"><i class="bi bi-tools text-info me-1" aria-hidden="true"></i>Técnico</h3>
+                                <div class="h-100 rounded border p-3<?= $userRoleCode === 'tecnico' ? ' border-primary border-2 bg-primary-subtle bg-opacity-10' : '' ?>">
+                                    <h3 class="h6">
+                                        <i class="bi bi-tools text-info me-1" aria-hidden="true"></i>Técnico
+                                        <?php if ($userRoleCode === 'tecnico') : ?><span class="badge text-bg-primary ms-1">Tu rol actual</span><?php endif; ?>
+                                    </h3>
                                     <p class="small mb-2">Atiende tickets y registra o actualiza los mantenimientos asignados, sin administrar usuarios ni importar bienes.</p>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
@@ -345,17 +415,23 @@ ob_start();
                                 </div>
                             </article>
                             <article class="col-12 col-sm-6">
-                                <div class="h-100 rounded border p-3">
-                                    <h3 class="h6"><i class="bi bi-eye text-secondary me-1" aria-hidden="true"></i>Consulta</h3>
-                                    <p class="small mb-2">Consulta el listado y los datos de tickets sin opciones para crear, cambiar estado, añadir seguimiento o eliminar.</p>
+                                <div class="h-100 rounded border p-3<?= $userRoleCode === 'consulta' ? ' border-primary border-2 bg-primary-subtle bg-opacity-10' : '' ?>">
+                                    <h3 class="h6">
+                                        <i class="bi bi-eye text-secondary me-1" aria-hidden="true"></i>Consulta
+                                        <?php if ($userRoleCode === 'consulta') : ?><span class="badge text-bg-primary ms-1">Tu rol actual</span><?php endif; ?>
+                                    </h3>
+                                    <p class="small mb-2">Consulta inventario, mantenimientos, reportes y tickets en modo solo lectura, sin crear ni modificar registros.</p>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
                                             data-doc-template="detail-role-consult">Caso de uso</button>
                                 </div>
                             </article>
                             <article class="col-12 col-sm-6">
-                                <div class="h-100 rounded border p-3">
-                                    <h3 class="h6"><i class="bi bi-person-badge text-warning me-1" aria-hidden="true"></i>Personal</h3>
+                                <div class="h-100 rounded border p-3<?= $userRoleCode === 'personal' ? ' border-primary border-2 bg-primary-subtle bg-opacity-10' : '' ?>">
+                                    <h3 class="h6">
+                                        <i class="bi bi-person-badge text-warning me-1" aria-hidden="true"></i>Personal
+                                        <?php if ($userRoleCode === 'personal') : ?><span class="badge text-bg-primary ms-1">Tu rol actual</span><?php endif; ?>
+                                    </h3>
                                     <p class="small mb-2">Registra solicitudes y consulta o actualiza el seguimiento de sus propios tickets desde su portal.</p>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="offcanvas" data-bs-target="#documentationDrawer"
@@ -623,10 +699,10 @@ ob_start();
 </template>
 <template id="detail-dashboard">
     <ul>
-        <li>Usa los indicadores de condición para filtrar rápidamente los bienes.</li>
-        <li>La tabla puede incluir código, descripción, condición, ubicación/adscripción y datos de asignación cuando existan.</li>
-        <li>Las acciones por fila dependen del rol e incluyen abrir el historial y, para los roles autorizados, crear tickets o mantenimientos relacionados.</li>
-        <li>Los datos de adscripción y asignación proceden de una caché local que puede estar desactualizada hasta la próxima sincronización.</li>
+        <li>Usa los indicadores de condición para filtrar rápidamente los bienes y exporta la vista filtrada a CSV en cualquier momento.</li>
+        <li>La tabla incluye modo compacto o extendido (la preferencia se recuerda en tu navegador) con enlaces directos a los mantenimientos y tickets de cada bien.</li>
+        <li>Las acciones por fila dependen del rol e incluyen abrir el historial, cambiar condición física (preservando tus filtros activos) y crear tickets o mantenimientos relacionados.</li>
+        <li>Los datos de adscripción y asignación proceden de una caché local con vigencia de 24 horas que se refresca al importar bienes desde PostgreSQL o sincronizar asignaciones.</li>
     </ul>
 </template>
 <template id="detail-maintenances">
@@ -650,9 +726,9 @@ ob_start();
         <p class="visually-hidden">Registrar la solicitud, actualizar su estado, añadir seguimientos cuando correspondan y conservar los cambios en el historial.</p>
     </figure>
     <ul>
-        <li>El ticket incluye título, descripción, observación opcional, bien y estado; el historial conserva quién realizó cada seguimiento o cambio.</li>
-        <li>Los estados representan la atención de la solicitud (por ejemplo, iniciado, en progreso, en espera, con retraso o finalizado).</li>
-        <li>Los roles operativos pueden abrir el detalle completo, registrar seguimiento y actualizar el estado según sus permisos.</li>
+        <li>El ticket incluye título, descripción, observación opcional, bien y estado; el historial conserva quién realizó cada seguimiento o cambio de forma atómica.</li>
+        <li>Los indicadores superiores y la barra de estado permiten filtrar en un clic (Todos, Abiertos, Iniciado, En progreso, Con retraso, En espera y Finalizado) y exportar la bandeja filtrada a CSV.</li>
+        <li>Los roles operativos pueden abrir el detalle completo, registrar seguimiento y actualizar el estado preservando sus filtros activos.</li>
         <li>Administrador y Operador pueden eliminar tickets mediante borrado lógico; los elementos eliminados no forman parte del listado activo.</li>
         <li>Un ticket no sustituye al registro de mantenimiento: describe la solicitud, mientras que el mantenimiento documenta el trabajo realizado.</li>
     </ul>
@@ -674,7 +750,7 @@ ob_start();
     <ul>
         <li>El módulo de Historiales permite consultar por bien los mantenimientos y tickets asociados.</li>
         <li>Los informes de mantenimiento pueden imprimirse para contar con una copia legible del historial.</li>
-        <li>El reporte de bienes dañados destaca los activos con condición mala o muy mala y muestra el historial de mantenimientos disponible.</li>
+        <li>El reporte de bienes dañados destaca los activos en condición mala o muy mala con nota de desincorporación, permite filtrar por condición o búsqueda para imprimir selectivamente y exportar a CSV.</li>
         <li>Los registros eliminados lógicamente no deben confundirse con registros activos.</li>
     </ul>
 </template>
@@ -686,15 +762,16 @@ ob_start();
     </figure>
     <ul>
         <li>Las opciones de importación y sincronización están disponibles para Administrador y Operador.</li>
-        <li>La importación de bienes y mantenimientos incorpora datos desde archivos compatibles con los procesos de carga del sistema.</li>
-        <li>La sincronización de asignaciones actualiza la copia local de adscripciones y responsables utilizada por las vistas.</li>
-        <li>Revisa los resultados y advertencias que muestra el proceso antes de continuar con otras actualizaciones.</li>
+        <li>La importación de bienes admite CSV/XLS o lectura directa desde PostgreSQL (actualizando automáticamente adscripciones y asignaciones en caché local).</li>
+        <li>La importación de mantenimientos permite subir un archivo CSV desde el equipo (hasta 5 MB) o procesar el archivo en servidor.</li>
+        <li>La sincronización de asignaciones actualiza responsables y usuarios asignados en SQLite y refresca el caché institucional.</li>
     </ul>
 </template>
 <template id="detail-administration">
     <ul>
-        <li>El Administrador crea y gestiona cuentas, define roles y puede desactivar cuentas.</li>
+        <li>El Administrador crea y gestiona cuentas, filtra por rol o estado, activa/desactiva cuentas rápidamente y exporta el directorio a CSV.</li>
         <li>Los roles disponibles son Administrador, Operador, Técnico, Consulta y Personal.</li>
+        <li>Las cuentas bloqueadas temporalmente por exceso de intentos fallidos se muestran en el listado y pueden desbloquearse manualmente o al restablecer la contraseña.</li>
         <li>Cada usuario puede cambiar su contraseña desde la barra superior. Cierra sesión al terminar, especialmente en equipos compartidos.</li>
     </ul>
 </template>
@@ -730,8 +807,10 @@ ob_start();
     const documentationPrintMode = <?= js($printMode) ?>;
     const documentationLayout = document.getElementById('documentationLayout');
     const documentationIndexToggle = document.getElementById('documentationIndexToggle');
-    documentationIndexToggle.addEventListener('click', () => {
-        const collapsed = documentationLayout.classList.toggle('documentation-index-collapsed');
+    const indexStorageKey = 'systec.documentation.indexCollapsed';
+
+    const applyIndexCollapsed = (collapsed) => {
+        documentationLayout.classList.toggle('documentation-index-collapsed', collapsed);
         const label = collapsed ? 'Expandir índice' : 'Colapsar índice';
         documentationIndexToggle.setAttribute('aria-expanded', String(!collapsed));
         documentationIndexToggle.setAttribute('aria-label', label);
@@ -739,7 +818,102 @@ ob_start();
         documentationIndexToggle.querySelector('i').className = collapsed
             ? 'bi bi-chevron-bar-right'
             : 'bi bi-chevron-bar-left';
+    };
+
+    try {
+        if (!documentationPrintMode && window.localStorage.getItem(indexStorageKey) === '1') {
+            applyIndexCollapsed(true);
+        }
+    } catch {
+        // Ignora restricciones de almacenamiento local.
+    }
+
+    documentationIndexToggle.addEventListener('click', () => {
+        const nextCollapsed = !documentationLayout.classList.contains('documentation-index-collapsed');
+        applyIndexCollapsed(nextCollapsed);
+        try {
+            window.localStorage.setItem(indexStorageKey, nextCollapsed ? '1' : '0');
+        } catch {
+            // Ignora restricciones de almacenamiento local.
+        }
     });
+
+    if (!documentationPrintMode) {
+        const docSearchInput = document.getElementById('documentationSearch');
+        const docSearchReset = document.getElementById('resetDocumentationSearch');
+        const docSearchCount = document.getElementById('documentationSearchCount');
+        const docNoMatches = document.getElementById('documentationNoMatches');
+        const docSections = Array.from(document.querySelectorAll('.documentation-section'));
+        const docIndexLinks = Array.from(document.querySelectorAll('#documentationIndex .list-group-item'));
+
+        // Precalcula texto buscable incluyendo el contenido oculto de los <template> asociados
+        const sectionHaystacks = new Map();
+        docSections.forEach((section) => {
+            const parts = [section.textContent || ''];
+            section.querySelectorAll('[data-doc-template]').forEach((trigger) => {
+                const tpl = document.getElementById(trigger.dataset.docTemplate || '');
+                if (tpl instanceof HTMLTemplateElement) {
+                    parts.push(tpl.content.textContent || '');
+                }
+            });
+            sectionHaystacks.set(section.id, parts.join(' ').toLowerCase());
+        });
+
+        const applyDocSearch = () => {
+            const term = (docSearchInput ? docSearchInput.value : '').trim().toLowerCase();
+            let visibleCount = 0;
+
+            docSections.forEach((section) => {
+                const visible = !term || (sectionHaystacks.get(section.id) || '').includes(term);
+                section.classList.toggle('d-none', !visible);
+                if (visible) visibleCount++;
+                const indexLink = docIndexLinks.find((link) => link.getAttribute('href') === `#${section.id}`);
+                if (indexLink) {
+                    indexLink.classList.toggle('d-none', !visible);
+                }
+            });
+
+            if (docSearchCount) {
+                docSearchCount.textContent = term
+                    ? `Mostrando ${visibleCount} de ${docSections.length} secciones`
+                    : `${docSections.length} secciones`;
+            }
+            if (docNoMatches) {
+                docNoMatches.classList.toggle('d-none', visibleCount > 0);
+            }
+        };
+
+        if (docSearchInput) {
+            docSearchInput.addEventListener('input', applyDocSearch);
+        }
+        if (docSearchReset) {
+            docSearchReset.addEventListener('click', () => {
+                if (docSearchInput) docSearchInput.value = '';
+                applyDocSearch();
+            });
+        }
+
+        if ('IntersectionObserver' in window && docSections.length && docIndexLinks.length) {
+            const setActiveIndex = (id) => {
+                docIndexLinks.forEach((link) => {
+                    const active = link.getAttribute('href') === `#${id}`;
+                    link.classList.toggle('active', active);
+                    if (active) {
+                        link.setAttribute('aria-current', 'true');
+                    } else {
+                        link.removeAttribute('aria-current');
+                    }
+                });
+            };
+            const observer = new IntersectionObserver((entries) => {
+                const visibleEntry = entries.find((entry) => entry.isIntersecting);
+                if (visibleEntry && visibleEntry.target.id) {
+                    setActiveIndex(visibleEntry.target.id);
+                }
+            }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+            docSections.forEach((section) => observer.observe(section));
+        }
+    }
 
     const documentationPrintDetails = [
         ['detail-overview', 'Cómo funciona SysTec'],
@@ -797,11 +971,14 @@ ob_start();
             const error = document.createElement('p');
             error.className = 'alert alert-warning mb-0';
             error.setAttribute('role', 'alert');
-            error.textContent = 'No se pudieron representar todos los diagramas. Recarga la página para volver a intentarlo; la impresión está deshabilitada para evitar una guía incompleta.';
+            error.textContent = 'No se pudieron representar todos los diagramas (puede requerir acceso a CDN). El contenido textual sigue disponible y puedes imprimir igualmente.';
             document.querySelector('.documentation-print-appendix')?.appendChild(error);
             const printButton = document.getElementById('documentationPrintButton');
-            printButton.querySelector('span').textContent = 'No se pudo preparar la impresión';
-            printButton.removeAttribute('aria-busy');
+            if (printButton) {
+                printButton.disabled = false;
+                printButton.querySelector('span').textContent = 'Imprimir guía (sin diagramas)';
+                printButton.removeAttribute('aria-busy');
+            }
         };
 
         if (!window.mermaid) {
@@ -872,7 +1049,8 @@ ob_start();
         const trigger = event.relatedTarget;
         const templateId = trigger && trigger.dataset ? trigger.dataset.docTemplate : '';
         const template = templateId ? document.getElementById(templateId) : null;
-        const title = trigger.closest('article')?.querySelector('h3')?.textContent
+        const title = (trigger && trigger.dataset && trigger.dataset.docTitle)
+            || trigger.closest('article')?.querySelector('h3')?.textContent
             || trigger.closest('.documentation-section')?.querySelector('h2')?.textContent
             || 'Detalle de la guía';
         document.getElementById('documentationDrawerTitle').textContent = title;
@@ -880,6 +1058,12 @@ ob_start();
         body.replaceChildren();
         if (template instanceof HTMLTemplateElement) {
             body.appendChild(template.content.cloneNode(true));
+        }
+    });
+
+    documentationDrawer.addEventListener('hide.bs.offcanvas', () => {
+        if (documentationDrawer.contains(document.activeElement)) {
+            document.activeElement.blur();
         }
     });
 

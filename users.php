@@ -9,13 +9,24 @@ $currentUser = auth_user();
 $roles = $db->getListRoles();
 $users = $db->index('users', array(), 'id, username, role, active, created_at', 'id ASC');
 
+$ticketCountsByUser = array();
+foreach ($db->fetchAllQuery('SELECT created_by, COUNT(*) AS total FROM tickets GROUP BY created_by') as $row) {
+    $ticketCountsByUser[(int) $row['created_by']] = (int) $row['total'];
+}
+$historyCountsByUser = array();
+foreach ($db->fetchAllQuery('SELECT actor_user_id, COUNT(*) AS total FROM ticket_histories GROUP BY actor_user_id') as $row) {
+    $historyCountsByUser[(int) $row['actor_user_id']] = (int) $row['total'];
+}
+
 $summaryCounts = array(
     'total' => count($users),
     'active' => 0,
     'technicians' => 0,
     'inactive' => 0,
 );
+$throttleByUserId = array();
 foreach ($users as $account) {
+    $accountId = (int) $account['id'];
     $isActive = (int) ($account['active'] ?? 0) === 1;
     if ($isActive) {
         $summaryCounts['active']++;
@@ -25,6 +36,7 @@ foreach ($users as $account) {
     } else {
         $summaryCounts['inactive']++;
     }
+    $throttleByUserId[$accountId] = auth_throttle_check((string) $account['username'], '0.0.0.0');
 }
 
 $roleBadgeClasses = array(
@@ -57,15 +69,25 @@ ob_start();
             <h1 class="h3 mb-1" id="users-page-title">Usuarios</h1>
             <p class="text-body-secondary mb-0">Administración de cuentas, roles, técnicos activos y credenciales de acceso.</p>
         </div>
-        <button type="button" class="btn btn-primary align-self-md-start flex-shrink-0"
-                data-bs-toggle="modal" data-bs-target="#userManageModal">
-            <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Nuevo usuario
-        </button>
+        <div class="d-flex flex-wrap gap-2 align-self-md-start flex-shrink-0">
+            <button type="button" class="btn btn-outline-secondary" id="exportUsersCsv"
+                    <?= $summaryCounts['total'] === 0 ? 'disabled' : '' ?>
+                    title="Descargar en CSV los usuarios filtrados">
+                <i class="bi bi-filetype-csv me-1" aria-hidden="true"></i>Exportar CSV
+            </button>
+            <button type="button" class="btn btn-primary"
+                    data-bs-toggle="modal" data-bs-target="#userManageModal">
+                <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Nuevo usuario
+            </button>
+        </div>
     </section>
 
-    <section class="row g-3 mb-4" aria-label="Indicadores de cuentas de usuario">
+    <section class="row g-3 mb-3" aria-label="Indicadores de cuentas de usuario">
         <div class="col-6 col-md-3">
-            <article class="card h-100 border-start border-4 border-primary shadow-sm">
+            <button type="button"
+                    class="card h-100 w-100 border-start border-4 border-primary shadow-sm text-start text-body js-users-kpi"
+                    data-kpi="total" aria-controls="usersTable" aria-pressed="true"
+                    title="Mostrar todas las cuentas">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-primary-subtle text-primary p-2" aria-hidden="true">
                         <i class="bi bi-people fs-4"></i>
@@ -75,10 +97,13 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['total']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-3">
-            <article class="card h-100 border-start border-4 border-success shadow-sm">
+            <button type="button"
+                    class="card h-100 w-100 border-start border-4 border-success shadow-sm text-start text-body js-users-kpi"
+                    data-kpi="active" aria-controls="usersTable" aria-pressed="false"
+                    title="Filtrar cuentas activas">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-success-subtle text-success p-2" aria-hidden="true">
                         <i class="bi bi-person-check fs-4"></i>
@@ -88,10 +113,13 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['active']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-3">
-            <article class="card h-100 border-start border-4 border-info shadow-sm">
+            <button type="button"
+                    class="card h-100 w-100 border-start border-4 border-info shadow-sm text-start text-body js-users-kpi"
+                    data-kpi="technicians" aria-controls="usersTable" aria-pressed="false"
+                    title="Filtrar técnicos activos">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-info-subtle text-info p-2" aria-hidden="true">
                         <i class="bi bi-tools fs-4"></i>
@@ -101,10 +129,13 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['technicians']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
         </div>
         <div class="col-6 col-md-3">
-            <article class="card h-100 border-start border-4 border-secondary shadow-sm">
+            <button type="button"
+                    class="card h-100 w-100 border-start border-4 border-secondary shadow-sm text-start text-body js-users-kpi"
+                    data-kpi="inactive" aria-controls="usersTable" aria-pressed="false"
+                    title="Filtrar cuentas inactivas">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="rounded-circle bg-secondary-subtle text-secondary p-2" aria-hidden="true">
                         <i class="bi bi-person-slash fs-4"></i>
@@ -114,7 +145,37 @@ ob_start();
                         <p class="h3 mb-0"><?= e((string) $summaryCounts['inactive']) ?></p>
                     </div>
                 </div>
-            </article>
+            </button>
+        </div>
+    </section>
+
+    <section class="card shadow-sm border-0 mb-3" aria-labelledby="users-filter-title">
+        <div class="card-body py-2">
+            <h2 class="visually-hidden" id="users-filter-title">Filtrar usuarios</h2>
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-sm-6 col-md-4">
+                    <label for="filterUserRole" class="form-label fw-semibold small mb-1">Rol</label>
+                    <select id="filterUserRole" class="form-select form-select-sm">
+                        <option value="">Todos los roles</option>
+                        <?php foreach ($roles as $roleKey => $roleLabel) : ?>
+                            <option value="<?= e($roleKey) ?>"><?= e($roleLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-4">
+                    <label for="filterUserStatus" class="form-label fw-semibold small mb-1">Estado</label>
+                    <select id="filterUserStatus" class="form-select form-select-sm">
+                        <option value="">Todos los estados</option>
+                        <option value="1">Activos</option>
+                        <option value="0">Inactivos</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 d-flex justify-content-md-end">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="resetUserFilters">
+                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Limpiar filtros
+                    </button>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -123,13 +184,14 @@ ob_start();
             <h2 class="h5 mb-0" id="users-list-title">
                 <i class="bi bi-shield-lock text-primary me-2" aria-hidden="true"></i>Cuentas registradas
             </h2>
-            <span class="badge text-bg-light border text-body-secondary" aria-live="polite">
+            <span class="badge text-bg-light border text-body-secondary" id="usersResultCount"
+                  role="status" aria-live="polite">
                 <?= e((string) $summaryCounts['total']) ?> usuarios
             </span>
         </div>
-        <div class="card-body p-0">
+        <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0" id="usersTable">
                     <caption class="visually-hidden">Listado de usuarios del sistema</caption>
                     <thead class="table-light">
                     <tr>
@@ -149,14 +211,25 @@ ob_start();
                         $roleBadge = isset($roleBadgeClasses[$roleCode]) ? $roleBadgeClasses[$roleCode] : 'secondary';
                         $isActive = (int) ($account['active'] ?? 0) === 1;
                         $isSelf = isset($currentUser['id']) && (int) $currentUser['id'] === $accountId;
+                        $throttle = $throttleByUserId[$accountId] ?? array('blocked' => false, 'retry_minutes' => 0);
+                        $isBlocked = !empty($throttle['blocked']);
+                        $retryMinutes = (int) ($throttle['retry_minutes'] ?? 0);
                         $userData = array(
                             'id' => $accountId,
                             'username' => (string) $account['username'],
                             'role' => $roleCode,
                             'active' => $isActive ? 1 : 0,
+                            'is_self' => $isSelf,
                         );
                         ?>
-                        <tr>
+                        <tr data-role="<?= e($roleCode) ?>"
+                            data-active="<?= $isActive ? '1' : '0' ?>"
+                            data-export-id="<?= e((string) $accountId) ?>"
+                            data-export-username="<?= e((string) $account['username']) ?>"
+                            data-export-role="<?= e($roleLabel) ?>"
+                            data-export-status="<?= e($isActive ? 'Activo' : 'Inactivo') ?>"
+                            data-export-blocked="<?= e($isBlocked ? 'Sí (' . $retryMinutes . ' min)' : 'No') ?>"
+                            data-export-created="<?= e((string) ($account['created_at'] ?? '—')) ?>">
                             <td><span class="fw-semibold">#<?= e((string) $accountId) ?></span></td>
                             <td>
                                 <span class="fw-semibold"><?= e((string) $account['username']) ?></span>
@@ -175,15 +248,58 @@ ob_start();
                                 <?php else : ?>
                                     <span class="badge text-bg-secondary">Inactivo</span>
                                 <?php endif; ?>
+                                <?php if ($isBlocked) : ?>
+                                    <span class="badge text-bg-warning ms-1" title="Bloqueado temporalmente por intentos fallidos">
+                                        <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>Bloqueado (<?= e((string) $retryMinutes) ?> min)
+                                    </span>
+                                <?php endif; ?>
                             </td>
                             <td class="text-nowrap"><?= e((string) ($account['created_at'] ?? '—')) ?></td>
                             <td class="text-end">
-                                <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
-                                        aria-label="Editar usuario <?= e((string) $account['username']) ?>"
-                                        data-bs-toggle="modal" data-bs-target="#userManageModal"
-                                        data-user="<?= e(js($userData)) ?>">
-                                    <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Editar
-                                </button>
+                                <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                                    <?php if ($isBlocked) : ?>
+                                        <form method="post" action="<?= e(url('users/actions/save.php')) ?>" class="m-0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="action" value="unlock">
+                                            <input type="hidden" name="user_id" value="<?= e((string) $accountId) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap"
+                                                    aria-label="Desbloquear usuario <?= e((string) $account['username']) ?>">
+                                                <i class="bi bi-unlock me-1" aria-hidden="true"></i>Desbloquear
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if (!$isSelf) : ?>
+                                        <form method="post" action="<?= e(url('users/actions/save.php')) ?>" class="m-0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="action" value="toggle_active">
+                                            <input type="hidden" name="user_id" value="<?= e((string) $accountId) ?>">
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-<?= $isActive ? 'secondary' : 'success' ?> text-nowrap"
+                                                    aria-label="<?= $isActive ? 'Desactivar' : 'Activar' ?> usuario <?= e((string) $account['username']) ?>">
+                                                <i class="bi <?= $isActive ? 'bi-person-dash' : 'bi-person-check' ?> me-1" aria-hidden="true"></i>
+                                                <?= $isActive ? 'Desactivar' : 'Activar' ?>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
+                                            aria-label="Editar usuario <?= e((string) $account['username']) ?>"
+                                            data-bs-toggle="modal" data-bs-target="#userManageModal"
+                                            data-user="<?= e(js($userData)) ?>">
+                                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Editar
+                                    </button>
+                                    <?php if (!$isSelf) : ?>
+                                        <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
+                                                aria-label="Eliminar usuario <?= e((string) $account['username']) ?>"
+                                                data-bs-toggle="modal" data-bs-target="#deleteUserModal"
+                                                data-user-id="<?= e((string) $accountId) ?>"
+                                                data-username="<?= e((string) $account['username']) ?>"
+                                                data-role-label="<?= e($roleLabel) ?>"
+                                                data-tickets-count="<?= e((string) ($ticketCountsByUser[$accountId] ?? 0)) ?>"
+                                                data-histories-count="<?= e((string) ($historyCountsByUser[$accountId] ?? 0)) ?>">
+                                            <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -193,7 +309,175 @@ ob_start();
         </div>
     </section>
 </div>
+
+<style nonce="<?= e(systec_csp_nonce()) ?>">
+    .js-users-kpi {
+        appearance: none;
+        font: inherit;
+        cursor: pointer;
+        transition: box-shadow .15s ease, transform .15s ease;
+    }
+
+    .js-users-kpi:hover {
+        transform: translateY(-1px);
+    }
+
+    .js-users-kpi:focus-visible,
+    .js-users-kpi[aria-pressed="true"] {
+        outline: 0;
+        box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .2), var(--bs-box-shadow-sm);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .js-users-kpi {
+            transition: none;
+        }
+
+        .js-users-kpi:hover {
+            transform: none;
+        }
+    }
+</style>
+
+<script nonce="<?= e(systec_csp_nonce()) ?>">
+    (function () {
+        const totalUsers = <?= js($summaryCounts['total']) ?>;
+        const roleFilter = document.getElementById('filterUserRole');
+        const statusFilter = document.getElementById('filterUserStatus');
+        const resetButton = document.getElementById('resetUserFilters');
+        const resultCountBadge = document.getElementById('usersResultCount');
+        const exportCsvButton = document.getElementById('exportUsersCsv');
+        const kpiButtons = Array.from(document.querySelectorAll('.js-users-kpi'));
+
+        const usersTable = new window.Systec.TablePaginator('#usersTable', {
+            pageLength: 10,
+            language: {
+                search: 'Buscar usuarios:',
+                searchPlaceholder: 'Usuario, rol, estado…',
+                emptyTable: 'No hay cuentas registradas.',
+                zeroRecords: 'Ningún usuario coincide con los filtros aplicados.',
+                unitLabel: 'usuarios'
+            }
+        });
+
+        usersTable.setFilterPredicate((row) => {
+            if (!row) return true;
+            const roleMatch = !roleFilter.value || row.dataset.role === roleFilter.value;
+            const statusMatch = !statusFilter.value || row.dataset.active === statusFilter.value;
+            return roleMatch && statusMatch;
+        });
+
+        const syncKpiState = () => {
+            kpiButtons.forEach((button) => {
+                const kpi = button.dataset.kpi;
+                let pressed = false;
+                if (kpi === 'total') {
+                    pressed = !roleFilter.value && !statusFilter.value && !usersTable.search().trim();
+                } else if (kpi === 'active') {
+                    pressed = !roleFilter.value && statusFilter.value === '1';
+                } else if (kpi === 'technicians') {
+                    pressed = roleFilter.value === 'tecnico' && statusFilter.value === '1';
+                } else if (kpi === 'inactive') {
+                    pressed = !roleFilter.value && statusFilter.value === '0';
+                }
+                button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            });
+        };
+
+        const updateFeedback = () => {
+            const filteredCount = usersTable.rows({ search: 'applied' }).count();
+            const hasFilter = Boolean(roleFilter.value || statusFilter.value || usersTable.search().trim());
+            if (resultCountBadge) {
+                resultCountBadge.textContent = hasFilter
+                    ? `Mostrando ${filteredCount} de ${totalUsers} usuarios`
+                    : `${totalUsers} usuarios`;
+            }
+            if (exportCsvButton) {
+                exportCsvButton.disabled = filteredCount === 0;
+            }
+            syncKpiState();
+        };
+
+        usersTable.on('draw', updateFeedback);
+        usersTable.on('search', updateFeedback);
+
+        [roleFilter, statusFilter].forEach((select) => {
+            select.addEventListener('change', () => {
+                usersTable.draw(true);
+            });
+        });
+
+        kpiButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const kpi = button.dataset.kpi;
+                if (kpi === 'total') {
+                    roleFilter.value = '';
+                    statusFilter.value = '';
+                    usersTable.search('');
+                } else if (kpi === 'active') {
+                    roleFilter.value = '';
+                    statusFilter.value = statusFilter.value === '1' ? '' : '1';
+                } else if (kpi === 'technicians') {
+                    const alreadyActive = roleFilter.value === 'tecnico' && statusFilter.value === '1';
+                    roleFilter.value = alreadyActive ? '' : 'tecnico';
+                    statusFilter.value = alreadyActive ? '' : '1';
+                } else if (kpi === 'inactive') {
+                    roleFilter.value = '';
+                    statusFilter.value = statusFilter.value === '0' ? '' : '0';
+                }
+                usersTable.draw(true);
+            });
+        });
+
+        if (resetButton) {
+            resetButton.addEventListener('click', () => {
+                roleFilter.value = '';
+                statusFilter.value = '';
+                usersTable.search('');
+                usersTable.draw(true);
+            });
+        }
+
+        if (exportCsvButton) {
+            const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            exportCsvButton.addEventListener('click', () => {
+                const columns = [
+                    { header: 'ID', key: 'exportId' },
+                    { header: 'Usuario', key: 'exportUsername' },
+                    { header: 'Rol', key: 'exportRole' },
+                    { header: 'Estado', key: 'exportStatus' },
+                    { header: 'Bloqueado', key: 'exportBlocked' },
+                    { header: 'Fecha de alta', key: 'exportCreated' }
+                ];
+                const lines = [columns.map((col) => csvEscape(col.header)).join(';')];
+                usersTable.rows({ search: 'applied' }).nodes().toArray().forEach((row) => {
+                    const values = columns.map((col) => (row.dataset[col.key] || '').replace(/\s+/g, ' ').trim());
+                    lines.push(values.map(csvEscape).join(';'));
+                });
+
+                const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+                const downloadUrl = URL.createObjectURL(blob);
+                const today = new Date();
+                const dateStamp = [
+                    today.getFullYear(),
+                    String(today.getMonth() + 1).padStart(2, '0'),
+                    String(today.getDate()).padStart(2, '0')
+                ].join('-');
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `usuarios-${dateStamp}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(downloadUrl);
+            });
+        }
+
+        updateFeedback();
+    })();
+</script>
 <?php include __DIR__ . '/include/user_manage_modal.php'; ?>
+<?php include __DIR__ . '/include/user_delete_modal.php'; ?>
 <?php
 $main = ob_get_clean();
 include __DIR__ . '/include/layout.php';

@@ -42,8 +42,22 @@ if (!$status) {
 $user = auth_user();
 $now = date('Y-m-d H:i:s');
 $closedAt = $status['code'] === 'finalizado' ? $now : null;
+$rawReturnQuery = isset($_POST['return_query']) && is_string($_POST['return_query']) ? $_POST['return_query'] : '';
 
+if ((int) $ticket['status_id'] === (int) $status_id) {
+    $_SESSION['ticket_notice_type'] = 'info';
+    $_SESSION['ticket_notice'] = 'El ticket #' . (int) $ticket_id . ' ya se encontraba en estado ' . $status['name'] . '.';
+    header('Location: ' . tickets_return_url($rawReturnQuery));
+    exit();
+}
+
+$inTransaction = false;
 try {
+    if (!$db->exec('BEGIN IMMEDIATE')) {
+        throw new RuntimeException('No se pudo iniciar la transacción de cambio de estado.');
+    }
+    $inTransaction = true;
+
     $db->update('tickets', $ticket_id, array(
         'status_id' => (int) $status_id,
         'updated_at' => $now,
@@ -61,9 +75,19 @@ try {
         'created_at' => $now,
     ));
 
-    header('Location: ' . url('tickets.php'));
+    if (!$db->exec('COMMIT')) {
+        throw new RuntimeException('No se pudo confirmar el cambio de estado.');
+    }
+    $inTransaction = false;
+
+    $_SESSION['ticket_notice_type'] = 'success';
+    $_SESSION['ticket_notice'] = 'Estado del ticket #' . (int) $ticket_id . ' actualizado a ' . $status['name'] . '.';
+    header('Location: ' . tickets_return_url($rawReturnQuery));
     exit();
 } catch (Throwable $e) {
+    if ($inTransaction) {
+        $db->exec('ROLLBACK');
+    }
     error_log('Error actualizando ticket: ' . $e->getMessage());
     http_response_code(500);
     exit('No se pudo actualizar el estado del ticket.');

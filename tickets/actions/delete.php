@@ -23,8 +23,10 @@ try {
         exit('Ticket no encontrado o ya eliminado.');
     }
 
+    $rawReturnQuery = isset($_POST['return_query']) && is_string($_POST['return_query']) ? $_POST['return_query'] : '';
+    $_SESSION['ticket_notice_type'] = 'success';
     $_SESSION['ticket_notice'] = 'Ticket eliminado. Su historial se conserva.';
-    header('Location: ' . url('tickets.php'));
+    header('Location: ' . tickets_return_url($rawReturnQuery));
     exit();
 } catch (Throwable $e) {
     error_log('Error eliminando ticket: ' . $e->getMessage());

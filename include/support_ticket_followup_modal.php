@@ -5,6 +5,8 @@
             <form method="post" action="<?= e(url('tickets/actions/history.php')) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="ticket_id" id="supportTicketFollowupModalId">
+                <input type="hidden" name="return_to" value="tickets">
+                <input type="hidden" name="return_query" id="supportTicketFollowupModalReturnQuery" value="">
                 <div class="modal-header">
                     <div class="support-ticket-modal-heading">
                         <h2 class="modal-title fs-5" id="supportTicketFollowupModalTitle">
@@ -34,6 +36,7 @@
     supportTicketFollowupModal.addEventListener('show.bs.modal', (event) => {
         const ticket = JSON.parse(event.relatedTarget.dataset.ticket);
         document.getElementById('supportTicketFollowupModalId').value = String(ticket.id);
+        document.getElementById('supportTicketFollowupModalReturnQuery').value = window.location.search;
         document.getElementById('supportTicketFollowupModalSubtitle').textContent = `Ticket #${ticket.id} · ${ticket.title}`;
         document.getElementById('supportTicketFollowupModalDescription').value = '';
     });

@@ -13,13 +13,14 @@ require_once __DIR__ . '/csv_import.php';
  *   - stale:        bool
  *   - found:        bool  (true si se encontró y leyó un archivo de cache)
  */
-function legacy_postgres_read_local_cache(): array
+function legacy_postgres_read_local_cache(?int $ttlSeconds = null, ?int $now = null): array
 {
     $empty = array(
         'adscriptions' => array(),
         'assignments'  => array(),
         'rows'         => array(),
         'cached_at'    => null,
+        'age_seconds'  => null,
         'stale'        => false,
         'found'        => false,
     );
@@ -51,6 +52,17 @@ function legacy_postgres_read_local_cache(): array
         return $empty;
     }
 
+    $cachedAt = isset($decoded['cached_at']) && is_numeric($decoded['cached_at'])
+        ? (int) $decoded['cached_at']
+        : null;
+    $referenceNow = $now !== null ? $now : time();
+    $ttl = ($ttlSeconds !== null && $ttlSeconds > 0)
+        ? $ttlSeconds
+        : (defined('SYSTEC_LEGACY_CACHE_TTL') ? (int) SYSTEC_LEGACY_CACHE_TTL : 86400);
+    $ageSeconds = $cachedAt !== null ? max(0, $referenceNow - $cachedAt) : null;
+    $isStale = (isset($decoded['stale']) && $decoded['stale'] === true)
+        || ($ageSeconds !== null && $ageSeconds > $ttl);
+
     return array(
         'adscriptions' => isset($decoded['adscriptions']) && is_array($decoded['adscriptions'])
             ? $decoded['adscriptions']
@@ -59,12 +71,108 @@ function legacy_postgres_read_local_cache(): array
             ? $decoded['assignments']
             : array(),
         'rows'         => array(),   // no se usa en la tarjeta; evita cargar datos voluminosos
-        'cached_at'    => isset($decoded['cached_at']) && is_numeric($decoded['cached_at'])
-            ? (int) $decoded['cached_at']
-            : null,
-        'stale'        => isset($decoded['stale']) && $decoded['stale'] === true,
+        'cached_at'    => $cachedAt,
+        'age_seconds'  => $ageSeconds,
+        'stale'        => $isStale,
         'found'        => true,
     );
+}
+
+/**
+ * Persiste atómicamente adscripciones y asignaciones en el archivo de caché local.
+ */
+function legacy_postgres_write_local_cache(
+    array $adscriptions,
+    array $assignments = array(),
+    array $propertyIdentifiers = array(),
+    ?int $cachedAt = null
+): bool {
+    $identifiers = array();
+    $sourceIdentifiers = $propertyIdentifiers !== array()
+        ? $propertyIdentifiers
+        : array_merge(array_keys($adscriptions), array_keys($assignments));
+    foreach ($sourceIdentifiers as $identifier) {
+        $identifier = trim((string) $identifier);
+        if ($identifier !== '') {
+            $normalized = str_pad($identifier, 4, '0', STR_PAD_LEFT);
+            $identifiers[$normalized] = $normalized;
+        }
+    }
+    $identifiers = array_values($identifiers);
+    sort($identifiers, SORT_STRING);
+    if (!$identifiers) {
+        return false;
+    }
+
+    $cacheDirectory = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
+    if (!is_dir($cacheDirectory) && !mkdir($cacheDirectory, 0750, true) && !is_dir($cacheDirectory)) {
+        error_log('No se pudo crear el directorio de cache de adscripciones.');
+        return false;
+    }
+
+    $cachePath = $cacheDirectory . DIRECTORY_SEPARATOR
+        . 'inventory-adscriptions-' . hash('sha256', implode("\n", $identifiers)) . '.json';
+    $lock = fopen($cachePath . '.lock', 'c');
+    if ($lock === false) {
+        error_log('No se pudo abrir el lock del cache de adscripciones.');
+        return false;
+    }
+
+    try {
+        if (!flock($lock, LOCK_EX)) {
+            return false;
+        }
+
+        if (($adscriptions === array() || $assignments === array()) && is_file($cachePath)) {
+            $existingRaw = @file_get_contents($cachePath);
+            $existingDecoded = $existingRaw !== false ? json_decode($existingRaw, true) : null;
+            if (is_array($existingDecoded)) {
+                if ($adscriptions === array()
+                    && isset($existingDecoded['adscriptions'])
+                    && is_array($existingDecoded['adscriptions'])
+                    && $existingDecoded['adscriptions'] !== array()) {
+                    $adscriptions = $existingDecoded['adscriptions'];
+                }
+                if ($assignments === array()
+                    && isset($existingDecoded['assignments'])
+                    && is_array($existingDecoded['assignments'])
+                    && $existingDecoded['assignments'] !== array()) {
+                    $assignments = $existingDecoded['assignments'];
+                }
+            }
+        }
+
+        $payload = array(
+            'rows' => array(),
+            'adscriptions' => $adscriptions,
+            'assignments' => $assignments,
+            'cached_at' => $cachedAt !== null ? $cachedAt : time(),
+            'stale' => false,
+        );
+        $encoded = json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($encoded === false) {
+            return false;
+        }
+
+        $temporaryPath = tempnam($cacheDirectory, 'inventory-adscriptions-');
+        if ($temporaryPath === false
+            || file_put_contents($temporaryPath, $encoded, LOCK_EX) === false
+            || !rename($temporaryPath, $cachePath)) {
+            if (isset($temporaryPath) && is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+            error_log('No se pudo guardar el cache local de inventario.');
+            return false;
+        }
+
+        return true;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
 }
 
 function property_assignment_filter_key(string $name, string $status): string
@@ -77,20 +185,8 @@ function property_assignment_filter_key(string $name, string $status): string
 
 function property_assignment_filter_label(string $name, string $status): string
 {
-    $statusLabels = array(
-        'ACTIVO' => 'Activo',
-        'INACTIVO' => 'Inactivo',
-        'JUBILADO' => 'Jubilado',
-        'REMOCION' => 'Remoción',
-        'RENUNCIA' => 'Renuncia',
-        'VACACIONES' => 'Vacaciones',
-        'SIN ASIGNAR' => 'Sin asignar',
-        'SIN FICHA' => 'Sin ficha',
-        'SIN ESTADO' => 'Estado no registrado',
-    );
     $name = trim($name);
-    $status = mb_strtoupper(trim($status), 'UTF-8');
-    $statusLabel = $statusLabels[$status] ?? ($status !== '' ? ucfirst(mb_strtolower($status)) : '');
+    $statusLabel = assignment_status_label($status, '');
 
     if ($name !== '' && $statusLabel !== '') {
         return $name . ' · ' . $statusLabel;
@@ -140,9 +236,37 @@ function execute_inventory_import($db, string $filename, string $extension, call
 
 function execute_legacy_postgres_inventory_import($db, callable $processor): string
 {
-    $rows = legacy_postgres_inventory_rows();
+    $snapshot = legacy_postgres_inventory_snapshot(array(), true, true);
     // La lectura PostgreSQL termina antes de iniciar la escritura en la SQLite local.
-    return execute_inventory_rows_import($db, $rows, $processor);
+    $output = execute_inventory_rows_import($db, $snapshot['rows'], $processor);
+
+    try {
+        $properties = $db->index(
+            'properties',
+            array(),
+            'id,ident,adscription,responsible_name,responsible_status,assigned_name,assigned_status',
+            'id ASC'
+        );
+        $identifiers = array_map(function ($property) {
+            return trim((string) $property['ident']);
+        }, $properties);
+
+        if (!empty($snapshot['adscriptions'])) {
+            $db->syncPropertyAdscriptions($properties, $snapshot['adscriptions']);
+        }
+        if (!empty($snapshot['assignments'])) {
+            $db->syncPropertyAssignments($properties, $snapshot['assignments']);
+        }
+        legacy_postgres_write_local_cache(
+            $snapshot['adscriptions'] ?? array(),
+            $snapshot['assignments'] ?? array(),
+            $identifiers
+        );
+    } catch (Throwable $e) {
+        error_log('Importación PostgreSQL completada, pero falló la actualización del caché local: ' . $e->getMessage());
+    }
+
+    return $output;
 }
 
 function legacy_postgres_inventory_rows(): array
@@ -280,14 +404,14 @@ function legacy_postgres_inventory_snapshot(
             }
         }
 
-        $adscriptions = legacy_postgres_property_adscriptions($pdo, $propertyIdentifiers);
+        $effectiveIdentifiers = $propertyIdentifiers;
+        foreach ($rows as $row) {
+            $effectiveIdentifiers[] = $row[3];
+        }
+        $adscriptions = legacy_postgres_property_adscriptions($pdo, $effectiveIdentifiers);
         $assignments = array();
         if ($includePropertyAssignments) {
-            $assignmentIdentifiers = $propertyIdentifiers;
-            foreach ($rows as $row) {
-                $assignmentIdentifiers[] = $row[3];
-            }
-            $assignments = legacy_postgres_property_assignments($pdo, $assignmentIdentifiers);
+            $assignments = legacy_postgres_property_assignments($pdo, $effectiveIdentifiers);
         }
 
         $pdo->commit();
@@ -387,6 +511,9 @@ function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers
 
         try {
             $snapshot = legacy_postgres_inventory_snapshot($identifiers, false);
+            if (empty($snapshot['assignments']) && is_array($cached) && !empty($cached['assignments']) && is_array($cached['assignments'])) {
+                $snapshot['assignments'] = $cached['assignments'];
+            }
             $snapshot['cached_at'] = time();
             $snapshot['stale'] = false;
             $encoded = json_encode(

@@ -40,7 +40,16 @@ try {
 
     $db->update($table, $id, $data);
 
-    header('Location: ' . url('maintenances.php?id=' . $id));
+    $statusLabels = $db->getListMaintenanceStatus();
+    $statusLabel = isset($statusLabels[$status]) ? $statusLabels[$status] : $status;
+    $maintenanceCode = trim((string) ($maintenance['code'] ?? ''));
+    $_SESSION['maintenance_notice_type'] = 'success';
+    $_SESSION['maintenance_notice'] = $maintenanceCode !== ''
+        ? 'Mantenimiento ' . $maintenanceCode . ' actualizado a ' . $statusLabel . '.'
+        : 'Estado del mantenimiento actualizado a ' . $statusLabel . '.';
+
+    $rawReturnQuery = isset($_POST['return_query']) && is_string($_POST['return_query']) ? $_POST['return_query'] : '';
+    header('Location: ' . maintenances_return_url($rawReturnQuery, array('id' => $id)));
     exit();
 } catch (Exception $e) {
     error_log('Error cambiando estado del mantenimiento: ' . $e->getMessage());

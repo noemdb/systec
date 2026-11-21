@@ -3,11 +3,13 @@ require_once __DIR__ . '/conn.php';
 require_once __DIR__ . '/include/auth.php';
 require_once __DIR__ . '/include/inventory_import.php';
 require_login();
+require_non_personal_area();
 
 $title = 'Dashboard';
 $db = db();
 
-$canViewTickets = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canViewTickets = auth_can_view_tickets();
+$canManageTickets = auth_can_manage_all_tickets();
 $canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
 $propertyFields = 'id,grupo,subgrupo,seccion,ident,adscription,description,model,color,serial,status';
 if ($canViewAssignments) {
@@ -19,7 +21,7 @@ $ticketCount = $canViewTickets
     ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
     : 0;
 $maintenanceCountsByProperty = $db->maintenanceCountsByProperty();
-$ticketCountsByProperty = $db->ticketCountsByProperty();
+$ticketCountsByProperty = $canViewTickets ? $db->ticketCountsByProperty() : array();
 
 $statusSummary = $db->properties()->summarizeStatuses($properties);
 $propertyCount = $statusSummary['total'];
@@ -87,10 +89,16 @@ $adscriptionsByPropertyId = $filterMetadata['adscriptions_by_property_id'];
 $adscriptionOptions = $filterMetadata['adscription_options'];
 $assignmentFilterOptions = $filterMetadata['assignment_filter_options'];
 $assignmentFilterKeysByPropertyId = $filterMetadata['assignment_filter_keys_by_property_id'];
+$propertyCategories = $filterMetadata['property_categories'];
 
-$legacySyncCardClass = $legacySyncAvailable ? 'success' : 'secondary';
-$legacySyncIcon      = $legacySyncAvailable ? 'bi-clock-history' : 'bi-question-circle';
-$legacySyncStale     = $localCache['stale'] ?? false;
+$legacySyncStale     = !empty($localCache['stale']);
+$legacySyncCardClass = !$legacySyncAvailable ? 'secondary' : ($legacySyncStale ? 'warning' : 'success');
+$legacySyncIcon      = !$legacySyncAvailable ? 'bi-question-circle' : ($legacySyncStale ? 'bi-exclamation-circle' : 'bi-clock-history');
+$legacySyncAgeSeconds = isset($localCache['age_seconds']) && is_int($localCache['age_seconds'])
+    ? $localCache['age_seconds']
+    : null;
+$legacySyncRelativeAge = format_relative_age($legacySyncAgeSeconds);
+$legacyAssignmentCount = count($legacyAssignmentsByIdent);
 
 ob_start(); ?>
 
@@ -160,7 +168,7 @@ ob_start(); ?>
                 </button>
             </div>
             <div class="col-12 col-sm-6 col-xl">
-                <article class="card h-100 border-start border-4 border-info shadow-sm">
+                <article class="card h-100 border-start border-4 border-info shadow-sm position-relative dashboard-link-card">
                     <div class="card-body d-flex align-items-center gap-3">
                         <span class="rounded-circle bg-info-subtle text-info p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi bi-wrench-adjustable-circle fs-4"></i>
@@ -169,13 +177,16 @@ ob_start(); ?>
                             <p class="small text-body-secondary mb-1">Mantenimientos realizados</p>
                             <p class="h3 mb-0"><?= e((string) $completedMaintenanceCount) ?></p>
                             <p class="small text-body-secondary mb-0">Finalizados</p>
+                            <a href="<?= e(url('maintenances.php?estado=finalizado')) ?>"
+                               class="stretched-link"
+                               aria-label="Ver los <?= e((string) $completedMaintenanceCount) ?> mantenimientos finalizados"></a>
                         </div>
                     </div>
                 </article>
             </div>
             <?php if ($canViewTickets) : ?>
                 <div class="col-12 col-sm-6 col-xl">
-                    <article class="card h-100 border-start border-4 border-primary shadow-sm">
+                    <article class="card h-100 border-start border-4 border-primary shadow-sm position-relative dashboard-link-card">
                         <div class="card-body d-flex align-items-center gap-3">
                             <span class="rounded-circle bg-primary-subtle text-primary p-2 flex-shrink-0" aria-hidden="true">
                                 <i class="bi bi-ticket-detailed fs-4"></i>
@@ -183,7 +194,7 @@ ob_start(); ?>
                             <div>
                                 <p class="small text-body-secondary mb-1">Tickets registrados</p>
                                 <p class="h3 mb-1"><?= e((string) $ticketCount) ?></p>
-                                <a class="small fw-semibold text-decoration-none" href="<?= e(url('tickets.php')) ?>">
+                                <a class="small fw-semibold text-decoration-none stretched-link" href="<?= e(url('tickets.php')) ?>">
                                     Consultar tickets <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </a>
                             </div>
@@ -197,7 +208,7 @@ ob_start(); ?>
                         <span class="rounded-circle bg-<?= e($legacySyncCardClass) ?>-subtle text-<?= e($legacySyncCardClass) ?> p-2 flex-shrink-0" aria-hidden="true">
                             <i class="bi <?= e($legacySyncIcon) ?> fs-4"></i>
                         </span>
-                        <div class="flex-grow-1">
+                        <div class="flex-grow-1 min-w-0">
                             <p class="small text-body-secondary mb-1">Inventario institucional</p>
                             <?php if (!$legacySyncAvailable) : ?>
                                 <p class="h6 mb-1">Sin caché local</p>
@@ -209,7 +220,7 @@ ob_start(); ?>
                                     <?= e((string) count($legacyAdscriptionsByIdent)) ?> adscripciones<?= $legacySyncStale ? ' <span class="badge text-bg-warning ms-1">Desactualizado</span>' : '' ?>
                                 </p>
                                 <p class="small text-body-secondary mb-1">
-                                    <?= $legacySyncCheckedAt !== '—' ? 'Sync: ' . e($legacySyncCheckedAt) : 'Datos locales disponibles' ?>
+                                    <?= e((string) $legacyAssignmentCount) ?> asignaciones · <?= $legacySyncAgeSeconds !== null ? e($legacySyncRelativeAge) : ($legacySyncCheckedAt !== '—' ? 'Sync: ' . e($legacySyncCheckedAt) : 'Datos locales') ?>
                                 </p>
                             <?php endif; ?>
                             <?php if ($canImportInventory) : ?>
@@ -223,63 +234,97 @@ ob_start(); ?>
             </div>
         </section>
 
-        <?php include __DIR__ . '/dashboard/filter_bar.php'; ?>
-
-        <section class="card shadow-sm border-0" id="inventoryTableSection" aria-labelledby="inventory-table-title">
-            <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <h2 class="h5 mb-0" id="inventory-table-title">
-                        <i class="bi bi-box-seam text-primary me-2" aria-hidden="true"></i>Lista de bienes registrados
-                    </h2>
-                    <p class="small text-body-secondary mb-0" id="inventoryResultCount" role="status" aria-live="polite"></p>
+        <?php if ($propertyCount === 0) : ?>
+            <section class="card shadow-sm border-0 text-center" aria-label="Sin bienes registrados">
+                <div class="card-body py-5" role="status" aria-live="polite">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary p-3 mb-3"
+                          aria-hidden="true">
+                        <i class="bi bi-box-seam fs-3"></i>
+                    </span>
+                    <h2 class="h5 mb-1">No hay bienes registrados en el inventario</h2>
+                    <p class="text-body-secondary mb-3">
+                        Importa el catálogo de bienes desde CSV/XLS o sincroniza con la base institucional para comenzar.
+                    </p>
+                    <?php if ($canImportInventory) : ?>
+                        <a href="<?= e(url('updates.php')) ?>" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-down me-1" aria-hidden="true"></i>Importar bienes
+                        </a>
+                    <?php endif; ?>
                 </div>
-                <div class="d-flex align-items-center gap-2">
-                    <button type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            id="toggleTableDensity"
-                            aria-pressed="true"
-                            aria-controls="myTable"
-                            title="Alternar entre vista compacta y vista con todas las columnas">
-                        <i class="bi bi-layout-three-columns me-1" aria-hidden="true"></i>
-                        <span id="toggleTableDensityLabel">Mostrar todas las columnas</span>
-                    </button>
+            </section>
+        <?php else : ?>
+            <?php include __DIR__ . '/dashboard/filter_bar.php'; ?>
+
+            <section class="card shadow-sm border-0" id="inventoryTableSection" aria-labelledby="inventory-table-title">
+                <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <h2 class="h5 mb-0" id="inventory-table-title">
+                            <i class="bi bi-box-seam text-primary me-2" aria-hidden="true"></i>Lista de bienes registrados
+                        </h2>
+                        <p class="small text-body-secondary mb-0" id="inventoryResultCount" role="status" aria-live="polite"></p>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-success"
+                                id="exportInventoryCsv"
+                                title="Exportar los bienes filtrados a CSV">
+                            <i class="bi bi-filetype-csv me-1" aria-hidden="true"></i>Exportar CSV
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                id="toggleTableDensity"
+                                aria-pressed="true"
+                                aria-controls="myTable"
+                                title="Alternar entre vista compacta y vista con todas las columnas">
+                            <i class="bi bi-layout-three-columns me-1" aria-hidden="true"></i>
+                            <span id="toggleTableDensityLabel">Mostrar todas las columnas</span>
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div id="activeInventoryFilters" class="d-flex flex-wrap gap-2 mb-2"
-                     aria-label="Filtros activos"></div>
+                <div class="card-body">
+                    <div id="activeInventoryFilters" class="d-flex flex-wrap gap-2 mb-2"
+                         aria-label="Filtros activos"></div>
 
-                <?php include __DIR__ . '/dashboard/table/index.php'; ?>
+                    <?php include __DIR__ . '/dashboard/table/index.php'; ?>
 
-            </div>
-        </section>
+                </div>
+            </section>
+        <?php endif; ?>
 
     </div>
 
     <style nonce="<?= e(systec_csp_nonce()) ?>">
+        .js-inventory-indicator,
+        .dashboard-link-card {
+            transition: box-shadow .15s ease, transform .15s ease;
+        }
+
         .js-inventory-indicator {
             appearance: none;
             font: inherit;
             cursor: pointer;
-            transition: box-shadow .15s ease, transform .15s ease;
         }
 
-        .js-inventory-indicator:hover {
+        .js-inventory-indicator:hover,
+        .dashboard-link-card:hover {
             transform: translateY(-1px);
         }
 
         .js-inventory-indicator:focus-visible,
-        .js-inventory-indicator[aria-pressed="true"] {
+        .js-inventory-indicator[aria-pressed="true"],
+        .dashboard-link-card:focus-within {
             outline: 0;
             box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .2), var(--bs-box-shadow-sm);
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .js-inventory-indicator {
+            .js-inventory-indicator,
+            .dashboard-link-card {
                 transition: none;
             }
 
-            .js-inventory-indicator:hover {
+            .js-inventory-indicator:hover,
+            .dashboard-link-card:hover {
                 transform: none;
             }
         }
@@ -324,7 +369,7 @@ ob_start(); ?>
     </style>
 
     <?php include __DIR__ . '/include/dashboard_register_maintenance_modal.php'; ?>
-    <?php if ($canViewTickets) : ?>
+    <?php if ($canManageTickets) : ?>
         <?php include __DIR__ . '/include/dashboard_register_ticket_drawer.php'; ?>
     <?php endif; ?>
 
@@ -332,6 +377,8 @@ ob_start(); ?>
         window.SystecDashboardConfig = {
             search: <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>,
             totalPropertyCount: <?= js($propertyCount) ?>,
+            canViewAssignments: <?= js($canViewAssignments) ?>,
+            canViewTickets: <?= js($canViewTickets) ?>,
             openMaintenanceModalOnLoad: <?= js(($maintenanceFeedback['type'] ?? '') === 'danger') ?>,
             improveTicketNarrativeUrl: <?= js(url('tickets/actions/improve-narrative.php')) ?>,
             processTicketNarrativeUrl: <?= js(url('tickets/actions/process-narrative.php')) ?>,

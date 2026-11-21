@@ -1,17 +1,6 @@
 <?php
 $canRegisterMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
 $canPropertyStatus = auth_has_role(array('admin', 'operador'));
-$assignmentStatusLabels = array(
-    'ACTIVO' => 'Activo',
-    'INACTIVO' => 'Inactivo',
-    'JUBILADO' => 'Jubilado',
-    'REMOCION' => 'Remoción',
-    'RENUNCIA' => 'Renuncia',
-    'VACACIONES' => 'Vacaciones',
-    'SIN ASIGNAR' => 'Sin asignar',
-    'SIN FICHA' => 'Sin ficha',
-    'SIN ESTADO' => 'Estado no registrado',
-);
 ?>
 <div class="table-responsive">
     <table class="table table-striped table-sm table-hover align-middle mb-0 is-compact-view" id="myTable">
@@ -33,7 +22,9 @@ $assignmentStatusLabels = array(
                 <th scope="col" class="col-extended-detail">Serial</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Mant.</th>
-                <th scope="col">Tickets</th>
+                <?php if ($canViewTickets) : ?>
+                    <th scope="col">Tickets</th>
+                <?php endif; ?>
                 <th scope="col" class="text-center">Acciones</th>
             </tr>
         </thead>
@@ -41,11 +32,12 @@ $assignmentStatusLabels = array(
         <tbody>
             <?php foreach ($properties as $property) : ?>
                 <?php
+                $propertyId = (int) $property['id'];
                 $group = trim((string) $property['grupo']);
                 $subgroup = str_pad(trim((string) $property['subgrupo']), 4, '0', STR_PAD_LEFT);
-                $section = str_pad(trim((string) $property['seccion']), 3, '0', STR_PAD_LEFT);
-                $identPadded = str_pad((string) $property['ident'], 4, '0', STR_PAD_LEFT);
-                $propertyCategory = property_category($property);
+                $section = str_pad(trim((string) $property['seccion']), 4, '0', STR_PAD_LEFT);
+                $identPadded = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
+                $propertyCategory = $propertyCategories[$propertyId] ?? property_category($property);
                 $propertyCode = property_code($property);
                 $propertyModel = trim((string) ($property['model'] ?? ''));
                 $propertyColor = trim((string) ($property['color'] ?? ''));
@@ -55,33 +47,45 @@ $assignmentStatusLabels = array(
                     $propertyColor !== '' ? 'Color: ' . $propertyColor : '',
                     $propertySerial !== '' ? 'S/N: ' . $propertySerial : '',
                 )));
-                $propertyAdscription = $adscriptionsByPropertyId[(int) $property['id']]
+                $propertyAdscription = $adscriptionsByPropertyId[$propertyId]
                     ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
                 $responsibleName = trim((string) ($property['responsible_name'] ?? ''));
-                $responsibleStatus = mb_strtoupper(trim((string) ($property['responsible_status'] ?? '')));
-                $responsibleStatusLabel = $assignmentStatusLabels[$responsibleStatus]
-                    ?? ($responsibleStatus !== '' ? ucfirst(mb_strtolower($responsibleStatus)) : 'Pendiente de sincronizar');
+                $responsibleStatusLabel = assignment_status_label((string) ($property['responsible_status'] ?? ''));
                 $responsibleDisplay = $responsibleName !== ''
                     ? $responsibleName
                     : ($responsibleStatusLabel === 'Sin asignar' || $responsibleStatusLabel === 'Sin ficha'
                         ? $responsibleStatusLabel
                         : 'Nombre no registrado');
                 $assignedName = trim((string) ($property['assigned_name'] ?? ''));
-                $assignedStatus = mb_strtoupper(trim((string) ($property['assigned_status'] ?? '')));
-                $assignedStatusLabel = $assignmentStatusLabels[$assignedStatus]
-                    ?? ($assignedStatus !== '' ? ucfirst(mb_strtolower($assignedStatus)) : 'Pendiente de sincronizar');
+                $assignedStatusLabel = assignment_status_label((string) ($property['assigned_status'] ?? ''));
                 $assignedDisplay = $assignedName !== ''
                     ? $assignedName
                     : ($assignedStatusLabel === 'Sin asignar' || $assignedStatusLabel === 'Sin ficha'
                         ? $assignedStatusLabel
                         : 'Nombre no registrado');
+                $propertyStatusLabel = property_status_label((string) $property['status']);
+                $maintenanceCount = (int) ($maintenanceCountsByProperty[$propertyId] ?? 0);
+                $propertyTicketCount = (int) ($ticketCountsByProperty[$propertyId] ?? 0);
                 ?>
                 <tr data-category="<?= e($propertyCategory) ?>"
                     data-adscription="<?= e($propertyAdscription['key']) ?>"
                     data-status="<?= e(mb_strtoupper(trim((string) $property['status']))) ?>"
+                    data-export-code="<?= e($propertyCode) ?>"
+                    data-export-adscription="<?= e($propertyAdscription['label']) ?>"
+                    data-export-description="<?= e((string) $property['description']) ?>"
+                    data-export-model="<?= e($propertyModel) ?>"
+                    data-export-color="<?= e($propertyColor) ?>"
+                    data-export-serial="<?= e($propertySerial) ?>"
+                    data-export-status="<?= e($propertyStatusLabel) ?>"
+                    data-export-maintenances="<?= e((string) $maintenanceCount) ?>"
+                    <?php if ($canViewTickets) : ?>
+                        data-export-tickets="<?= e((string) $propertyTicketCount) ?>"
+                    <?php endif; ?>
                     <?php if ($canViewAssignments) : ?>
-                        data-responsible="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['responsible'] ?? '') ?>"
-                        data-assigned="<?= e($assignmentFilterKeysByPropertyId[(int) $property['id']]['assigned'] ?? '') ?>"
+                        data-responsible="<?= e($assignmentFilterKeysByPropertyId[$propertyId]['responsible'] ?? '') ?>"
+                        data-assigned="<?= e($assignmentFilterKeysByPropertyId[$propertyId]['assigned'] ?? '') ?>"
+                        data-export-responsible="<?= e($responsibleDisplay) ?>"
+                        data-export-assigned="<?= e($assignedDisplay) ?>"
                     <?php endif; ?>>
                     <td class="col-extended-detail"><?= e($property['id']) ?></td>
                     <td class="col-extended-detail"><?= e($property['grupo']) ?></td>
@@ -124,9 +128,33 @@ $assignmentStatusLabels = array(
                         <?= $propertyColor !== '' ? e($propertyColor) : '<span class="text-body-secondary">No registrado</span>' ?>
                     </td>
                     <td class="col-extended-detail"><?= e($property['serial']) ?></td>
-                    <td><?= sat_badge(badge_clase_bien((string) $property['status']), property_status_label((string) $property['status'])) ?></td>
-                    <td><?= e($maintenanceCountsByProperty[(int) $property['id']] ?? 0) ?></td>
-                    <td><?= e($ticketCountsByProperty[(int) $property['id']] ?? 0) ?></td>
+                    <td><?= sat_badge(badge_clase_bien((string) $property['status']), $propertyStatusLabel) ?></td>
+                    <td class="text-nowrap">
+                        <?php if ($maintenanceCount > 0) : ?>
+                            <a href="<?= e(url('maintenances.php?search=' . rawurlencode($identPadded))) ?>"
+                               class="badge rounded-pill text-bg-info text-decoration-none"
+                               title="Ver mantenimientos del bien <?= e($identPadded) ?>"
+                               aria-label="Ver <?= e((string) $maintenanceCount) ?> mantenimientos del bien <?= e($identPadded) ?>">
+                                <?= e((string) $maintenanceCount) ?>
+                            </a>
+                        <?php else : ?>
+                            <span class="text-body-secondary">0</span>
+                        <?php endif; ?>
+                    </td>
+                    <?php if ($canViewTickets) : ?>
+                        <td class="text-nowrap">
+                            <?php if ($propertyTicketCount > 0) : ?>
+                                <a href="<?= e(url('tickets.php?search=' . rawurlencode($identPadded))) ?>"
+                                   class="badge rounded-pill text-bg-primary text-decoration-none"
+                                   title="Ver tickets del bien <?= e($identPadded) ?>"
+                                   aria-label="Ver <?= e((string) $propertyTicketCount) ?> tickets del bien <?= e($identPadded) ?>">
+                                    <?= e((string) $propertyTicketCount) ?>
+                                </a>
+                            <?php else : ?>
+                                <span class="text-body-secondary">0</span>
+                            <?php endif; ?>
+                        </td>
+                    <?php endif; ?>
                     <td>
                         <div class="btn-group" role="group" aria-label="Acciones del bien">
                             <?php if ($canRegisterMaintenance) : ?>
@@ -139,7 +167,7 @@ $assignmentStatusLabels = array(
                                 </button>
                             <?php endif; ?>
 
-                            <?php if ($canViewTickets) : ?>
+                            <?php if ($canManageTickets) : ?>
                                 <button type="button" class="btn btn-outline-primary btn-sm property-action-btn"
                                         data-bs-toggle="offcanvas" data-bs-target="#dashboardTicketDrawer"
                                         aria-controls="dashboardTicketDrawer"
@@ -237,9 +265,15 @@ $assignmentStatusLabels = array(
          aria-labelledby="updatePropertyStatusModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content text-start">
-                <form action="<?= e(url('dashboard/actions/status.php')) ?>" method="POST">
+                <form action="<?= e(url('dashboard/actions/status.php')) ?>" method="POST" id="updatePropertyStatusForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="property_id" id="statusPropertyId">
+                    <input type="hidden" name="return_category" value="">
+                    <input type="hidden" name="return_status" value="">
+                    <input type="hidden" name="return_adscription" value="">
+                    <input type="hidden" name="return_responsible" value="">
+                    <input type="hidden" name="return_assigned" value="">
+                    <input type="hidden" name="return_search" value="">
                     <div class="modal-header">
                         <div>
                             <h2 class="modal-title fs-5" id="updatePropertyStatusModalTitle">Actualizar estado del bien</h2>

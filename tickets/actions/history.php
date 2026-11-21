@@ -40,7 +40,15 @@ if (!auth_can_access_ticket_for_user((int) $ticket['created_by'])) {
 }
 
 $now = date('Y-m-d H:i:s');
+$returnToTickets = isset($_POST['return_to']) && is_string($_POST['return_to']) && $_POST['return_to'] === 'tickets';
+$rawReturnQuery = isset($_POST['return_query']) && is_string($_POST['return_query']) ? $_POST['return_query'] : '';
+$inTransaction = false;
 try {
+    if (!$db->exec('BEGIN IMMEDIATE')) {
+        throw new RuntimeException('No se pudo iniciar la transacción de seguimiento.');
+    }
+    $inTransaction = true;
+
     $db->create('ticket_histories', array(
         'ticket_id' => (int) $ticket_id,
         'actor_user_id' => (int) $user['id'],
@@ -53,9 +61,23 @@ try {
     ));
 
     $db->update('tickets', $ticket_id, array('updated_at' => $now));
-    header('Location: ' . url('tickets/detail.php?id=' . (int) $ticket_id));
+
+    if (!$db->exec('COMMIT')) {
+        throw new RuntimeException('No se pudo confirmar el registro de seguimiento.');
+    }
+    $inTransaction = false;
+
+    $_SESSION['ticket_notice_type'] = 'success';
+    $_SESSION['ticket_notice'] = 'Seguimiento registrado en el ticket #' . (int) $ticket_id . '.';
+    $redirectUrl = $returnToTickets
+        ? tickets_return_url($rawReturnQuery)
+        : url('tickets/detail.php?id=' . (int) $ticket_id);
+    header('Location: ' . $redirectUrl);
     exit();
 } catch (Throwable $e) {
+    if ($inTransaction) {
+        $db->exec('ROLLBACK');
+    }
     error_log('Error registrando seguimiento: ' . $e->getMessage());
     http_response_code(500);
     exit('No se pudo registrar el seguimiento.');

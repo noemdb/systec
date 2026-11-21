@@ -43,9 +43,22 @@ function auth_has_role(array $roles): bool
     return $user !== null && in_array($user['role'], $roles, true);
 }
 
+function auth_can_view_tickets(): bool
+{
+    return auth_has_role(array('admin', 'operador', 'tecnico', 'consulta'));
+}
+
 function auth_can_manage_all_tickets(): bool
 {
     return auth_has_role(array('admin', 'operador', 'tecnico'));
+}
+
+function require_non_personal_area(): void
+{
+    if (auth_check() && auth_has_role(array('personal'))) {
+        header('Location: ' . url('personal/index.php'));
+        exit();
+    }
 }
 
 function auth_can_access_ticket_for_user(int $ticketCreatedBy): bool
@@ -453,8 +466,11 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
         if (strlen($password) < 6) {
             return array('ok' => false, 'message' => 'La contraseña inicial debe tener al menos 6 caracteres.');
         }
-        $existing = $dbInstance->getFirstForConditions('users', array('username' => $username));
-        if ($existing) {
+        $existingRows = $dbInstance->fetchAllQuery(
+            'SELECT id FROM users WHERE LOWER(username) = LOWER(:username) LIMIT 1',
+            array(':username' => $username)
+        );
+        if ($existingRows !== array()) {
             return array('ok' => false, 'message' => 'Ya existe un usuario con ese nombre.');
         }
 
@@ -498,10 +514,74 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
     }
 
     $dbInstance->update('users', (int) $existing['id'], $updates);
+    if ($password !== '') {
+        auth_throttle_clear((string) $existing['username']);
+    }
 
     return array(
         'ok' => true,
         'id' => (int) $existing['id'],
         'message' => 'Usuario «' . $existing['username'] . '» actualizado correctamente.',
+    );
+}
+
+/**
+ * Elimina permanentemente una cuenta de usuario tras doble confirmación administrativa.
+ */
+function auth_admin_delete_user(
+    int $targetUserId,
+    int $actorUserId,
+    string $confirmUsername,
+    bool $confirmedRisk,
+    ?DB $database = null
+): array {
+    $dbInstance = $database ?: db();
+    if ($targetUserId < 1) {
+        return array('ok' => false, 'message' => 'Identificador de usuario inválido.');
+    }
+    if ($targetUserId === $actorUserId) {
+        return array('ok' => false, 'message' => 'No puedes eliminar tu propia cuenta en sesión.');
+    }
+
+    $existing = $dbInstance->getFirstForId('users', $targetUserId);
+    if (!$existing) {
+        return array('ok' => false, 'message' => 'El usuario seleccionado no existe.');
+    }
+
+    if (!$confirmedRisk) {
+        return array('ok' => false, 'message' => 'Debes confirmar que comprendes los riesgos antes de eliminar la cuenta.');
+    }
+
+    if (trim($confirmUsername) !== (string) $existing['username']) {
+        return array('ok' => false, 'message' => 'El nombre de usuario de confirmación no coincide.');
+    }
+
+    if ((string) ($existing['role'] ?? '') === 'admin' && (int) ($existing['active'] ?? 0) === 1) {
+        $otherActiveAdmins = $dbInstance->fetchAllQuery(
+            "SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1 AND id != :id",
+            array(':id' => $targetUserId)
+        );
+        if ((int) ($otherActiveAdmins[0]['total'] ?? 0) < 1) {
+            return array('ok' => false, 'message' => 'No puedes eliminar el último administrador activo del sistema.');
+        }
+    }
+
+    $stmt = $dbInstance->prepare('DELETE FROM users WHERE id = :id');
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar la eliminación del usuario.');
+    }
+    $stmt->bindValue(':id', $targetUserId, SQLITE3_INTEGER);
+    if (!$stmt->execute()) {
+        throw new RuntimeException('No se pudo eliminar el usuario en SQLite.');
+    }
+
+    auth_throttle_clear((string) $existing['username']);
+
+    return array(
+        'ok' => true,
+        'id' => $targetUserId,
+        'username' => (string) $existing['username'],
+        'role' => (string) ($existing['role'] ?? ''),
+        'message' => 'Usuario «' . $existing['username'] . '» eliminado permanentemente.',
     );
 }

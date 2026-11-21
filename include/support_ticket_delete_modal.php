@@ -6,6 +6,7 @@
                 <form method="post" action="<?= e(url('tickets/actions/delete.php')) ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="ticket_id" id="deleteTicketId">
+                    <input type="hidden" name="return_query" id="deleteTicketReturnQuery" value="">
                     <div class="modal-header">
                         <h2 class="modal-title fs-5" id="deleteTicketModalTitle">Eliminar ticket</h2>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -34,6 +35,7 @@
             const button = event.relatedTarget;
             if (!button) return;
             document.getElementById('deleteTicketId').value = button.dataset.ticketId;
+            document.getElementById('deleteTicketReturnQuery').value = window.location.search;
             document.getElementById('deleteTicketTitle').textContent = `#${button.dataset.ticketId} — ${button.dataset.ticketTitle}`;
         });
     </script>

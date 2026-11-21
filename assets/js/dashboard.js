@@ -4,6 +4,8 @@
     const config = window.SystecDashboardConfig || {};
     const search = config.search || '';
     const totalPropertyCount = Number(config.totalPropertyCount || 0);
+    const canViewAssignments = Boolean(config.canViewAssignments);
+    const canViewTickets = Boolean(config.canViewTickets);
     const openMaintenanceModalOnLoad = Boolean(config.openMaintenanceModalOnLoad);
     const improveTicketNarrativeUrl = config.improveTicketNarrativeUrl || '';
     const processTicketNarrativeUrl = config.processTicketNarrativeUrl || '';
@@ -41,6 +43,7 @@
     const inventoryIndicators = document.querySelectorAll('.js-inventory-indicator');
     const activeFiltersContainer = document.getElementById('activeInventoryFilters');
     const resultCount = document.getElementById('inventoryResultCount');
+    const exportCsvButton = document.getElementById('exportInventoryCsv');
 
     const updateFilterFeedback = () => {
         const activeFilters = [];
@@ -94,6 +97,9 @@
 
         const filteredCount = table.rows({ search: 'applied' }).count();
         resultCount.textContent = `Mostrando ${filteredCount} de ${totalPropertyCount} bienes`;
+        if (exportCsvButton) {
+            exportCsvButton.disabled = filteredCount === 0;
+        }
     };
 
     activeFiltersContainer.addEventListener('click', (event) => {
@@ -620,6 +626,64 @@
         });
     }
 
+    const statusForm = document.getElementById('updatePropertyStatusForm');
+    if (statusForm) {
+        statusForm.addEventListener('submit', () => {
+            const params = new URLSearchParams(window.location.search);
+            ['category', 'status', 'adscription', 'responsible', 'assigned', 'search'].forEach((key) => {
+                const field = statusForm.elements[`return_${key}`];
+                if (field) field.value = params.get(key) ?? '';
+            });
+        });
+    }
+
+    if (exportCsvButton) {
+        const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        exportCsvButton.addEventListener('click', () => {
+            const columns = [
+                { header: 'Código', key: 'exportCode' },
+                { header: 'Adscripción', key: 'exportAdscription' }
+            ];
+            if (canViewAssignments) {
+                columns.push({ header: 'Responsable', key: 'exportResponsible' });
+                columns.push({ header: 'Usuario asignado', key: 'exportAssigned' });
+            }
+            columns.push(
+                { header: 'Descripción', key: 'exportDescription' },
+                { header: 'Modelo', key: 'exportModel' },
+                { header: 'Color', key: 'exportColor' },
+                { header: 'Serial', key: 'exportSerial' },
+                { header: 'Estado', key: 'exportStatus' },
+                { header: 'Mantenimientos', key: 'exportMaintenances' }
+            );
+            if (canViewTickets) {
+                columns.push({ header: 'Tickets', key: 'exportTickets' });
+            }
+
+            const lines = [columns.map((col) => csvEscape(col.header)).join(';')];
+            table.rows({ search: 'applied' }).nodes().toArray().forEach((row) => {
+                const values = columns.map((col) => (row.dataset[col.key] || '').replace(/\s+/g, ' ').trim());
+                lines.push(values.map(csvEscape).join(';'));
+            });
+
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const today = new Date();
+            const dateStamp = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0')
+            ].join('-');
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `inventario-${dateStamp}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(downloadUrl);
+        });
+    }
+
     table.on('search', () => {
         syncInventoryUrl();
         syncIndicatorState();
@@ -629,6 +693,23 @@
     const toggleDensityLabel = document.getElementById('toggleTableDensityLabel');
     const inventoryTableElement = document.getElementById('myTable');
     if (toggleDensityButton && toggleDensityLabel && inventoryTableElement) {
+        const densityStorageKey = 'systec.dashboard.compactView';
+        const readStoredDensity = () => {
+            try {
+                const stored = window.localStorage.getItem(densityStorageKey);
+                return stored === null ? true : stored === '1';
+            } catch {
+                return true;
+            }
+        };
+        const saveStoredDensity = (isCompact) => {
+            try {
+                window.localStorage.setItem(densityStorageKey, isCompact ? '1' : '0');
+            } catch {
+                // Ignora restricciones de almacenamiento (modo privado o cuota).
+            }
+        };
+
         const applyTableDensity = (isCompact) => {
             inventoryTableElement.classList.toggle('is-compact-view', isCompact);
             toggleDensityButton.setAttribute('aria-pressed', String(isCompact));
@@ -637,11 +718,12 @@
                 : 'Vista compacta';
         };
 
-        applyTableDensity(true);
+        applyTableDensity(readStoredDensity());
 
         toggleDensityButton.addEventListener('click', () => {
             const nextCompact = !inventoryTableElement.classList.contains('is-compact-view');
             applyTableDensity(nextCompact);
+            saveStoredDensity(nextCompact);
         });
     }
 

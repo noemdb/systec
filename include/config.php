@@ -26,6 +26,7 @@ if (!function_exists('systec_load_env_file')) {
             'SYSTEC_LEGACY_PG_DATABASE',
             'SYSTEC_LEGACY_PG_USER',
             'SYSTEC_LEGACY_PG_PASSWORD',
+            'SYSTEC_LEGACY_CACHE_TTL',
             'API_KEY_NVIDIA_BUILD',
         );
 
@@ -71,6 +72,14 @@ if (!defined('SYSTEC_STORAGE')) {
 if (!defined('SYSTEC_DB')) {
     $dbPath = getenv('SYSTEC_DB');
     define('SYSTEC_DB', $dbPath ?: SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'db.db');
+}
+
+if (!defined('SYSTEC_LEGACY_CACHE_TTL')) {
+    $cacheTtlEnv = getenv('SYSTEC_LEGACY_CACHE_TTL');
+    $cacheTtl = ($cacheTtlEnv !== false && ctype_digit(trim((string) $cacheTtlEnv)) && (int) $cacheTtlEnv > 0)
+        ? (int) $cacheTtlEnv
+        : 86400;
+    define('SYSTEC_LEGACY_CACHE_TTL', $cacheTtl);
 }
 
 if (!defined('SYSTEC_BASE_PATH')) {

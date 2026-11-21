@@ -10,6 +10,7 @@ $supportTicketStatuses = isset($statuses) && is_array($statuses)
             <form method="post" action="<?= e(url('tickets/actions/status.php')) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="ticket_id" id="supportTicketStatusModalId">
+                <input type="hidden" name="return_query" id="supportTicketStatusModalReturnQuery" value="">
                 <div class="modal-header">
                     <div class="support-ticket-modal-heading">
                         <h2 class="modal-title fs-5" id="supportTicketStatusModalTitle">
@@ -42,6 +43,7 @@ $supportTicketStatuses = isset($statuses) && is_array($statuses)
     supportTicketStatusModal.addEventListener('show.bs.modal', (event) => {
         const ticket = JSON.parse(event.relatedTarget.dataset.ticket);
         document.getElementById('supportTicketStatusModalId').value = String(ticket.id);
+        document.getElementById('supportTicketStatusModalReturnQuery').value = window.location.search;
         document.getElementById('supportTicketStatusModalSubtitle').textContent =
             `Ticket #${ticket.id} · ${ticket.title} · Estado actual: ${ticket.status}`;
         document.getElementById('supportTicketStatusModalSelect').value = String(ticket.status_id);

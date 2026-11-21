@@ -4,24 +4,32 @@ require_once __DIR__ . '/conn.php';
 require_once __DIR__ . '/include/auth.php';
 require_once __DIR__ . '/include/inventory_import.php';
 require_login();
+require_non_personal_area();
 
 $title = 'Mantenimiento';
 $maintenanceNotice = isset($_SESSION['maintenance_notice']) && is_string($_SESSION['maintenance_notice'])
     ? trim($_SESSION['maintenance_notice'])
     : '';
-unset($_SESSION['maintenance_notice']);
+$maintenanceNoticeType = isset($_SESSION['maintenance_notice_type']) && is_string($_SESSION['maintenance_notice_type'])
+    ? $_SESSION['maintenance_notice_type']
+    : 'success';
+if (!in_array($maintenanceNoticeType, array('success', 'info', 'warning', 'danger'), true)) {
+    $maintenanceNoticeType = 'success';
+}
+unset($_SESSION['maintenance_notice'], $_SESSION['maintenance_notice_type']);
 $notifications = $maintenanceNotice !== ''
-    ? array(toast_notification('success', $maintenanceNotice))
+    ? array(toast_notification($maintenanceNoticeType, $maintenanceNotice))
     : array();
 
 $db = db();
 $maintenances = $db->index('maintenances', array(), '*', 'id DESC');
-$canViewTickets = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canViewTickets = auth_can_view_tickets();
 $canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
 $ticketCount = $canViewTickets
     ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
     : 0;
-$ticketCountsByProperty = $db->ticketCountsByProperty();
+$ticketCountsByProperty = $canViewTickets ? $db->ticketCountsByProperty() : array();
 
 $propertyFields = 'id,grupo,subgrupo,seccion,ident,adscription,description,model,color,status';
 if ($canViewAssignments) {
@@ -29,28 +37,20 @@ if ($canViewAssignments) {
 }
 $propertiesForSelect = $db->index('properties', array(), $propertyFields, 'id ASC');
 
-$legacyAdscriptionsByIdent = array();
-$adscriptionSourceWarning = '';
-$adscriptionSourceUnavailable = false;
-try {
-    $identifiers = array_map(function ($propertyRow) {
-        return trim((string) $propertyRow['ident']);
-    }, $propertiesForSelect);
-    $adscriptionSnapshot = legacy_postgres_cached_property_adscriptions($identifiers);
-    $legacyAdscriptionsByIdent = $adscriptionSnapshot['adscriptions'];
-    if (!empty($adscriptionSnapshot['stale'])) {
-        $adscriptionSourceWarning = 'La fuente institucional no responde; se usa la última consulta guardada.';
-    } else {
-        try {
-            $db->syncPropertyAdscriptions($propertiesForSelect, $legacyAdscriptionsByIdent);
-        } catch (Throwable $e) {
-            error_log('Mantenimientos no pudo guardar las adscripciones locales: ' . $e->getMessage());
-            $adscriptionSourceWarning = 'Se cargaron las adscripciones, pero no se pudieron guardar para respaldo local.';
+// PERF-01: Leer adscripciones y asignaciones desde el caché local sin bloquear el GET con PostgreSQL.
+$localCache = legacy_postgres_read_local_cache();
+$legacyAdscriptionsByIdent = $localCache['adscriptions'];
+$legacyAssignmentsByIdent = $localCache['assignments'];
+$legacySyncAvailable = !empty($localCache['found']);
+$legacySyncStale = !empty($localCache['stale']);
+
+if ($canViewAssignments && $legacySyncAvailable && $legacyAssignmentsByIdent) {
+    foreach ($propertiesForSelect as $index => $propertyRow) {
+        $ident = str_pad(trim((string) $propertyRow['ident']), 4, '0', STR_PAD_LEFT);
+        if (isset($legacyAssignmentsByIdent[$ident])) {
+            $propertiesForSelect[$index] = array_merge($propertyRow, $legacyAssignmentsByIdent[$ident]);
         }
     }
-} catch (Throwable $e) {
-    error_log('Mantenimientos no pudo cargar las adscripciones institucionales: ' . $e->getMessage());
-    $adscriptionSourceUnavailable = true;
 }
 
 $filterMetadata = $db->properties()->buildFilterMetadata(
@@ -66,10 +66,13 @@ $adscriptionsByPropertyId = $filterMetadata['adscriptions_by_property_id'];
 $adscriptionOptions = $filterMetadata['adscription_options'];
 $localAdscriptionCount = $filterMetadata['local_adscription_count'];
 
-if ($adscriptionSourceUnavailable) {
+$adscriptionSourceWarning = '';
+if (!$legacySyncAvailable) {
     $adscriptionSourceWarning = $localAdscriptionCount > 0
-        ? 'No se pudo consultar la fuente institucional; se usan las adscripciones locales guardadas.'
-        : 'No se pudo consultar la fuente institucional y aún no hay adscripciones locales guardadas; los bienes aparecen como "Sin adscripción".';
+        ? 'Sin caché institucional reciente; se usan las adscripciones locales guardadas.'
+        : 'Sin caché institucional ni adscripciones locales; sincroniza el inventario para ver unidades.';
+} elseif ($legacySyncStale) {
+    $adscriptionSourceWarning = 'Caché institucional desactualizado (>24 h); se muestran los últimos datos guardados.';
 }
 
 $maintenanceCounts = $db->maintenances()->summarizeCounts($maintenances);
@@ -79,8 +82,8 @@ $property_id = array_key_exists('property_id', $_GET) ? $_GET['property_id'] : n
 $modeCreate = array_key_exists('modeCreate', $_GET) ? $_GET['modeCreate'] : null;
 $modeEdit = array_key_exists('modeEdit', $_GET) ? $_GET['modeEdit'] : null;
 $modeIndex = (empty($modeCreate) && empty($modeEdit)) ? 'true' : null;
-$property = $db->getFirstForId('properties', $property_id);
-$itemArrSeleted = ($id) ? ($db->getFirstForId('maintenances', $id) ?: array()) : array();
+$property = ($property_id !== null && $property_id !== '') ? $db->getFirstForId('properties', $property_id) : null;
+$itemArrSeleted = ($id !== null && $id !== '') ? ($db->getFirstForId('maintenances', $id) ?: array()) : array();
 
 ob_start(); ?>
 
@@ -93,18 +96,22 @@ ob_start(); ?>
             </div>
             <div class="d-flex flex-column flex-sm-row gap-2 flex-shrink-0">
                 <button type="button" class="btn btn-outline-primary" id="printMaintenanceHistories"
+                        <?= $maintenanceCounts['total'] === 0 ? 'disabled' : '' ?>
                         title="Imprime un historial por bien según los filtros aplicados">
                     <i class="bi bi-printer me-1" aria-hidden="true"></i>Imprimir historiales
                 </button>
                 <button type="button" class="btn btn-outline-secondary" id="exportMaintenanceCsv"
+                        <?= $maintenanceCounts['total'] === 0 ? 'disabled' : '' ?>
                         title="Descarga en CSV los mantenimientos filtrados">
                     <i class="bi bi-filetype-csv me-1" aria-hidden="true"></i>Exportar CSV
                 </button>
-                <button type="button" class="btn btn-primary"
-                        data-bs-toggle="offcanvas" data-bs-target="#createMaintenanceDrawer"
-                        aria-controls="createMaintenanceDrawer">
-                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Registrar mantenimiento
-                </button>
+                <?php if ($canEditMaintenance) : ?>
+                    <button type="button" class="btn btn-primary"
+                            data-bs-toggle="offcanvas" data-bs-target="#createMaintenanceDrawer"
+                            aria-controls="createMaintenanceDrawer">
+                        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Registrar mantenimiento
+                    </button>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -160,7 +167,7 @@ ob_start(); ?>
             <?php endforeach; ?>
             <?php if ($canViewTickets) : ?>
                 <div class="col-6 col-md">
-                    <article class="card h-100 border-start border-4 border-primary shadow-sm">
+                    <article class="card h-100 border-start border-4 border-primary shadow-sm position-relative maintenance-link-card">
                         <div class="card-body d-flex align-items-center gap-2">
                             <span class="rounded-circle bg-primary-subtle text-primary p-2" aria-hidden="true">
                                 <i class="bi bi-ticket-detailed fs-4"></i>
@@ -168,6 +175,9 @@ ob_start(); ?>
                             <div class="flex-grow-1">
                                 <p class="small text-body-secondary mb-0">Tickets activos</p>
                                 <p class="h3 mb-0"><?= e((string) $ticketCount) ?></p>
+                                <a href="<?= e(url('tickets.php?status=abiertos')) ?>"
+                                   class="stretched-link"
+                                   aria-label="Consultar los <?= e((string) $ticketCount) ?> tickets activos"></a>
                             </div>
                         </div>
                     </article>
@@ -177,52 +187,85 @@ ob_start(); ?>
 
         <?php include __DIR__ . '/maintenances/form/edit_card.php'; ?>
 
-        <section class="card shadow-sm" aria-labelledby="maintenance-list-title">
-            <div class="card-header d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
-                <h2 class="h5 mb-0" id="maintenance-list-title">
-                    <i class="bi bi-list-task text-primary me-2" aria-hidden="true"></i>Registro de mantenimientos
-                </h2>
-                <span class="badge text-bg-light border text-body-secondary" aria-live="polite">
-                    <?= e((string) $maintenanceCounts['total']) ?> registros
-                </span>
-            </div>
-            <div class="card-body">
-                <?php include __DIR__ . '/maintenances/table/crud.php'; ?>
-            </div>
-        </section>
+        <?php if ($maintenanceCounts['total'] === 0 && empty($modeEdit)) : ?>
+            <section class="card shadow-sm border-0 text-center" aria-label="Sin mantenimientos registrados">
+                <div class="card-body py-5" role="status" aria-live="polite">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary p-3 mb-3"
+                          aria-hidden="true">
+                        <i class="bi bi-tools fs-3"></i>
+                    </span>
+                    <h2 class="h5 mb-1">Aún no hay mantenimientos registrados</h2>
+                    <p class="text-body-secondary mb-3">
+                        Registra la primera intervención preventiva, correctiva, predictiva o evaluativa de un bien.
+                    </p>
+                    <?php if ($canEditMaintenance) : ?>
+                        <button type="button" class="btn btn-primary"
+                                data-bs-toggle="offcanvas" data-bs-target="#createMaintenanceDrawer"
+                                aria-controls="createMaintenanceDrawer">
+                            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Registrar primer mantenimiento
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </section>
+        <?php else : ?>
+            <section class="card shadow-sm" aria-labelledby="maintenance-list-title">
+                <div class="card-header d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
+                    <h2 class="h5 mb-0" id="maintenance-list-title">
+                        <i class="bi bi-list-task text-primary me-2" aria-hidden="true"></i>Registro de mantenimientos
+                    </h2>
+                    <span class="badge text-bg-light border text-body-secondary" id="maintenanceResultCount"
+                          role="status" aria-live="polite">
+                        <?= e((string) $maintenanceCounts['total']) ?> registros
+                    </span>
+                </div>
+                <div class="card-body">
+                    <?php include __DIR__ . '/maintenances/table/crud.php'; ?>
+                </div>
+            </section>
+        <?php endif; ?>
     </div>
 
-    <?php include __DIR__ . '/maintenances/form/create_drawer.php'; ?>
+    <?php if ($canEditMaintenance) : ?>
+        <?php include __DIR__ . '/maintenances/form/create_drawer.php'; ?>
+    <?php endif; ?>
 
     <style nonce="<?= e(systec_csp_nonce()) ?>">
         .maintenance-create-drawer {
             --bs-offcanvas-width: min(34rem, 100vw);
         }
 
+        .js-kpi-filter,
+        .maintenance-link-card {
+            transition: box-shadow .15s ease, transform .15s ease;
+        }
+
         .js-kpi-filter {
             appearance: none;
             font: inherit;
             cursor: pointer;
-            transition: box-shadow .15s ease, transform .15s ease;
         }
 
-        .js-kpi-filter:hover {
+        .js-kpi-filter:hover,
+        .maintenance-link-card:hover {
             transform: translateY(-1px);
         }
 
         .js-kpi-filter:focus-visible,
-        .js-kpi-filter[aria-pressed="true"] {
+        .js-kpi-filter[aria-pressed="true"],
+        .maintenance-link-card:focus-within {
             outline: 0;
             box-shadow: 0 0 0 .2rem rgba(var(--bs-emphasis-color-rgb, 33, 37, 41), .3),
                         var(--bs-box-shadow-sm, 0 .125rem .25rem rgba(0, 0, 0, .075));
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .js-kpi-filter {
+            .js-kpi-filter,
+            .maintenance-link-card {
                 transition: none;
             }
 
-            .js-kpi-filter:hover {
+            .js-kpi-filter:hover,
+            .maintenance-link-card:hover {
                 transform: none;
             }
         }
@@ -267,6 +310,8 @@ ob_start(); ?>
     <script nonce="<?= e(systec_csp_nonce()) ?>">
         window.SystecMaintenancesConfig = {
             search: <?= js(isset($_GET['search']) ? $_GET['search'] : '') ?>,
+            totalMaintenanceCount: <?= js($maintenanceCounts['total']) ?>,
+            canViewTickets: <?= js($canViewTickets) ?>,
             improveMaintenanceNarrativeUrl: <?= js(url('maintenances/actions/improve-narrative.php')) ?>,
             propertyTicketsUrl: <?= js(url('maintenances/actions/property-tickets.php')) ?>,
             registerMaintenanceUrl: <?= js(url('maintenances/register.php')) ?>,

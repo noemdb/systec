@@ -223,3 +223,164 @@ function maintenance_transition_allowed(string $from, string $to): bool
 
     return isset($allowed[$from]) && in_array($to, $allowed[$from], true);
 }
+
+/** Formatea una antigüedad en segundos a una etiqueta legible en español. */
+function format_relative_age(?int $ageSeconds): string
+{
+    if ($ageSeconds === null) {
+        return '—';
+    }
+
+    $seconds = max(0, $ageSeconds);
+    if ($seconds < 60) {
+        return 'hace menos de 1 min';
+    }
+    if ($seconds < 3600) {
+        $minutes = (int) floor($seconds / 60);
+        return 'hace ' . $minutes . ' min';
+    }
+    if ($seconds < 86400) {
+        $hours = (int) floor($seconds / 3600);
+        return 'hace ' . $hours . ' h';
+    }
+
+    $days = (int) floor($seconds / 86400);
+    return $days === 1 ? 'hace 1 día' : 'hace ' . $days . ' días';
+}
+
+/** Etiqueta legible del estado laboral/asignación de un responsable o usuario asignado. */
+function assignment_status_label(string $status, string $emptyFallback = 'Pendiente de sincronizar'): string
+{
+    $statusLabels = array(
+        'ACTIVO' => 'Activo',
+        'INACTIVO' => 'Inactivo',
+        'JUBILADO' => 'Jubilado',
+        'REMOCION' => 'Remoción',
+        'RENUNCIA' => 'Renuncia',
+        'VACACIONES' => 'Vacaciones',
+        'SIN ASIGNAR' => 'Sin asignar',
+        'SIN FICHA' => 'Sin ficha',
+        'SIN ESTADO' => 'Estado no registrado',
+    );
+
+    $normalized = mb_strtoupper(trim($status), 'UTF-8');
+    if (isset($statusLabels[$normalized])) {
+        return $statusLabels[$normalized];
+    }
+
+    return $normalized !== '' ? ucfirst(mb_strtolower($normalized, 'UTF-8')) : $emptyFallback;
+}
+
+/** Construye una URL de retorno segura a dashboard.php preservando solo filtros permitidos. */
+function dashboard_return_url(array $input, string $fallbackSearch = ''): string
+{
+    $returnQuery = array();
+    $allowedReturnFilters = array(
+        'category' => array('informatica', 'redes', 'otros'),
+        'status' => array('__attention__', 'BUENO', 'REGULAR', 'MALO', 'MUY MALO'),
+    );
+
+    foreach ($allowedReturnFilters as $filter => $allowedValues) {
+        $postKey = 'return_' . $filter;
+        if (isset($input[$postKey]) && is_string($input[$postKey])) {
+            $value = trim($input[$postKey]);
+            if ($value !== '' && in_array($value, $allowedValues, true)) {
+                $returnQuery[$filter] = $value;
+            }
+        }
+    }
+
+    if (isset($input['return_adscription'])
+        && is_string($input['return_adscription'])
+        && preg_match('/^[A-Za-z0-9_.:\/-]{1,128}$/D', $input['return_adscription'])) {
+        $returnQuery['adscription'] = $input['return_adscription'];
+    }
+
+    foreach (array('responsible', 'assigned') as $filter) {
+        $postKey = 'return_' . $filter;
+        if (isset($input[$postKey])
+            && is_string($input[$postKey])
+            && preg_match('/^[a-f0-9]{64}$/D', $input[$postKey])) {
+            $returnQuery[$filter] = $input[$postKey];
+        }
+    }
+
+    if (isset($input['return_search']) && is_string($input['return_search'])) {
+        $search = trim($input['return_search']);
+        if ($search !== '') {
+            $returnQuery['search'] = $search;
+        }
+    }
+
+    if ($returnQuery === array() && trim($fallbackSearch) !== '') {
+        $returnQuery['search'] = trim($fallbackSearch);
+    }
+
+    return url('dashboard.php') . ($returnQuery ? '?' . http_build_query($returnQuery) : '');
+}
+
+/** Construye una URL de retorno segura a maintenances.php preservando solo filtros permitidos. */
+function maintenances_return_url(string $rawReturnQuery = '', array $extraParams = array()): string
+{
+    $allowedReturnParams = array(
+        'category', 'adscription', 'responsible', 'assigned', 'search',
+        'estado', 'tipo', 'tecnico', 'desde', 'hasta', 'proximo', 'vencido',
+    );
+    $returnParams = array();
+
+    if ($rawReturnQuery !== '') {
+        $parsed = array();
+        parse_str(ltrim($rawReturnQuery, '?'), $parsed);
+        foreach ($allowedReturnParams as $key) {
+            if (!isset($parsed[$key]) || !is_string($parsed[$key])) {
+                continue;
+            }
+            $value = trim($parsed[$key]);
+            if ($value === '' || strlen($value) > 200) {
+                continue;
+            }
+            if (($key === 'responsible' || $key === 'assigned') && !preg_match('/^[a-f0-9]{64}$/D', $value)) {
+                continue;
+            }
+            if (($key === 'desde' || $key === 'hasta') && !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) {
+                continue;
+            }
+            $returnParams[$key] = $value;
+        }
+    }
+
+    foreach ($extraParams as $key => $value) {
+        if (is_string($key) && $key !== '' && $value !== null && $value !== '') {
+            $returnParams[$key] = (string) $value;
+        }
+    }
+
+    return url('maintenances.php') . ($returnParams ? '?' . http_build_query($returnParams) : '');
+}
+
+/** Construye una URL de retorno segura a tickets.php preservando solo filtros permitidos. */
+function tickets_return_url(string $rawReturnQuery = ''): string
+{
+    $allowedStatuses = array('abiertos', 'iniciado', 'en_progreso', 'con_retraso', 'en_espera', 'finalizado');
+    $returnParams = array();
+
+    if ($rawReturnQuery !== '') {
+        $parsed = array();
+        parse_str(ltrim($rawReturnQuery, '?'), $parsed);
+
+        if (isset($parsed['status']) && is_string($parsed['status'])) {
+            $status = trim($parsed['status']);
+            if ($status !== '' && in_array($status, $allowedStatuses, true)) {
+                $returnParams['status'] = $status;
+            }
+        }
+        if (isset($parsed['search']) && is_string($parsed['search'])) {
+            $search = trim($parsed['search']);
+            if ($search !== '' && strlen($search) <= 200) {
+                $returnParams['search'] = $search;
+            }
+        }
+    }
+
+    return url('tickets.php') . ($returnParams ? '?' . http_build_query($returnParams) : '');
+}
