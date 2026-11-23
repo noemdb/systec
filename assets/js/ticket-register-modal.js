@@ -1,8 +1,15 @@
 (function () {
     'use strict';
 
-    const modal = document.getElementById('ticketRegisterModal');
+    const modal = document.querySelector('[data-ticket-register-container]')
+        || document.getElementById('ticketRegisterModal')
+        || document.getElementById('ticketRegisterDrawer');
     if (!modal) return;
+    const isOffcanvas = modal.classList.contains('offcanvas');
+    const showEventName = isOffcanvas ? 'show.bs.offcanvas' : 'show.bs.modal';
+    const shownEventName = isOffcanvas ? 'shown.bs.offcanvas' : 'shown.bs.modal';
+    const hideEventName = isOffcanvas ? 'hide.bs.offcanvas' : 'hide.bs.modal';
+    const hiddenEventName = isOffcanvas ? 'hidden.bs.offcanvas' : 'hidden.bs.modal';
 
     const byId = (id) => modal.querySelector(`#${id}`);
     const propertyPicker = byId('ticketRegisterPropertyId');
@@ -10,16 +17,28 @@
     const propertySearch = byId('ticketRegisterPropertySearch');
     const propertyDirection = byId('ticketRegisterPropertyDirection');
     const propertyCategory = byId('ticketRegisterPropertyCategory');
+    const propertyAssigned = byId('ticketRegisterPropertyAssigned');
+    const propertyFiltersReset = byId('ticketRegisterPropertyFiltersReset');
     const propertyMatches = byId('ticketRegisterPropertyMatches');
     const propertySourceNotice = byId('ticketRegisterPropertySourceNotice');
     const propertySelection = byId('ticketRegisterPropertySelection');
     const propertySelectionText = byId('ticketRegisterPropertySelectionText');
     const propertyError = byId('ticketRegisterPropertyError');
+    const ticketNarrative = byId('ticketRegisterNarrativeInput');
     const ticketTitle = byId('ticketRegisterTitleInput');
     const ticketDescription = byId('ticketRegisterDescriptionInput');
     const ticketObservation = byId('ticketRegisterObservationInput');
+    const processNarrativeBtn = byId('ticketRegisterProcessNarrative');
+    const processNarrativeIcon = byId('ticketRegisterProcessNarrativeIcon');
+    const processNarrativeLabel = byId('ticketRegisterProcessNarrativeLabel');
+    const processNarrativeStatus = byId('ticketRegisterProcessNarrativeStatus');
+    const improveNarrativeBtn = byId('ticketRegisterImproveNarrative');
+    const improveNarrativeIcon = byId('ticketRegisterImproveNarrativeIcon');
+    const improveNarrativeLabel = byId('ticketRegisterImproveNarrativeLabel');
+    const improveNarrativeStatus = byId('ticketRegisterImproveNarrativeStatus');
     const wizardSteps = Array.from(modal.querySelectorAll('[data-wizard-step]'));
     const wizardIndicators = Array.from(modal.querySelectorAll('[data-wizard-indicator]'));
+    const wizardStepTriggers = Array.from(modal.querySelectorAll('[data-wizard-step-trigger]'));
     const wizardStatus = byId('ticketRegisterWizardStatus');
     const wizardBack = byId('ticketRegisterWizardBack');
     const wizardNext = byId('ticketRegisterWizardNext');
@@ -32,6 +51,7 @@
     let currentWizardStep = 1;
     let propertyLoadPromise = null;
     let propertyOptionsLoaded = false;
+    let isSubmittingForm = false;
 
     const setWizardStep = (step) => {
         currentWizardStep = step;
@@ -58,14 +78,22 @@
     const updateWizardSummary = () => {
         const selected = propertyPicker.querySelector('input[type="radio"]:checked');
         const summaryProperty = byId('ticketRegisterSummaryProperty');
+        const summaryAssigned = byId('ticketRegisterSummaryAssigned');
         if (!selected) {
             summaryProperty.textContent = 'Sin seleccionar';
+            if (summaryAssigned) summaryAssigned.textContent = '—';
         } else {
             const option = selected.closest('[data-property-picker-option]');
             const code = option.querySelector('[data-property-code]').textContent;
             const description = option.querySelector('[data-property-description]').textContent;
             const direction = option.querySelector('[data-property-direction-label]').textContent;
+            const assignedEl = option.querySelector('[data-property-assigned-label]');
             summaryProperty.textContent = `${code} — ${description} (${direction})`;
+            if (summaryAssigned) {
+                summaryAssigned.textContent = assignedEl
+                    ? assignedEl.textContent.replace(/^Usuario asignado:\s*/i, '')
+                    : 'Sin asignar';
+            }
         }
         byId('ticketRegisterSummaryTitle').textContent = ticketTitle.value.trim() || '—';
         byId('ticketRegisterSummaryDescription').textContent = ticketDescription.value.trim() || '—';
@@ -131,9 +159,15 @@
 
             propertyPicker.replaceChildren();
             propertyDirection.replaceChildren(new Option('Todas las direcciones', ''));
-            Object.entries(data.directions).forEach(([key, label]) => {
+            Object.entries(data.directions || {}).forEach(([key, label]) => {
                 propertyDirection.add(new Option(label, key));
             });
+            if (propertyAssigned) {
+                propertyAssigned.replaceChildren(new Option('Todos los usuarios asignados', ''));
+                Object.entries(data.assigned_users || {}).forEach(([key, label]) => {
+                    propertyAssigned.add(new Option(label, key));
+                });
+            }
 
             data.properties.forEach((property) => {
                 const option = document.createElement('label');
@@ -141,11 +175,13 @@
                 option.dataset.propertyPickerOption = '';
                 option.dataset.category = property.category;
                 option.dataset.direction = property.direction_key;
+                option.dataset.assigned = property.assigned_key || '';
                 option.dataset.search = [
                     property.code,
                     property.description,
                     property.status,
                     property.direction_label,
+                    property.assigned_label || '',
                     property.id
                 ].join(' ');
 
@@ -170,10 +206,14 @@
                 direction.className = 'small text-body-secondary';
                 direction.dataset.propertyDirectionLabel = '';
                 direction.textContent = `Dirección: ${property.direction_label}`;
+                const assigned = document.createElement('span');
+                assigned.className = 'small text-body-secondary';
+                assigned.dataset.propertyAssignedLabel = '';
+                assigned.textContent = `Usuario asignado: ${property.assigned_label || 'Sin asignar'}`;
                 const status = document.createElement('span');
                 status.className = 'small text-body-secondary';
                 status.textContent = `Estado: ${property.status}`;
-                content.append(code, description, direction, status);
+                content.append(code, description, direction, assigned, status);
                 option.append(input, content);
                 propertyPicker.appendChild(option);
             });
@@ -190,6 +230,7 @@
             propertySearch.addEventListener('input', updatePropertySelection);
             propertyDirection.addEventListener('change', updatePropertySelection);
             propertyCategory.addEventListener('change', updatePropertySelection);
+            propertyAssigned?.addEventListener('change', updatePropertySelection);
             byId('ticketRegisterPropertyClear').addEventListener('click', () => {
                 const selected = propertyPicker.querySelector('input[type="radio"]:checked');
                 if (selected) {
@@ -235,11 +276,168 @@
             wizardHeadings[currentWizardStep - 1].focus();
         }
     });
+    wizardStepTriggers.forEach((button) => {
+        button.addEventListener('click', () => {
+            const targetStep = Number(button.dataset.wizardStepTrigger);
+            if (!targetStep || targetStep === currentWizardStep) return;
+            if (targetStep < currentWizardStep) {
+                setWizardStep(targetStep);
+                wizardHeadings[targetStep - 1]?.focus();
+                return;
+            }
+            if (targetStep >= 2 && !validatePropertyStep()) return;
+            if (targetStep === 3 && !validateDetailsStep()) {
+                setWizardStep(2);
+                return;
+            }
+            updateWizardSummary();
+            setWizardStep(targetStep);
+            wizardHeadings[targetStep - 1]?.focus();
+        });
+    });
+    if (propertyFiltersReset) {
+        propertyFiltersReset.addEventListener('click', () => {
+            propertyDirection.value = '';
+            propertyCategory.value = '';
+            if (propertyAssigned) propertyAssigned.value = '';
+            propertySearch.value = '';
+            propertyDirection.dispatchEvent(new Event('change', { bubbles: true }));
+            propertyCategory.dispatchEvent(new Event('change', { bubbles: true }));
+            if (propertyAssigned) propertyAssigned.dispatchEvent(new Event('change', { bubbles: true }));
+            propertySearch.dispatchEvent(new Event('input', { bubbles: true }));
+            propertySearch.focus();
+        });
+    }
+
+    const csrfInput = propertyForm.querySelector('input[name="csrf_token"]');
+    const processNarrativeUrl = modal.dataset.processNarrativeUrl || '';
+    const improveNarrativeUrl = modal.dataset.improveNarrativeUrl || '';
+
+    const setAiBusy = (btn, icon, label, busy, defaultText, busyText) => {
+        if (!btn) return;
+        btn.disabled = busy;
+        if (icon) icon.className = busy ? 'spinner-border spinner-border-sm me-1' : 'bi bi-magic me-1';
+        if (label) label.textContent = busy ? busyText : defaultText;
+    };
+
+    if (processNarrativeBtn && ticketNarrative && processNarrativeUrl) {
+        processNarrativeBtn.addEventListener('click', async () => {
+            const narrative = ticketNarrative.value.trim();
+            if (!narrative) {
+                if (processNarrativeStatus) {
+                    processNarrativeStatus.className = 'form-text text-danger m-0';
+                    processNarrativeStatus.textContent = 'Escribe un relato breve antes de procesarlo.';
+                }
+                ticketNarrative.focus();
+                return;
+            }
+            setAiBusy(processNarrativeBtn, processNarrativeIcon, processNarrativeLabel, true, 'Procesar relato', 'Procesando…');
+            if (processNarrativeStatus) {
+                processNarrativeStatus.className = 'form-text text-body-secondary m-0';
+                processNarrativeStatus.textContent = 'Generando propuesta con IA…';
+            }
+            try {
+                const body = new URLSearchParams();
+                body.set('csrf_token', csrfInput ? csrfInput.value : '');
+                body.set('narrative', narrative);
+                const selectedRadio = propertyPicker.querySelector('input[type="radio"]:checked');
+                if (selectedRadio) {
+                    const selectedOption = selectedRadio.closest('[data-property-picker-option]');
+                    const code = selectedOption?.querySelector('[data-property-code]')?.textContent || '';
+                    const desc = selectedOption?.querySelector('[data-property-description]')?.textContent || '';
+                    const ctx = `${code} ${desc}`.trim();
+                    if (ctx) body.set('property_context', ctx);
+                }
+                const response = await fetch(processNarrativeUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: body.toString()
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'No se pudo procesar el relato.');
+                if (typeof data.title === 'string') ticketTitle.value = data.title;
+                if (typeof data.description === 'string') ticketDescription.value = data.description;
+                if (typeof data.observation === 'string') ticketObservation.value = data.observation;
+                updateWizardSummary();
+                if (processNarrativeStatus) {
+                    if (data.fallback) {
+                        processNarrativeStatus.className = 'form-text text-warning-emphasis m-0';
+                        processNarrativeStatus.textContent = 'IA no disponible temporalmente; se aplicó una propuesta básica local. Revisa y ajusta los campos.';
+                    } else {
+                        processNarrativeStatus.className = 'form-text text-success m-0';
+                        processNarrativeStatus.textContent = 'Propuesta aplicada. Revisa y ajusta los campos si hace falta.';
+                    }
+                }
+            } catch (error) {
+                if (processNarrativeStatus) {
+                    processNarrativeStatus.className = 'form-text text-danger m-0';
+                    processNarrativeStatus.textContent = error.message || 'No se pudo procesar el relato.';
+                }
+            } finally {
+                setAiBusy(processNarrativeBtn, processNarrativeIcon, processNarrativeLabel, false, 'Procesar relato', 'Procesando…');
+            }
+        });
+    }
+
+    if (improveNarrativeBtn && improveNarrativeUrl) {
+        improveNarrativeBtn.addEventListener('click', async () => {
+            if (!ticketTitle.value.trim() && !ticketDescription.value.trim() && !ticketObservation.value.trim()) {
+                if (improveNarrativeStatus) {
+                    improveNarrativeStatus.className = 'form-text text-danger m-0';
+                    improveNarrativeStatus.textContent = 'Completa al menos un campo antes de mejorar la redacción.';
+                }
+                ticketTitle.focus();
+                return;
+            }
+            setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, true, 'Mejorar redacción con IA', 'Mejorando…');
+            if (improveNarrativeStatus) {
+                improveNarrativeStatus.className = 'form-text text-body-secondary m-0';
+                improveNarrativeStatus.textContent = 'Solicitando mejora de redacción…';
+            }
+            try {
+                const body = new URLSearchParams();
+                body.set('csrf_token', csrfInput ? csrfInput.value : '');
+                body.set('title', ticketTitle.value);
+                body.set('description', ticketDescription.value);
+                body.set('observation', ticketObservation.value);
+                const response = await fetch(improveNarrativeUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: body.toString()
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'No se pudo mejorar la redacción.');
+                if (typeof data.title === 'string') ticketTitle.value = data.title;
+                if (typeof data.description === 'string') ticketDescription.value = data.description;
+                if (typeof data.observation === 'string') ticketObservation.value = data.observation;
+                updateWizardSummary();
+                if (improveNarrativeStatus) {
+                    improveNarrativeStatus.className = 'form-text text-success m-0';
+                    improveNarrativeStatus.textContent = 'Redacción mejorada. Revisa los textos antes de guardar.';
+                }
+            } catch (error) {
+                if (improveNarrativeStatus) {
+                    improveNarrativeStatus.className = 'form-text text-danger m-0';
+                    improveNarrativeStatus.textContent = error.message || 'No se pudo mejorar la redacción.';
+                }
+            } finally {
+                setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, false, 'Mejorar redacción con IA', 'Mejorando…');
+            }
+        });
+    }
+
     [ticketTitle, ticketDescription, ticketObservation].forEach((input) => {
         input.addEventListener('input', updateWizardSummary);
     });
     propertyPicker.addEventListener('change', updateWizardSummary);
-    modal.addEventListener('show.bs.modal', loadPropertyOptions);
+    modal.addEventListener(showEventName, loadPropertyOptions);
+    modal.addEventListener(shownEventName, () => {
+        if (propertyOptionsLoaded && currentWizardStep === 1 && !propertyPicker.querySelector('input[type="radio"]:checked')) {
+            propertySearch.focus();
+        }
+    });
     propertyForm.addEventListener('submit', (event) => {
         if (currentWizardStep < 3) {
             event.preventDefault();
@@ -267,14 +465,36 @@
             validateDetailsStep();
             return;
         }
+        isSubmittingForm = true;
         updateWizardSummary();
     });
     if (modal.dataset.openAfterRedirect === 'true') {
-        bootstrap.Modal.getOrCreateInstance(modal).show();
+        if (isOffcanvas && window.bootstrap && window.bootstrap.Offcanvas) {
+            window.bootstrap.Offcanvas.getOrCreateInstance(modal).show();
+        } else if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
     }
-    modal.addEventListener('hide.bs.modal', () => {
+    const hasUnsavedDraft = () => Boolean(
+        ticketTitle.value.trim()
+        || ticketDescription.value.trim()
+        || ticketObservation.value.trim()
+        || (ticketNarrative && ticketNarrative.value.trim())
+    );
+    modal.addEventListener(hideEventName, (event) => {
+        if (!isSubmittingForm && hasUnsavedDraft()) {
+            if (!window.confirm('Tienes cambios sin guardar en el ticket. ¿Deseas cerrar el panel?')) {
+                event.preventDefault();
+                return;
+            }
+        }
         if (modal.contains(document.activeElement)) {
             document.activeElement.blur();
+        }
+    });
+    modal.addEventListener(hiddenEventName, () => {
+        if (!isSubmittingForm) {
+            setWizardStep(1);
         }
     });
 })();

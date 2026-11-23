@@ -170,4 +170,40 @@ class NvidiaMaintenanceNarrativeTest extends TestCase
             '{"description":"Texto mejorado"}'
         );
     }
+
+    public function testFallbackProcessTicketNarrativeExtractsTitleDescriptionAndObservation(): void
+    {
+        $result = systec_fallback_process_ticket_narrative(
+            "Buenos días, reporto que la impresora no imprime desde hoy.\nNota: ubicado en piso 2, extensión 1234."
+        );
+
+        self::assertTrue($result['fallback']);
+        self::assertSame('La impresora no imprime desde hoy', $result['title']);
+        self::assertSame('Buenos días, reporto que la impresora no imprime desde hoy.', $result['description']);
+        self::assertSame('Ubicado en piso 2, extensión 1234.', $result['observation']);
+    }
+
+    public function testProcessTicketNarrativeWithFallbackUsesLocalFallbackWithoutApiKey(): void
+    {
+        $result = systec_process_ticket_narrative_with_fallback(
+            'El monitor parpadea al encender el equipo.',
+            ''
+        );
+
+        self::assertTrue($result['fallback']);
+        self::assertSame('El monitor parpadea al encender el equipo', $result['title']);
+        self::assertSame('El monitor parpadea al encender el equipo.', $result['description']);
+        self::assertSame('', $result['observation']);
+    }
+
+    public function testImproveTicketHistoryNoteWithFallbackUsesLocalFallbackWithoutApiKey(): void
+    {
+        $result = systec_improve_ticket_history_note_with_fallback(
+            '  se reinicio   el monitor y sigue sin señal  ',
+            ''
+        );
+
+        self::assertTrue($result['fallback']);
+        self::assertSame('Se reinicio el monitor y sigue sin señal.', $result['note']);
+    }
 }

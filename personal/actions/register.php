@@ -80,7 +80,11 @@ try {
         throw new RuntimeException('No se pudo confirmar la transacción: ' . $db->lastErrorMsg());
     }
     $transactionStarted = false;
-    header('Location: ' . url('personal/detail.php?id=' . (int) $ticketId));
+    $_SESSION['personal_ticket_created'] = array(
+        'id' => (int) $ticketId,
+        'title' => $title,
+    );
+    header('Location: ' . url('personal/index.php'), true, 303);
     exit();
 } catch (Throwable $e) {
     if ($transactionStarted) {

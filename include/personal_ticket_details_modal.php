@@ -1,97 +1,119 @@
-<div class="modal fade" id="personalTicketDetailsModal" tabindex="-1"
+<div class="offcanvas offcanvas-end personal-ticket-details-drawer text-start" tabindex="-1"
+     id="personalTicketDetailsDrawer"
      data-details-url="<?= e(url('personal/actions/details.php')) ?>"
-     aria-labelledby="personalTicketDetailsTitle" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable personal-ticket-modal-dialog">
-        <div class="modal-content text-start">
-            <div class="modal-header">
-                <div class="personal-ticket-modal-heading">
-                    <h2 class="modal-title fs-5" id="personalTicketDetailsTitle">
-                        <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>Ticket
-                    </h2>
-                    <p class="small text-body-secondary text-break mb-0" id="personalTicketDetailsSubtitle"></p>
-                </div>
-                <span class="badge text-bg-light border" id="personalTicketDetailsStatus"></span>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+     aria-labelledby="personalTicketDetailsTitle">
+    <div class="offcanvas-header border-bottom">
+        <div class="personal-ticket-modal-heading me-2">
+            <h2 class="offcanvas-title h5 mb-1" id="personalTicketDetailsTitle">
+                <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>Ticket
+            </h2>
+            <p class="small text-body-secondary text-break mb-0" id="personalTicketDetailsSubtitle"></p>
+        </div>
+        <span class="badge text-bg-light border me-2" id="personalTicketDetailsStatus"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="personal-ticket-drawer-form">
+        <div class="offcanvas-body">
+            <div id="personalTicketDetailsLoading" class="d-none align-items-center gap-2 text-body-secondary small mb-3" role="status" aria-live="polite">
+                <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                <span>Cargando detalle e historial…</span>
             </div>
-            <div class="modal-body">
-                <p id="personalTicketDetailsFeedback" class="small text-body-secondary mb-2" role="status" aria-live="polite"></p>
-                <div class="row g-3 bento-grid">
-                    <div class="col-12 col-lg-8">
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <section class="bento-card card border h-100" aria-labelledby="personalTicketDescriptionTitle">
-                                    <div class="card-body">
-                                        <h3 class="h6 mb-3" id="personalTicketDescriptionTitle">
-                                            <i class="bi bi-card-text me-2" aria-hidden="true"></i>Descripción
+            <p id="personalTicketDetailsFeedback" class="small text-body-secondary mb-2" role="status" aria-live="polite"></p>
+            <div class="row g-3 bento-grid" id="personalTicketDetailsContent">
+                <div class="col-12 col-xl-7">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <section class="bento-card card border h-100" aria-labelledby="personalTicketDescriptionTitle">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3" id="personalTicketDescriptionTitle">
+                                        <i class="bi bi-card-text me-2" aria-hidden="true"></i>Descripción
+                                    </h3>
+                                    <div class="ticket-modal-copy text-break" id="personalTicketDescription"></div>
+                                </div>
+                            </section>
+                        </div>
+                        <div class="col-12">
+                            <section class="bento-card card border h-100" aria-labelledby="personalTicketObservationTitle">
+                                <div class="card-body">
+                                    <h3 class="h6 mb-3" id="personalTicketObservationTitle">
+                                        <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>Observación
+                                    </h3>
+                                    <div class="ticket-modal-copy text-break" id="personalTicketObservation"></div>
+                                </div>
+                            </section>
+                        </div>
+                        <div class="col-12">
+                            <section class="bento-card card border h-100" aria-labelledby="personalTicketHistoryTitle">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                        <h3 class="h6 mb-0" id="personalTicketHistoryTitle">
+                                            <i class="bi bi-clock-history me-2" aria-hidden="true"></i>Historial
                                         </h3>
-                                        <div class="ticket-modal-copy text-break" id="personalTicketDescription"></div>
+                                        <span class="badge bg-light text-secondary border" id="personalTicketHistoryCount"></span>
                                     </div>
-                                </section>
-                            </div>
-                            <div class="col-12">
-                                <section class="bento-card card border h-100" aria-labelledby="personalTicketObservationTitle">
-                                    <div class="card-body">
-                                        <h3 class="h6 mb-3" id="personalTicketObservationTitle">
-                                            <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>Observación
-                                        </h3>
-                                        <div class="ticket-modal-copy text-break" id="personalTicketObservation"></div>
-                                    </div>
-                                </section>
-                            </div>
-                            <div class="col-12">
-                                <section class="bento-card card border h-100" aria-labelledby="personalTicketHistoryTitle">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-                                            <h3 class="h6 mb-0" id="personalTicketHistoryTitle">
-                                                <i class="bi bi-clock-history me-2" aria-hidden="true"></i>Historial
-                                            </h3>
-                                            <span class="badge bg-light text-secondary border" id="personalTicketHistoryCount"></span>
-                                        </div>
-                                        <div class="d-flex flex-column gap-2" id="personalTicketHistory" aria-live="polite"></div>
-                                    </div>
-                                </section>
-                            </div>
+                                    <div class="d-flex flex-column gap-2" id="personalTicketHistory" aria-live="polite"></div>
+                                </div>
+                            </section>
                         </div>
                     </div>
-                    <aside class="col-12 col-lg-4" aria-label="Datos del ticket">
-                        <section class="bento-card card border h-100" aria-labelledby="personalTicketInfoTitle">
-                            <div class="card-body">
-                                <h3 class="h6 mb-3" id="personalTicketInfoTitle">
-                                    <i class="bi bi-info-circle me-2" aria-hidden="true"></i>Datos del ticket
-                                </h3>
-                                <dl class="ticket-modal-meta row g-2 mb-0">
-                                    <dt class="col-5">Bien</dt>
-                                    <dd class="col-7 text-end" id="personalTicketProperty"></dd>
-                                    <dt class="col-5">Código</dt>
-                                    <dd class="col-7 text-end" id="personalTicketPropertyCode"></dd>
-                                    <dt class="col-5">Estado del bien</dt>
-                                    <dd class="col-7 text-end" id="personalTicketPropertyStatus"></dd>
-                                    <dt class="col-5">Categoría</dt>
-                                    <dd class="col-7 text-end" id="personalTicketDetailsPropertyCategory"></dd>
-                                    <dt class="col-5">Estado del ticket</dt>
-                                    <dd class="col-7 text-end" id="personalTicketStatusValue"></dd>
-                                    <dt class="col-5">Creado</dt>
-                                    <dd class="col-7 text-end" id="personalTicketCreatedAt"></dd>
-                                    <dt class="col-5">Actualizado</dt>
-                                    <dd class="col-7 text-end" id="personalTicketUpdatedAt"></dd>
-                                    <dt class="col-5">Cerrado</dt>
-                                    <dd class="col-7 text-end" id="personalTicketClosedAt"></dd>
-                                </dl>
-                            </div>
-                        </section>
-                    </aside>
                 </div>
+                <aside class="col-12 col-xl-5" aria-label="Datos del ticket">
+                    <section class="bento-card card border h-100" aria-labelledby="personalTicketInfoTitle">
+                        <div class="card-body">
+                            <h3 class="h6 mb-3" id="personalTicketInfoTitle">
+                                <i class="bi bi-info-circle me-2" aria-hidden="true"></i>Datos del ticket
+                            </h3>
+                            <dl class="ticket-modal-meta row g-2 mb-0">
+                                <dt class="col-12 col-sm-5 text-body-secondary">Bien</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketProperty"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Código</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketPropertyCode"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Estado del bien</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketPropertyStatus"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Categoría</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketDetailsPropertyCategory"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Usuario del bien</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketPropertyAssigned"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Técnico asignado</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketAssignedTech"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Estado del ticket</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketStatusValue"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Creado</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketCreatedAt"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Actualizado</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-2 mb-sm-0" id="personalTicketUpdatedAt"></dd>
+                                <dt class="col-12 col-sm-5 text-body-secondary">Cerrado</dt>
+                                <dd class="col-12 col-sm-7 text-sm-end text-break mb-0" id="personalTicketClosedAt"></dd>
+                            </dl>
+                        </div>
+                    </section>
+                </aside>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-            </div>
+        </div>
+        <div class="border-top p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">Cerrar</button>
+            <button type="button" class="btn btn-primary d-none" id="personalTicketDetailsFollowupBtn">
+                <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Añadir seguimiento
+            </button>
         </div>
     </div>
 </div>
 <script nonce="<?= e(systec_csp_nonce()) ?>">
-    const personalTicketDetailsModal = document.getElementById('personalTicketDetailsModal');
+    const personalTicketDetailsDrawer = document.getElementById('personalTicketDetailsDrawer');
+    const personalTicketDetailsLoading = document.getElementById('personalTicketDetailsLoading');
+    const personalTicketDetailsContent = document.getElementById('personalTicketDetailsContent');
+    const personalTicketDetailsFollowupBtn = document.getElementById('personalTicketDetailsFollowupBtn');
     let personalTicketDetailsRequest = null;
+    let currentPersonalDetailsTicket = null;
+
+    const setPersonalDetailsLoading = (isLoading) => {
+        personalTicketDetailsLoading.classList.toggle('d-none', !isLoading);
+        personalTicketDetailsLoading.classList.toggle('d-flex', isLoading);
+        personalTicketDetailsContent.classList.toggle('opacity-50', isLoading);
+    };
+
     const renderPersonalTicketDetails = (ticket) => {
+        currentPersonalDetailsTicket = ticket;
         document.getElementById('personalTicketDetailsTitle').textContent = `Ticket #${ticket.id}`;
         document.getElementById('personalTicketDetailsSubtitle').textContent = ticket.title;
         const statusBadge = document.getElementById('personalTicketDetailsStatus');
@@ -103,7 +125,7 @@
             finalizado: 'success'
         };
         const statusClass = statusClassByCode[ticket.status_code] || 'light';
-        statusBadge.className = `badge text-bg-${statusClass} border`;
+        statusBadge.className = `badge text-bg-${statusClass} border me-2`;
         statusBadge.textContent = ticket.status_name || 'Sin estado';
         document.getElementById('personalTicketProperty').textContent = ticket.property_description || 'Bien desconocido';
         document.getElementById('personalTicketPropertyCode').textContent = ticket.property_ident || 'Sin código';
@@ -111,13 +133,17 @@
         const categories = { informatica: 'Informática', redes: 'Redes y telecomunicaciones', otros: 'Otros bienes' };
         document.getElementById('personalTicketDetailsPropertyCategory').textContent =
             categories[ticket.property_category] || 'Otros bienes';
+        document.getElementById('personalTicketPropertyAssigned').textContent =
+            ticket.property_assigned_label || 'Sin asignar';
+        document.getElementById('personalTicketAssignedTech').textContent =
+            ticket.assigned_username || 'Sin técnico asignado';
         document.getElementById('personalTicketStatusValue').textContent = ticket.status_name || 'Sin estado';
-        document.getElementById('personalTicketCreatedAt').textContent = ticket.created_at || 'No disponible';
-        document.getElementById('personalTicketUpdatedAt').textContent = ticket.updated_at || 'No disponible';
-        document.getElementById('personalTicketClosedAt').textContent = ticket.closed_at || 'No cerrado';
         document.getElementById('personalTicketDescription').textContent = ticket.description || 'Sin descripción.';
         document.getElementById('personalTicketObservation').textContent = ticket.observation || 'Sin observación adicional.';
         document.getElementById('personalTicketDetailsFeedback').textContent = '';
+
+        const isFinalized = ticket.status_code === 'finalizado';
+        personalTicketDetailsFollowupBtn.classList.toggle('d-none', isFinalized);
 
         const formatDateTime = (value) => {
             if (!value) return 'No disponible';
@@ -187,26 +213,51 @@
         });
     };
 
-    personalTicketDetailsModal.addEventListener('show.bs.modal', async (event) => {
+    personalTicketDetailsFollowupBtn.addEventListener('click', () => {
+        if (!currentPersonalDetailsTicket || currentPersonalDetailsTicket.status_code === 'finalizado') return;
+        const ticketPayload = {
+            id: Number(currentPersonalDetailsTicket.id),
+            title: String(currentPersonalDetailsTicket.title || '')
+        };
+        const detailsInstance = window.bootstrap?.Offcanvas?.getOrCreateInstance(personalTicketDetailsDrawer);
+        if (detailsInstance) {
+            personalTicketDetailsDrawer.addEventListener('hidden.bs.offcanvas', () => {
+                if (typeof window.SystecOpenPersonalFollowup === 'function') {
+                    window.SystecOpenPersonalFollowup(ticketPayload);
+                }
+            }, { once: true });
+            detailsInstance.hide();
+        } else if (typeof window.SystecOpenPersonalFollowup === 'function') {
+            window.SystecOpenPersonalFollowup(ticketPayload);
+        }
+    });
+
+    personalTicketDetailsDrawer.addEventListener('show.bs.offcanvas', async (event) => {
         const ticketId = event.relatedTarget?.dataset.ticketId;
         const feedback = document.getElementById('personalTicketDetailsFeedback');
         const history = document.getElementById('personalTicketHistory');
+        currentPersonalDetailsTicket = null;
+        personalTicketDetailsFollowupBtn.classList.add('d-none');
+
         if (!ticketId) {
             feedback.className = 'small text-danger';
             feedback.textContent = 'No se pudo identificar el ticket.';
+            setPersonalDetailsLoading(false);
             return;
         }
 
         personalTicketDetailsRequest?.abort();
         personalTicketDetailsRequest = new AbortController();
         document.getElementById('personalTicketDetailsTitle').textContent = `Ticket #${ticketId}`;
+        document.getElementById('personalTicketDetailsSubtitle').textContent = '';
         document.getElementById('personalTicketDetailsStatus').textContent = 'Cargando…';
         feedback.className = 'small text-body-secondary';
-        feedback.textContent = 'Cargando detalle e historial…';
+        feedback.textContent = '';
         history.replaceChildren();
+        setPersonalDetailsLoading(true);
 
         try {
-            const endpoint = new URL(personalTicketDetailsModal.dataset.detailsUrl, window.location.href);
+            const endpoint = new URL(personalTicketDetailsDrawer.dataset.detailsUrl, window.location.href);
             endpoint.searchParams.set('ticket_id', ticketId);
             const response = await fetch(endpoint, {
                 credentials: 'same-origin',
@@ -226,11 +277,13 @@
             if (error.name === 'AbortError') return;
             feedback.className = 'small text-danger';
             feedback.textContent = `${error.message} Cierra el detalle e inténtalo de nuevo.`;
+        } finally {
+            setPersonalDetailsLoading(false);
         }
     });
 
-    personalTicketDetailsModal.addEventListener('hide.bs.modal', () => {
+    personalTicketDetailsDrawer.addEventListener('hide.bs.offcanvas', () => {
         personalTicketDetailsRequest?.abort();
-        if (personalTicketDetailsModal.contains(document.activeElement)) document.activeElement.blur();
+        if (personalTicketDetailsDrawer.contains(document.activeElement)) document.activeElement.blur();
     });
 </script>

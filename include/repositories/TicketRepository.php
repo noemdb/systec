@@ -411,6 +411,27 @@ class TicketRepository
         return (int) ($rows[0]['ticket_count'] ?? 0);
     }
 
+    /** @var bool|null */
+    private $propertyHasAssignmentColumns = null;
+
+    private function propertyAssignmentSelectSql(): string
+    {
+        if ($this->propertyHasAssignmentColumns === null) {
+            $columns = $this->db->fetchAllQuery('PRAGMA table_info(properties)');
+            $names = array();
+            foreach ($columns as $column) {
+                if (isset($column['name'])) {
+                    $names[(string) $column['name']] = true;
+                }
+            }
+            $this->propertyHasAssignmentColumns = isset($names['assigned_name'], $names['assigned_status']);
+        }
+
+        return $this->propertyHasAssignmentColumns
+            ? ', p.assigned_name AS property_assigned_name, p.assigned_status AS property_assigned_status'
+            : ", '' AS property_assigned_name, '' AS property_assigned_status";
+    }
+
     public function personalTickets(int $userId, array $filters, int $limit, int $offset): array
     {
         if ($userId < 1) {
@@ -425,17 +446,34 @@ class TicketRepository
         $params[':limit'] = $limit;
         $params[':offset'] = $offset;
 
+        $sortMap = array(
+            'id' => 't.id',
+            'property' => 'p.description',
+            'status' => 's.name',
+            'updated_at' => 't.updated_at',
+        );
+        $sortKey = isset($filters['sort']) && is_string($filters['sort']) && isset($sortMap[$filters['sort']])
+            ? $filters['sort']
+            : 'updated_at';
+        $sortDir = isset($filters['dir']) && strtolower((string) $filters['dir']) === 'asc'
+            ? 'ASC'
+            : 'DESC';
+        $orderBy = $sortMap[$sortKey] . ' ' . $sortDir . ', t.id DESC';
+        $assignmentColumnsSql = $this->propertyAssignmentSelectSql();
+
         return $this->db->fetchAllQuery(
             'SELECT t.id, t.property_id, t.status_id, t.title, t.description, t.observation,
                    t.created_by, t.assigned_to, t.created_at, t.updated_at, t.closed_at,
                    p.ident AS property_ident, p.description AS property_description,
                    p.status AS property_status, p.grupo AS property_grupo,
-                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
+                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion' . $assignmentColumnsSql . ',
+                   u_assigned.username AS assigned_username,
                    s.code AS status_code, s.name AS status_name
             FROM tickets t
             LEFT JOIN properties p ON p.id = t.property_id
+            LEFT JOIN users u_assigned ON u_assigned.id = t.assigned_to
             LEFT JOIN ticket_status s ON s.id = t.status_id' . $where . '
-            ORDER BY t.updated_at DESC, t.id DESC
+            ORDER BY ' . $orderBy . '
             LIMIT :limit OFFSET :offset',
             $params
         );
@@ -447,15 +485,18 @@ class TicketRepository
             return null;
         }
 
+        $assignmentColumnsSql = $this->propertyAssignmentSelectSql();
         $rows = $this->db->fetchAllQuery(
             'SELECT t.id, t.property_id, t.status_id, t.title, t.description, t.observation,
                    t.created_by, t.assigned_to, t.created_at, t.updated_at, t.closed_at,
                    p.ident AS property_ident, p.description AS property_description,
                    p.status AS property_status, p.grupo AS property_grupo,
-                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
+                   p.subgrupo AS property_subgrupo, p.seccion AS property_seccion' . $assignmentColumnsSql . ',
+                   u_assigned.username AS assigned_username,
                    s.code AS status_code, s.name AS status_name
             FROM tickets t
             LEFT JOIN properties p ON p.id = t.property_id
+            LEFT JOIN users u_assigned ON u_assigned.id = t.assigned_to
             LEFT JOIN ticket_status s ON s.id = t.status_id
             WHERE t.id = :ticket_id AND t.created_by = :created_by AND t.deleted_at IS NULL
             LIMIT 1',
@@ -472,6 +513,11 @@ class TicketRepository
             'subgrupo' => (string) ($ticket['property_subgrupo'] ?? ''),
             'seccion' => (string) ($ticket['property_seccion'] ?? ''),
         ));
+        $assignedName = trim((string) ($ticket['property_assigned_name'] ?? ''));
+        $assignedStatus = trim((string) ($ticket['property_assigned_status'] ?? ''));
+        $ticket['property_assigned_label'] = $assignedName !== ''
+            ? $assignedName . ($assignedStatus !== '' ? ' · ' . assignment_status_label($assignedStatus) : '')
+            : ($assignedStatus !== '' ? assignment_status_label($assignedStatus) : 'Sin asignar');
         $ticket['history'] = $this->ticketHistoryWithActors($ticketId);
         return $ticket;
     }

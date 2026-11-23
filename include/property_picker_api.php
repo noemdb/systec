@@ -10,7 +10,7 @@ function property_picker_json_response(): void
         $properties = $db->index(
             'properties',
             array(),
-            'id, ident, grupo, subgrupo, seccion, description, status',
+            'id, ident, grupo, subgrupo, seccion, description, status, assigned_name, assigned_status',
             'id ASC'
         );
         $identifiers = array_map(function ($property) {
@@ -18,8 +18,13 @@ function property_picker_json_response(): void
         }, $properties);
         $snapshot = legacy_postgres_cached_property_adscriptions($identifiers);
         $adscriptions = $snapshot['adscriptions'];
+        $localCache = !$adscriptionsOnly ? legacy_postgres_read_local_cache() : array('assignments' => array());
+        $legacyAssignments = isset($localCache['assignments']) && is_array($localCache['assignments'])
+            ? $localCache['assignments']
+            : array();
         $options = array();
         $directions = array();
+        $assignedUsers = array();
         $adscriptionOptions = array();
 
         foreach ($properties as $property) {
@@ -31,6 +36,14 @@ function property_picker_json_response(): void
                 'direction_label' => 'Sin dirección asignada',
             );
             if (!$adscriptionsOnly) {
+                $assignedName = trim((string) ($property['assigned_name'] ?? ''));
+                $assignedStatus = trim((string) ($property['assigned_status'] ?? ''));
+                if (isset($legacyAssignments[$ident]) && is_array($legacyAssignments[$ident])) {
+                    $assignedName = trim((string) ($legacyAssignments[$ident]['assigned_name'] ?? $assignedName));
+                    $assignedStatus = trim((string) ($legacyAssignments[$ident]['assigned_status'] ?? $assignedStatus));
+                }
+                $assignedKey = property_assignment_filter_key($assignedName, $assignedStatus);
+                $assignedLabel = property_assignment_filter_label($assignedName, $assignedStatus);
                 $options[] = array(
                     'id' => (int) $property['id'],
                     'code' => property_code($property),
@@ -39,17 +52,22 @@ function property_picker_json_response(): void
                     'category' => property_category($property),
                     'direction_key' => (string) $assignment['direction_key'],
                     'direction_label' => (string) $assignment['direction_label'],
+                    'assigned_key' => $assignedKey,
+                    'assigned_label' => $assignedLabel,
                 );
                 $directions[(string) $assignment['direction_key']] = (string) $assignment['direction_label'];
+                $assignedUsers[$assignedKey] = $assignedLabel;
             }
             $adscriptionOptions[(string) $assignment['key']] = (string) $assignment['label'];
         }
 
         uasort($directions, 'strnatcasecmp');
+        asort($assignedUsers, SORT_NATURAL | SORT_FLAG_CASE);
         uasort($adscriptionOptions, 'strnatcasecmp');
         echo json_encode(array(
             'properties' => $adscriptionsOnly ? array() : $options,
             'directions' => $adscriptionsOnly ? array() : $directions,
+            'assigned_users' => $adscriptionsOnly ? array() : $assignedUsers,
             'adscriptions' => $adscriptionOptions,
             'stale' => (bool) $snapshot['stale'],
             'cached_at' => date(DATE_ATOM, (int) $snapshot['cached_at']),

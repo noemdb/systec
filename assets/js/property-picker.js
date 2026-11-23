@@ -14,6 +14,9 @@
         const directionFilter = picker.dataset.directionFilter
             ? document.getElementById(picker.dataset.directionFilter)
             : null;
+        const assignedFilter = picker.dataset.assignedFilter
+            ? document.getElementById(picker.dataset.assignedFilter)
+            : null;
         if (!search || !resultCount || !categoryFilter) return;
 
         const isSelect = picker.tagName === 'SELECT';
@@ -39,7 +42,9 @@
                     || normalize(option.dataset.category) === selectedCategory;
                 const directionMatches = !directionFilter || !directionFilter.value
                     || option.dataset.direction === directionFilter.value;
-                const match = searchMatches && categoryMatches && directionMatches;
+                const assignedMatches = !assignedFilter || !assignedFilter.value
+                    || option.dataset.assigned === assignedFilter.value;
+                const match = searchMatches && categoryMatches && directionMatches && assignedMatches;
 
                 if (isSelect) {
                     option.hidden = !match;
@@ -78,6 +83,7 @@
         categoryFilter.addEventListener('input', filterOptions);
         categoryFilter.addEventListener('change', filterOptions);
         directionFilter?.addEventListener('change', filterOptions);
+        assignedFilter?.addEventListener('change', filterOptions);
         picker.addEventListener('change', (event) => {
             const radio = isSelect ? null : event.target.closest('input[type="radio"]');
             const hasSelection = isSelect ? Boolean(picker.value) : Boolean(radio && radio.checked);

@@ -5,16 +5,29 @@ require_personal_scope();
 
 $followupSaved = !empty($_SESSION['personal_ticket_followup_saved']);
 unset($_SESSION['personal_ticket_followup_saved']);
-$notifications = $followupSaved
-    ? array(toast_notification('success', 'El seguimiento se registró correctamente.'))
-    : array();
+$createdTicket = isset($_SESSION['personal_ticket_created']) && is_array($_SESSION['personal_ticket_created'])
+    ? $_SESSION['personal_ticket_created']
+    : null;
+unset($_SESSION['personal_ticket_created']);
+$createdTicketId = $createdTicket !== null ? (int) ($createdTicket['id'] ?? 0) : 0;
+
+$notifications = array();
+if ($followupSaved) {
+    $notifications[] = toast_notification('success', 'El seguimiento se registró correctamente.');
+}
+if ($createdTicketId > 0) {
+    $notifications[] = toast_notification('success', 'Ticket #' . $createdTicketId . ' registrado correctamente.');
+}
 
 $db = db();
 $user = auth_user();
 $statuses = $db->getTicketStatuses();
 $statusCodes = array();
+$statusNamesByCode = array();
 foreach ($statuses as $status) {
-    $statusCodes[(string) $status['code']] = true;
+    $code = (string) $status['code'];
+    $statusCodes[$code] = true;
+    $statusNamesByCode[$code] = (string) $status['name'];
 }
 $queryString = function (string $key): string {
     return isset($_GET[$key]) && is_string($_GET[$key]) ? trim($_GET[$key]) : '';
@@ -24,6 +37,12 @@ $rawDateFrom = $queryString('date_from');
 $rawDateTo = $queryString('date_to');
 $rawCategory = $queryString('category');
 $adscriptionFilter = $queryString('adscription');
+$rawSort = $queryString('sort');
+$rawDir = strtolower($queryString('dir'));
+$allowedSorts = array('id', 'property', 'status', 'updated_at');
+$sort = in_array($rawSort, $allowedSorts, true) ? $rawSort : 'updated_at';
+$dir = $rawDir === 'asc' ? 'asc' : 'desc';
+
 $filterError = '';
 $categoryOptions = array(
     'informatica' => 'Informática',
@@ -51,18 +70,26 @@ if ($dateFrom !== '' && $dateTo !== '' && $dateFrom > $dateTo) {
 $searchTerm = trim(mb_substr($queryString('q'), 0, 100, 'UTF-8'));
 $statusFilter = isset($statusCodes[$rawStatus]) ? $rawStatus : '';
 $filters = array(
-    'search' => $searchTerm,
+    'q' => $searchTerm,
     'status' => $statusFilter,
     'category' => $categoryFilter,
     'date_from' => $dateFrom,
     'date_to' => $dateTo,
     'adscription' => $adscriptionFilter,
 );
-$ticketFilters = $filters;
-unset($ticketFilters['adscription']);
+$ticketFilters = array(
+    'search' => $searchTerm,
+    'status' => $statusFilter,
+    'category' => $categoryFilter,
+    'date_from' => $dateFrom,
+    'date_to' => $dateTo,
+    'sort' => $sort,
+    'dir' => $dir,
+);
 $hasActiveFilters = count(array_filter($filters, function ($value) {
     return $value !== '';
 })) > 0;
+$adscriptionLabel = '';
 if ($adscriptionFilter !== '') {
     require_once __DIR__ . '/../include/inventory_import.php';
     try {
@@ -72,17 +99,25 @@ if ($adscriptionFilter !== '') {
             'id, ident',
             'id ASC'
         );
-        $identifiers = array_map(function ($property) {
-            return trim((string) $property['ident']);
-        }, $propertiesForAdscription);
-        $snapshot = legacy_postgres_cached_property_adscriptions($identifiers);
+        // PERF: Leer primero del caché local para evitar bloquear el GET con PostgreSQL.
+        $localCache = legacy_postgres_read_local_cache();
+        if ($localCache['found'] && !empty($localCache['adscriptions'])) {
+            $adscriptionsMap = $localCache['adscriptions'];
+        } else {
+            $identifiers = array_map(function ($property) {
+                return trim((string) $property['ident']);
+            }, $propertiesForAdscription);
+            $snapshot = legacy_postgres_cached_property_adscriptions($identifiers);
+            $adscriptionsMap = $snapshot['adscriptions'];
+        }
         $matchingPropertyIds = array();
         $knownAdscription = false;
         foreach ($propertiesForAdscription as $property) {
             $ident = str_pad(trim((string) $property['ident']), 4, '0', STR_PAD_LEFT);
-            $assignment = $snapshot['adscriptions'][$ident] ?? array('key' => '__unassigned__');
+            $assignment = $adscriptionsMap[$ident] ?? array('key' => '__unassigned__', 'label' => 'Sin adscripción');
             if ((string) $assignment['key'] === $adscriptionFilter) {
                 $knownAdscription = true;
+                $adscriptionLabel = (string) ($assignment['label'] ?? 'Unidad seleccionada');
                 $matchingPropertyIds[] = (int) $property['id'];
             }
         }
@@ -99,12 +134,14 @@ if ($adscriptionFilter !== '') {
 
 $summaryCounts = array(
     'total' => 0,
+    'initiated' => 0,
     'in_progress' => 0,
     'delayed' => 0,
     'waiting' => 0,
     'closed' => 0,
 );
 $summaryKeyByStatus = array(
+    'iniciado' => 'initiated',
     'en_progreso' => 'in_progress',
     'con_retraso' => 'delayed',
     'en_espera' => 'waiting',
@@ -140,110 +177,112 @@ unset($_SESSION['personal_ticket_form']);
 $formValues = isset($formState['values']) && is_array($formState['values']) ? $formState['values'] : array();
 $formError = isset($formState['error']) ? (string) $formState['error'] : '';
 $selectedPropertyId = isset($formValues['property_id']) ? (string) $formValues['property_id'] : '';
-$pageUrl = function (int $targetPage) use ($filters): string {
+
+$buildUrl = function (array $overrides = array()) use ($filters, $sort, $dir): string {
     $query = array_filter($filters, function ($value) {
         return $value !== '';
     });
-    $query['page'] = $targetPage;
-    return url('personal/index.php?' . http_build_query($query));
-};
-$statusUrl = function (string $status) use ($filters): string {
-    $query = array_filter($filters, function ($value) {
-        return $value !== '';
-    });
-    if ($status === '') {
-        unset($query['status']);
-    } else {
-        $query['status'] = $status;
+    if ($sort !== 'updated_at' || $dir !== 'desc') {
+        $query['sort'] = $sort;
+        $query['dir'] = $dir;
     }
-    return url('personal/index.php?' . http_build_query($query));
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($query[$key]);
+        } else {
+            $query[$key] = $value;
+        }
+    }
+    return url('personal/index.php' . ($query !== array() ? '?' . http_build_query($query) : ''));
 };
+$pageUrl = function (int $targetPage) use ($buildUrl): string {
+    return $buildUrl(array('page' => $targetPage));
+};
+$statusUrl = function (string $status) use ($buildUrl): string {
+    return $buildUrl(array('status' => $status, 'page' => null));
+};
+$sortUrl = function (string $column) use ($buildUrl, $sort, $dir): string {
+    $nextDir = ($sort === $column && $dir === 'desc') ? 'asc' : 'desc';
+    return $buildUrl(array('sort' => $column, 'dir' => $nextDir, 'page' => null));
+};
+$sortIcon = function (string $column) use ($sort, $dir): string {
+    if ($sort !== $column) {
+        return 'bi-arrow-down-up text-body-tertiary';
+    }
+    return $dir === 'asc' ? 'bi-arrow-up text-primary' : 'bi-arrow-down text-primary';
+};
+
+$activeFilterChips = array();
+if ($searchTerm !== '') {
+    $activeFilterChips[] = array('label' => 'Búsqueda: ' . $searchTerm, 'url' => $buildUrl(array('q' => null, 'page' => null)));
+}
+if ($categoryFilter !== '') {
+    $activeFilterChips[] = array('label' => 'Categoría: ' . $categoryOptions[$categoryFilter], 'url' => $buildUrl(array('category' => null, 'page' => null)));
+}
+if ($statusFilter !== '') {
+    $activeFilterChips[] = array('label' => 'Estado: ' . ($statusNamesByCode[$statusFilter] ?? $statusFilter), 'url' => $buildUrl(array('status' => null, 'page' => null)));
+}
+if ($adscriptionFilter !== '') {
+    $activeFilterChips[] = array('label' => 'Adscripción: ' . ($adscriptionLabel !== '' ? $adscriptionLabel : 'Unidad seleccionada'), 'url' => $buildUrl(array('adscription' => null, 'page' => null)));
+}
+if ($dateFrom !== '') {
+    $activeFilterChips[] = array('label' => 'Desde: ' . $dateFrom, 'url' => $buildUrl(array('date_from' => null, 'page' => null)));
+}
+if ($dateTo !== '') {
+    $activeFilterChips[] = array('label' => 'Hasta: ' . $dateTo, 'url' => $buildUrl(array('date_to' => null, 'page' => null)));
+}
+
+$kpiCards = array(
+    array('code' => '', 'label' => 'Total', 'count' => $summaryCounts['total'], 'color' => 'primary', 'icon' => 'bi-ticket-detailed', 'aria' => 'Mostrar todos los tickets'),
+    array('code' => 'iniciado', 'label' => 'Iniciados', 'count' => $summaryCounts['initiated'], 'color' => 'primary', 'icon' => 'bi-play-circle', 'aria' => 'Filtrar tickets iniciados'),
+    array('code' => 'en_progreso', 'label' => 'En progreso', 'count' => $summaryCounts['in_progress'], 'color' => 'info', 'icon' => 'bi-hourglass-split', 'aria' => 'Filtrar tickets en progreso'),
+    array('code' => 'con_retraso', 'label' => 'Con retraso', 'count' => $summaryCounts['delayed'], 'color' => 'warning', 'icon' => 'bi-exclamation-triangle', 'aria' => 'Filtrar tickets con retraso'),
+    array('code' => 'en_espera', 'label' => 'En espera', 'count' => $summaryCounts['waiting'], 'color' => 'secondary', 'icon' => 'bi-pause-circle', 'aria' => 'Filtrar tickets en espera'),
+    array('code' => 'finalizado', 'label' => 'Finalizados', 'count' => $summaryCounts['closed'], 'color' => 'success', 'icon' => 'bi-check-circle', 'aria' => 'Filtrar tickets finalizados'),
+);
 
 $title = 'Tickets personales';
 ob_start();
 ?>
-<div class="container-fluid">
+<div class="container-fluid text-start">
     <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
             <h1 class="h3 mb-1">Mi área de tickets</h1>
             <p class="text-body-secondary mb-0">Seguimiento y registro de incidencias del personal.</p>
         </div>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
-            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Nuevo ticket
-        </button>
+        <div class="d-flex flex-wrap gap-2 align-self-md-start flex-shrink-0">
+            <button type="button" class="btn btn-outline-secondary" id="exportPersonalTicketsCsv"
+                    <?= $tickets === array() ? 'disabled' : '' ?>
+                    title="Descarga en CSV los tickets visibles en esta página">
+                <i class="bi bi-filetype-csv me-1" aria-hidden="true"></i>Exportar CSV
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#ticketRegisterDrawer" aria-controls="ticketRegisterDrawer">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Nuevo ticket
+            </button>
+        </div>
     </div>
 
     <section class="row g-3 mb-4" aria-label="Indicadores del área personal">
-        <div class="col-6 col-md-4 col-xl">
-            <a href="<?= e($statusUrl('')) ?>" class="card h-100 border-start border-4 border-primary shadow-sm text-start text-body text-decoration-none"
-               aria-label="Mostrar todos los tickets">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="rounded-circle bg-primary-subtle text-primary p-2" aria-hidden="true">
-                        <i class="bi bi-ticket-detailed fs-4"></i>
-                    </span>
-                    <div>
-                        <p class="small text-body-secondary mb-1">Total</p>
-                        <p class="h3 mb-0"><?= e((string) $summaryCounts['total']) ?></p>
+        <?php foreach ($kpiCards as $kpi) :
+            $isActiveKpi = $statusFilter === $kpi['code'];
+            ?>
+            <div class="col-6 col-md-4 col-xl">
+                <a href="<?= e($statusUrl($kpi['code'])) ?>"
+                   class="card h-100 border-start border-4 border-<?= e($kpi['color']) ?> shadow-sm text-start text-body text-decoration-none personal-ticket-kpi-card<?= $isActiveKpi ? ' is-active' : '' ?>"
+                   aria-label="<?= e($kpi['aria']) ?>"
+                   <?= $isActiveKpi ? 'aria-current="page"' : '' ?>>
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="rounded-circle bg-<?= e($kpi['color']) ?>-subtle text-<?= e($kpi['color']) ?> p-2 flex-shrink-0" aria-hidden="true">
+                            <i class="bi <?= e($kpi['icon']) ?> fs-4"></i>
+                        </span>
+                        <div>
+                            <p class="small text-body-secondary mb-1"><?= e($kpi['label']) ?></p>
+                            <p class="h3 mb-0"><?= e((string) $kpi['count']) ?></p>
+                        </div>
                     </div>
-                </div>
-            </a>
-        </div>
-        <div class="col-6 col-md-4 col-xl">
-            <a href="<?= e($statusUrl('en_progreso')) ?>" class="card h-100 border-start border-4 border-info shadow-sm text-start text-body text-decoration-none"
-               aria-label="Filtrar tickets en progreso">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="rounded-circle bg-info-subtle text-info p-2" aria-hidden="true">
-                        <i class="bi bi-hourglass-split fs-4"></i>
-                    </span>
-                    <div>
-                        <p class="small text-body-secondary mb-1">En progreso</p>
-                        <p class="h3 mb-0"><?= e((string) $summaryCounts['in_progress']) ?></p>
-                    </div>
-                </div>
-            </a>
-        </div>
-        <div class="col-6 col-md-4 col-xl">
-            <a href="<?= e($statusUrl('con_retraso')) ?>" class="card h-100 border-start border-4 border-warning shadow-sm text-start text-body text-decoration-none"
-               aria-label="Filtrar tickets con retraso">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="rounded-circle bg-warning-subtle text-warning p-2" aria-hidden="true">
-                        <i class="bi bi-exclamation-triangle fs-4"></i>
-                    </span>
-                    <div>
-                        <p class="small text-body-secondary mb-1">Con retraso</p>
-                        <p class="h3 mb-0"><?= e((string) $summaryCounts['delayed']) ?></p>
-                    </div>
-                </div>
-            </a>
-        </div>
-        <div class="col-6 col-md-4 col-xl">
-            <a href="<?= e($statusUrl('en_espera')) ?>" class="card h-100 border-start border-4 border-secondary shadow-sm text-start text-body text-decoration-none"
-               aria-label="Filtrar tickets en espera">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="rounded-circle bg-secondary-subtle text-secondary p-2" aria-hidden="true">
-                        <i class="bi bi-pause-circle fs-4"></i>
-                    </span>
-                    <div>
-                        <p class="small text-body-secondary mb-1">En espera</p>
-                        <p class="h3 mb-0"><?= e((string) $summaryCounts['waiting']) ?></p>
-                    </div>
-                </div>
-            </a>
-        </div>
-        <div class="col-6 col-md-4 col-xl">
-            <a href="<?= e($statusUrl('finalizado')) ?>" class="card h-100 border-start border-4 border-success shadow-sm text-start text-body text-decoration-none"
-               aria-label="Filtrar tickets finalizados">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="rounded-circle bg-success-subtle text-success p-2" aria-hidden="true">
-                        <i class="bi bi-check-circle fs-4"></i>
-                    </span>
-                    <div>
-                        <p class="small text-body-secondary mb-1">Finalizados</p>
-                        <p class="h3 mb-0"><?= e((string) $summaryCounts['closed']) ?></p>
-                    </div>
-                </div>
-            </a>
-        </div>
+                </a>
+            </div>
+        <?php endforeach; ?>
     </section>
 
     <section class="card shadow-sm text-start" aria-labelledby="my-tickets-title">
@@ -257,6 +296,10 @@ ob_start();
         </div>
 
         <form method="get" action="<?= e(url('personal/index.php')) ?>" class="card-body border-bottom personal-ticket-filters" aria-label="Filtros de tickets">
+            <?php if ($sort !== 'updated_at' || $dir !== 'desc') : ?>
+                <input type="hidden" name="sort" value="<?= e($sort) ?>">
+                <input type="hidden" name="dir" value="<?= e($dir) ?>">
+            <?php endif; ?>
             <div class="row g-2 align-items-start">
                 <div class="col-12 col-md-4">
                     <label class="form-label small fw-semibold personal-ticket-filter-label" for="personalTicketSearch">Buscar</label>
@@ -292,7 +335,9 @@ ob_start();
                             <?= $adscriptionFilter === '' ? 'disabled' : '' ?>>
                         <option value="">Todas las unidades</option>
                         <?php if ($adscriptionFilter !== '') : ?>
-                            <option value="<?= e($adscriptionFilter) ?>" selected>Unidad seleccionada</option>
+                            <option value="<?= e($adscriptionFilter) ?>" selected>
+                                <?= e($adscriptionLabel !== '' ? $adscriptionLabel : 'Unidad seleccionada') ?>
+                            </option>
                         <?php endif; ?>
                     </select>
                     <div class="form-text" id="filterAdscriptionStatus" role="status" aria-live="polite">
@@ -324,6 +369,20 @@ ob_start();
             </div>
         </form>
 
+        <?php if ($activeFilterChips !== array()) : ?>
+            <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center gap-2" aria-label="Filtros activos">
+                <span class="small text-body-secondary">Filtros activos:</span>
+                <?php foreach ($activeFilterChips as $chip) : ?>
+                    <a href="<?= e($chip['url']) ?>"
+                       class="badge rounded-pill text-bg-light border text-body text-decoration-none d-inline-flex align-items-center gap-1 py-1 px-2"
+                       title="Quitar filtro">
+                        <span><?= e($chip['label']) ?></span>
+                        <i class="bi bi-x" aria-hidden="true"></i>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
         <?php if ($tickets === array()) : ?>
             <div class="card-body py-4">
                 <div class="text-center py-3">
@@ -337,7 +396,7 @@ ob_start();
                     <?php else : ?>
                         <h3 class="h6 mb-1">Aún no tienes tickets</h3>
                         <p class="text-body-secondary mb-3">Cuando registres una incidencia, podrás seguir su estado desde aquí.</p>
-                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#ticketRegisterDrawer" aria-controls="ticketRegisterDrawer">
                             <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Registrar incidencia
                         </button>
                     <?php endif; ?>
@@ -346,15 +405,31 @@ ob_start();
         <?php else : ?>
             <div class="card-body p-0">
                 <div class="table-responsive personal-ticket-table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle mb-0" id="personalTicketsTable">
                         <caption class="visually-hidden">Listado de tickets personales registrados</caption>
                         <thead class="table-light">
                         <tr>
-                            <th scope="col">Ticket</th>
-                            <th scope="col">Bien</th>
+                            <th scope="col">
+                                <a href="<?= e($sortUrl('id')) ?>" class="text-decoration-none text-body d-inline-flex align-items-center gap-1">
+                                    Ticket <i class="bi <?= e($sortIcon('id')) ?>" aria-hidden="true"></i>
+                                </a>
+                            </th>
+                            <th scope="col">
+                                <a href="<?= e($sortUrl('property')) ?>" class="text-decoration-none text-body d-inline-flex align-items-center gap-1">
+                                    Bien <i class="bi <?= e($sortIcon('property')) ?>" aria-hidden="true"></i>
+                                </a>
+                            </th>
                             <th scope="col">Incidencia</th>
-                            <th scope="col">Estado</th>
-                            <th scope="col">Actualizado</th>
+                            <th scope="col">
+                                <a href="<?= e($sortUrl('status')) ?>" class="text-decoration-none text-body d-inline-flex align-items-center gap-1">
+                                    Estado <i class="bi <?= e($sortIcon('status')) ?>" aria-hidden="true"></i>
+                                </a>
+                            </th>
+                            <th scope="col">
+                                <a href="<?= e($sortUrl('updated_at')) ?>" class="text-decoration-none text-body d-inline-flex align-items-center gap-1">
+                                    Actualizado <i class="bi <?= e($sortIcon('updated_at')) ?>" aria-hidden="true"></i>
+                                </a>
+                            </th>
                             <th scope="col" class="text-end">Acción</th>
                         </tr>
                         </thead>
@@ -368,39 +443,63 @@ ob_start();
                                 'description' => (string) ($ticket['property_description'] ?? 'Bien desconocido'),
                                 'status' => (string) ($ticket['property_status'] ?? ''),
                             );
+                            $propertyCode = property_code($property);
                             $statusCode = (string) ($ticket['status_code'] ?? '');
+                            $statusName = (string) ($ticket['status_name'] ?? 'Sin estado');
                             $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
                             $updatedTimestamp = strtotime((string) $ticket['updated_at']);
+                            $updatedLabel = $updatedTimestamp !== false
+                                ? date('d/m/Y H:i', $updatedTimestamp)
+                                : (string) $ticket['updated_at'];
                             $isInactive = $statusCode !== 'finalizado'
                                 && $updatedTimestamp !== false
                                 && $updatedTimestamp <= $inactiveTicketCutoff;
-                            $rowClass = $statusCode === 'con_retraso' || $isInactive ? 'table-warning' : '';
+                            $isNewlyCreated = $createdTicketId > 0 && (int) $ticket['id'] === $createdTicketId;
+                            $rowClass = $isNewlyCreated
+                                ? 'table-success'
+                                : ($statusCode === 'con_retraso' || $isInactive ? 'table-warning' : '');
+                            $assignedTech = trim((string) ($ticket['assigned_username'] ?? ''));
+                            $isFinalized = $statusCode === 'finalizado';
                             $followupTicket = array(
                                 'id' => (int) $ticket['id'],
                                 'title' => (string) $ticket['title'],
                             );
                             ?>
-                            <tr class="<?= e($rowClass) ?>">
-                                <td><span class="fw-semibold">#<?= e((string) $ticket['id']) ?></span></td>
+                            <tr class="<?= e($rowClass) ?>"
+                                data-export-id="#<?= e((string) $ticket['id']) ?>"
+                                data-export-code="<?= e($propertyCode) ?>"
+                                data-export-property="<?= e($property['description']) ?>"
+                                data-export-title="<?= e((string) $ticket['title']) ?>"
+                                data-export-status="<?= e($statusName) ?>"
+                                data-export-tech="<?= e($assignedTech !== '' ? $assignedTech : 'Sin asignar') ?>"
+                                data-export-updated="<?= e($updatedLabel) ?>">
+                                <td><span class="fw-semibold text-nowrap">#<?= e((string) $ticket['id']) ?></span></td>
                                 <td>
                                     <span class="fw-semibold"><?= e($property['description']) ?></span>
-                                    <div class="small text-body-secondary"><?= e(property_code($property)) ?></div>
+                                    <div class="small text-body-secondary"><?= e($propertyCode) ?></div>
                                 </td>
-                                <td><?= e((string) $ticket['title']) ?></td>
                                 <td>
-                                    <span class="badge text-bg-<?= e($statusClass) ?>"><?= e((string) ($ticket['status_name'] ?? 'Sin estado')) ?></span>
+                                    <div><?= e((string) $ticket['title']) ?></div>
+                                    <?php if ($assignedTech !== '') : ?>
+                                        <div class="small text-body-secondary">
+                                            <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Técnico: <?= e($assignedTech) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="badge text-bg-<?= e($statusClass) ?>"><?= e($statusName) ?></span>
                                     <?php if ($isInactive) : ?>
                                         <span class="badge text-bg-warning ms-1" title="Sin cambios durante 7 días o más">
                                             <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Sin actividad
                                         </span>
                                     <?php endif; ?>
                                 </td>
-                                <td>
+                                <td class="text-nowrap">
                                     <?php if ($updatedTimestamp !== false) : ?>
                                         <time datetime="<?= e(date(DATE_ATOM, $updatedTimestamp)) ?>"
                                               data-relative-time
-                                              title="<?= e(date('d/m/Y H:i', $updatedTimestamp)) ?>">
-                                            <?= e(date('d/m/Y H:i', $updatedTimestamp)) ?>
+                                              title="<?= e($updatedLabel) ?>">
+                                            <?= e($updatedLabel) ?>
                                         </time>
                                     <?php else : ?>
                                         <?= e((string) $ticket['updated_at']) ?>
@@ -411,14 +510,14 @@ ob_start();
                                          aria-label="Acciones para el ticket #<?= e((string) $ticket['id']) ?>">
                                         <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
                                                 aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
-                                                data-bs-toggle="modal" data-bs-target="#personalTicketDetailsModal"
+                                                data-bs-toggle="offcanvas" data-bs-target="#personalTicketDetailsDrawer"
+                                                aria-controls="personalTicketDetailsDrawer"
                                                 data-ticket-id="<?= e((string) $ticket['id']) ?>">
                                             <i class="bi bi-eye me-1" aria-hidden="true"></i>Detalle
                                         </button>
                                         <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
                                                 aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
-                                                data-bs-toggle="modal" data-bs-target="#personalTicketFollowupModal"
-                                                data-ticket="<?= e(js($followupTicket)) ?>">
+                                                <?= $isFinalized ? 'disabled title="No se puede añadir seguimiento a un ticket finalizado"' : 'data-bs-toggle="offcanvas" data-bs-target="#personalTicketFollowupDrawer" aria-controls="personalTicketFollowupDrawer" data-ticket="' . e(js($followupTicket)) . '"' ?>>
                                             <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
                                         </button>
                                     </div>
@@ -459,8 +558,11 @@ ob_start();
 
 <?php
 $ticketRegisterOptions = array(
+    'presentation' => 'drawer',
     'properties_url' => 'personal/actions/properties.php',
     'form_action' => 'personal/actions/register.php',
+    'process_narrative_url' => 'personal/actions/process-narrative.php',
+    'improve_narrative_url' => 'personal/actions/improve-narrative.php',
     'selected_property_id' => $selectedPropertyId,
     'error' => $formError,
     'values' => $formValues,
@@ -508,6 +610,44 @@ unset($ticketRegisterOptions);
         window.location.assign(event.currentTarget.dataset.resetUrl);
     });
 
+    const exportPersonalCsvBtn = document.getElementById('exportPersonalTicketsCsv');
+    if (exportPersonalCsvBtn) {
+        const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        exportPersonalCsvBtn.addEventListener('click', () => {
+            const rows = Array.from(document.querySelectorAll('#personalTicketsTable tbody tr'));
+            if (rows.length === 0) return;
+            const columns = [
+                { header: 'Ticket', key: 'exportId' },
+                { header: 'Código bien', key: 'exportCode' },
+                { header: 'Bien', key: 'exportProperty' },
+                { header: 'Incidencia', key: 'exportTitle' },
+                { header: 'Estado', key: 'exportStatus' },
+                { header: 'Técnico asignado', key: 'exportTech' },
+                { header: 'Actualizado', key: 'exportUpdated' }
+            ];
+            const lines = [columns.map((col) => csvEscape(col.header)).join(';')];
+            rows.forEach((row) => {
+                const values = columns.map((col) => (row.dataset[col.key] || '').replace(/\s+/g, ' ').trim());
+                lines.push(values.map(csvEscape).join(';'));
+            });
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const today = new Date();
+            const dateStamp = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0')
+            ].join('-');
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `mis-tickets-${dateStamp}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(downloadUrl);
+        });
+    }
+
     if (typeof Intl.RelativeTimeFormat === 'function') {
         const relativeTime = new Intl.RelativeTimeFormat('es-VE', { numeric: 'auto' });
         const units = [
@@ -526,7 +666,6 @@ unset($ticketRegisterOptions);
             time.textContent = relativeTime.format(Math.round(difference / secondsPerUnit), unit);
         });
     }
-
 </script>
 <?php
 $main = ob_get_clean();

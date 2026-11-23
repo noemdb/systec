@@ -28,6 +28,12 @@ if (!auth_can_access_ticket_for_user((int) $ticket['created_by'])) {
     exit('No tiene permiso para seguir este ticket.');
 }
 
+$ticketStatus = $db->getFirstForId('ticket_status', (int) $ticket['status_id']);
+if ($ticketStatus && (string) ($ticketStatus['code'] ?? '') === 'finalizado') {
+    http_response_code(409);
+    exit('No se puede añadir seguimiento a un ticket finalizado.');
+}
+
 $now = date('Y-m-d H:i:s');
 $transactionStarted = false;
 try {
