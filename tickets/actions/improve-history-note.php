@@ -65,19 +65,33 @@ if (!auth_can_access_ticket_for_user((int) $ticket['created_by'])) {
     $respond(403, array('error' => 'No tiene permiso para seguir este ticket.'));
 }
 
+$property = !empty($ticket['property_id'])
+    ? $db->getFirstForId('properties', (int) $ticket['property_id'])
+    : null;
+$ticketStatus = !empty($ticket['status_id'])
+    ? $db->getFirstForId('ticket_status', (int) $ticket['status_id'])
+    : null;
+$contextParts = array();
+if (trim((string) ($ticket['title'] ?? '')) !== '') {
+    $contextParts[] = 'Incidencia: ' . trim((string) $ticket['title']);
+}
+if ($property && trim((string) ($property['description'] ?? '')) !== '') {
+    $contextParts[] = 'Bien: ' . trim((string) $property['description']);
+}
+if ($ticketStatus && trim((string) ($ticketStatus['name'] ?? '')) !== '') {
+    $contextParts[] = 'Estado actual: ' . trim((string) $ticketStatus['name']);
+}
+$ticketContext = implode(' | ', $contextParts);
+
 if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
 
-try {
-    $apiKey = getenv('API_KEY_NVIDIA_BUILD');
-    $improved = systec_nvidia_improve_ticket_history_note(
-        $note,
-        $apiKey === false ? '' : $apiKey
-    );
-} catch (Throwable $e) {
-    error_log('No se pudo mejorar la nota de seguimiento: ' . $e->getMessage());
-    $respond(502, array('error' => $e->getMessage()));
-}
+$apiKey = getenv('API_KEY_NVIDIA_BUILD');
+$improved = systec_improve_ticket_history_note_with_fallback(
+    $note,
+    $apiKey === false ? '' : $apiKey,
+    $ticketContext
+);
 
-$respond(200, array('note' => $improved['note']));
+$respond(200, $improved);
