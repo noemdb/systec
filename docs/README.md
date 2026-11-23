@@ -1,6 +1,6 @@
 # docs/ — SysTec GMB
 
-> **Estado:** v1.4 (tickets y componentes compartidos) · **Actualizado:** 2026-11-11 · **Dueño:** Oficina de Informática / equipo de mantenimiento.
+> **Estado:** v1.5 (operación web e asistencia narrativa) · **Actualizado:** 2026-11-23 · **Dueño:** Oficina de Informática / equipo de mantenimiento.
 > **Naturaleza:** documentación inversa (as-built) del sistema actual, no un blueprint aspiracional. Cada afirmación se contrastó con el código y con `storage/db.db`. Lo que no está implementado se marca como deuda o propuesta.
 
 ## Mapa
@@ -54,4 +54,4 @@ Todos los diagramas usan Mermaid y se renderizan en GitHub/GitLab o con cualquie
 
 ## Advertencia
 
-La documentación operativa está bajo control de versiones. Los documentos funcionales reflejan el código al **2026-11-11**; los conteos de `DATABASE.md` conservan la fecha de su snapshot. Los anexos de inventario, trazabilidad y plan preservan el baseline F0/F1 y no sustituyen `TODO.md`. Si el código cambia sin actualizar `docs/`, la documentación queda obsoleta y debe tratarse como incidente documental.
+La documentación operativa está bajo control de versiones. Los documentos funcionales reflejan el código al **2026-11-23**; los conteos de `DATABASE.md` conservan la fecha de su snapshot. Los anexos de inventario, trazabilidad y plan preservan el baseline F0/F1 y no sustituyen `TODO.md`. Si el código cambia sin actualizar `docs/`, la documentación queda obsoleta y debe tratarse como incidente documental.

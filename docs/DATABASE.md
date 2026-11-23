@@ -1,6 +1,6 @@
 # DATABASE.md — SysTec GMB
 
-> **Estado:** v1.4 (esquema de tickets documentado) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (esquema vigente; sin cambios de tablas en noviembre) · **Actualizado:** 2026-11-23.
 > **Motor:** SQLite 3, archivo `storage/db.db`.
 > **Regla de oro:** migraciones versionadas aplican normalización, triggers e índices. Aún no existe `FOREIGN KEY`; `users.username` es `UNIQUE`.
 

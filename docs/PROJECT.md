@@ -1,6 +1,6 @@
 # PROJECT.md — SysTec GMB
 
-> **Estado:** v1.4 (tickets y componentes compartidos) · **Actualizado:** 2026-11-11 · **Dueño:** Oficina de Informática, San Felipe, Edo. Yaracuy.
+> **Estado:** v1.5 (operación web e asistencia narrativa) · **Actualizado:** 2026-11-23 · **Dueño:** Oficina de Informática, San Felipe, Edo. Yaracuy.
 > **Fuentes:** código PHP, `storage/db.db`, migraciones y backup previo a F2, `grafo/`.
 > Ver también: `README.md`, `ARCHITECTURE.md`, `DOMAIN.md`, `TODO.md`.
 
@@ -41,7 +41,8 @@ Un único lugar para responder: **¿qué bienes tenemos, qué mantenimientos se 
 - Reporte imprimible de bienes dañados/desincorporados.
 - Impresión por lote de dos historiales.
 - Registro y seguimiento de tickets vinculados a bienes. Soporte (`admin`, `operador`, `tecnico`) gestiona la bandeja global; el rol `personal` registra y consulta solo sus tickets.
-- Alta de tickets mediante un modal reutilizable de tres pasos (selección del bien, detalles y resumen), disponible desde las áreas de tickets personal y soporte.
+- Alta de tickets mediante un modal reutilizable de tres pasos (selección del bien, detalles y resumen), disponible desde las áreas de tickets personal y soporte. El selector admite filtros por dirección y usuario asignado.
+- Asistencia opcional con NVIDIA Build para convertir relatos libres en tickets, mejorar sus campos narrativos y mejorar notas de seguimiento. Cada propuesta puede revisarse antes de guardarse; sin clave o ante fallos se usa un fallback local limitado.
 - Historial de eventos del ticket y baja lógica para `admin`/`operador`; los registros e historiales se conservan.
 - Notificaciones toast dentro de la aplicación para mensajes de resultado; son avisos de interfaz, no notificaciones push ni correo.
 - Importación de inventario mediante CSV, reporte `.xls` descargado o lectura de solo lectura desde PostgreSQL del sistema de bienes; mantenimientos desde `storage/maintenances.csv`.
@@ -96,7 +97,7 @@ Un único lugar para responder: **¿qué bienes tenemos, qué mantenimientos se 
 | Pruebas | 🧪 Parciales | PHPUnit (`composer test`) y verificaciones manuales; cobertura y CI pendientes |
 | Migraciones | ✅ F2 | `bin/migrate.php`, `migrations/`, `schema_migrations` |
 | Tickets | ✅ Operativo | `tickets.php`, `personal/index.php`, endpoints y wizard compartido |
-| Documentación | ✅ v1.4 | Este directorio; actualizado al 2026-11-11 |
+| Documentación | ✅ v1.5 | Este directorio; actualizado al 2026-11-23 |
 
 ## Referencias
 

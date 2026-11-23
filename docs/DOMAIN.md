@@ -1,6 +1,6 @@
 # DOMAIN.md — SysTec GMB
 
-> **Estado:** v1.4 (tickets y flujos compartidos) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (tickets, filtros compartidos y asistencia narrativa) · **Actualizado:** 2026-11-23.
 > Este es el **idioma ubicuo** del sistema: los términos y reglas que deben usarse igual en código, UI, reportes y documentación. Si un término no está aquí, no existe para efectos de diseño.
 >
 > **Fuente de verdad:** el código actual, los datos de `db.db` y las decisiones aprobadas por el dueño. Las normalizaciones aplicadas se registran en ADR y migraciones.
@@ -146,6 +146,8 @@
 - **Relaciones lógicas:** cada ticket corresponde a un bien y a un usuario creador; puede tener un usuario asignado, estado y múltiples eventos en `ticket_histories`. Las tablas no declaran claves foráneas físicas.
 - **Registro:** se exige un bien existente, título y descripción no vacíos; la observación es opcional. Se inicia con estado `iniciado` y se escribe un evento `created`.
 - **Wizard compartido:** tanto `/tickets.php` como `/personal/index.php` muestran el modal reutilizable de tres pasos. El selector consulta bienes y direcciones, permite filtrar por categoría/dirección y buscar por código/descripción.
+- **Filtros del selector:** además de categoría y dirección, el selector puede limitar bienes por usuario asignado.
+- **Asistencia narrativa:** el usuario puede procesar un relato libre o mejorar título, descripción y observación. También puede mejorar una nota de seguimiento desde personal o soporte. La propuesta no se persiste hasta enviarla explícitamente en el formulario.
 - **Acceso:** `admin`, `operador` y `tecnico` acceden a la bandeja de soporte; `personal` registra y consulta únicamente tickets propios dentro de `/personal/`.
 - **Baja lógica:** solo `admin` y `operador` pueden dar de baja desde soporte. `deleted_at` oculta el ticket y bloquea su seguimiento; la fila y el historial se conservan.
 - **Trazabilidad:** el alta, los seguimientos, cambios de estado y baja agregan eventos en `ticket_histories`; no es una auditoría general de cambios de la aplicación.

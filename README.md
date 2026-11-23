@@ -28,6 +28,7 @@ El servidor de desarrollo usa `router.php`, que bloquea el acceso directo a `sto
 | `operador` | ✅ | ✅ | ✅ | ✅ |
 | `tecnico` | ✅ | — | ✅ | — |
 | `consulta` | ✅ | — | — | — |
+| `personal` | ✅ | — | — | — |
 
 Los usuarios se gestionan por CLI:
 
@@ -52,6 +53,7 @@ systec/
 ├── maintenances/          # Mantenimientos
 ├── properties/            # Importación de inventario
 ├── historials/            # Vistas de historial
+├── personal/              # Tickets propios del rol personal
 ├── storage/               # db.db, backups, CSV y logs (fuera del webroot)
 ├── docs/                  # Documentación as-built
 ├── grafo/                 # Grafo de lógica de negocio
@@ -82,4 +84,4 @@ Antes de exponer el sistema fuera de la red de confianza: configurar HTTPS/HSTS 
 
 ## Estado
 
-F1 (contención de seguridad) implementada el 2026-11-09. Quedan pendientes de F2/F3: normalización de datos legacy, migraciones versionadas, índices, reporte de dañados sin duplicados, auditoría y pruebas automatizadas.
+El sistema incluye inventario, mantenimientos, reportes, tickets, gestión web de usuarios, importaciones, backups programables y asistencia narrativa opcional con NVIDIA. Las tareas operativas pendientes se mantienen en `docs/TODO.md`; HTTPS/HSTS real, auditoría general, CI operativo completo y pruebas E2E siguen sujetas a despliegue o aprobación.

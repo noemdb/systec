@@ -1,6 +1,6 @@
 # API.md — SysTec GMB
 
-> **Estado:** v1.5 (repositorios, paginación de soporte, gestión de usuarios y rate limiting) · **Actualizado:** 2026-11-18.
+> **Estado:** v1.5 (repositorios, paginación de soporte, gestión de usuarios y asistencia NVIDIA) · **Actualizado:** 2026-11-23.
 > **No existe una API pública.** El sistema expone una superficie HTTP de páginas y formularios que devuelven HTML y redirecciones. Este documento describe esa superficie real, no un contrato REST ideal.
 
 ---
@@ -66,6 +66,9 @@
 | 4f | GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | Devuelve detalle e historial del ticket | JSON |
 | 4g | GET | `/personal/actions/properties.php` | `personal/actions/properties.php` | `personal` | Devuelve bienes y direcciones para el selector | JSON |
 | 4h | POST | `/personal/actions/password.php` | `personal/actions/password.php` | Sesión + CSRF | Cambia la contraseña de la cuenta autenticada | `302` |
+| 4i | POST | `/personal/actions/process-narrative.php` | `personal/actions/process-narrative.php` | `personal` + CSRF | Convierte un relato libre en título, descripción y observación; admite fallback local | JSON |
+| 4j | POST | `/personal/actions/improve-narrative.php` | `personal/actions/improve-narrative.php` | `personal` + CSRF | Mejora los campos narrativos de un ticket personal | JSON |
+| 4k | POST | `/personal/actions/improve-history-note.php` | `personal/actions/improve-history-note.php` | `personal` + CSRF | Mejora una nota de seguimiento propia y valida que el ticket siga activo | JSON |
 | 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search`, `category`, `status`, `adscription` | HTML |
 | 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Actualiza el estado físico de un bien previa confirmación | `302` |
 | 7 | GET | `/maintenances.php` | `maintenances.php` | Sesión | Lista, alta o edición según parámetros | HTML |
@@ -82,6 +85,9 @@
 | 10f | GET | `/tickets/detail.php?id={id}` | `tickets/detail.php` | `admin`, `operador`, `tecnico` | Detalle, historial y formularios autorizados | HTML |
 | 10g | POST | `/tickets/actions/history.php` | `tickets/actions/history.php` | `admin`, `operador`, `tecnico` + CSRF | Agrega seguimiento a ticket activo | `302` |
 | 10h | POST | `/tickets/actions/status.php` | `tickets/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y agrega evento | `302` |
+| 10k | POST | `/tickets/actions/improve-narrative.php` | `tickets/actions/improve-narrative.php` | `admin`, `operador`, `tecnico` + CSRF | Mejora los campos narrativos de un ticket de soporte | JSON |
+| 10l | POST | `/tickets/actions/process-narrative.php` | `tickets/actions/process-narrative.php` | `admin`, `operador`, `tecnico` + CSRF | Convierte un relato libre en campos de ticket de soporte | JSON |
+| 10m | POST | `/tickets/actions/improve-history-note.php` | `tickets/actions/improve-history-note.php` | `admin`, `operador`, `tecnico` + CSRF | Mejora una nota de seguimiento de soporte | JSON |
 | 11 | GET | `/historials.php` | `historials.php` | Sesión | Historial de un bien | HTML |
 | 12 | GET | `/report.php` | `report.php` | Sesión | Reporte de bienes dañados | HTML imprimible |
 | 13 | GET | `/batch.php` | `batch.php` | Sesión | Dos historiales en una página | HTML imprimible |

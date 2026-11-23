@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — SysTec GMB
 
-> **Estado:** v1.5 (repositorios especializados, CI y gestión de usuarios) · **Actualizado:** 2026-11-18.
+> **Estado:** v1.5 (repositorios especializados, CI, gestión de usuarios y asistencia narrativa) · **Actualizado:** 2026-11-23.
 > Describe cómo se conectan las piezas del sistema actual. El detalle de rutas y parámetros vive en `API.md`; el esquema y los datos, en `DATABASE.md`; los riesgos, en `SECURITY.md`.
 
 ## Principio rector

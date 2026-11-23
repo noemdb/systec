@@ -1,6 +1,6 @@
 # SECURITY.md — SysTec GMB
 
-> **Estado:** v1.5 (rate limiting en login, gestión web de usuarios, pruebas de seguridad y CI) · **Actualizado:** 2026-11-18.
+> **Estado:** v1.5 (rate limiting en login, gestión web de usuarios, asistencia NVIDIA y CI) · **Actualizado:** 2026-11-23.
 > **Resumen ejecutivo:** F1 implementó autenticación, roles, CSRF, escape, SQL parametrizado y protección de `storage/`. F2 agregó transacciones y límites de importación, normalizó datos aprobados, aplicó triggers e índices.En 2026-11-18 se incorporaron bloqueo por fuerza bruta en login (`SEC-02`), eliminación de artefactos sensibles del repositorio (`SEC-01`), gestión de usuarios/contraseñas (`OPS-02`), script de backup verificable (`OPS-01`) y suite automatizada de seguridad y CI (`TEST-01`/`TEST-02`). Siguen pendientes HTTPS/HSTS en el servidor real y la tabla de auditoría general (`audit_events`).
 
 ---
@@ -23,6 +23,8 @@
 ### Redacción asistida por NVIDIA Build
 
 `bin/improve-maintenance-narrative.php` usa la API de NVIDIA Build con `nvidia/nemotron-3.5-lightning-30b-a3b`. Solo transmite `description`, `failure_reason` y `notes`; no envía IDs, códigos de bienes, fechas, técnicos ni estados. Los textos podrían contener datos sensibles por sí mismos. La vista previa también realiza una solicitud externa, aunque no persiste cambios. `API_KEY_NVIDIA_BUILD` se carga desde el entorno o `.env`, y se envía en el encabezado Bearer sin registrarse. El endpoint está sujeto a la cuota y disponibilidad del servicio de prueba de NVIDIA. La generación de todas las propuestas termina antes de iniciar la transacción; si la API falla, no se guardan cambios parciales.
+
+Los flujos web de tickets usan el mismo proveedor con acciones JSON separadas para relato libre, mejora de campos y mejora de notas. Exigen sesión, CSRF y el rol o propietario correspondiente. Validan longitud, campos obligatorios y, en seguimientos, existencia, baja lógica y estado finalizado. Ante ausencia de clave o respuesta inválida, procesan un fallback local o devuelven un estado controlado; el usuario debe revisar y enviar el texto antes de persistirlo.
 
 ---
 

@@ -1,5 +1,33 @@
 # CHANGELOG docs/ — SysTec GMB
 
+## 2026-11-23 — Asistencia narrativa NVIDIA en tickets y seguimientos
+
+- El registro de tickets comparte ahora entre personal y soporte una interacción de tres pasos con asistencia por NVIDIA:
+  - puede transformar un relato libre en título, descripción y observación;
+  - puede mejorar los campos existentes sin vaciar datos originales;
+  - conserva los límites de longitud y exige título/descripción en el relato estructurado.
+- Se incorporaron acciones JSON protegidas por sesión y CSRF para procesar relatos, mejorar tickets y mejorar notas de seguimiento.
+- Los modales/offcanvas de seguimiento personal y soporte incluyen textos rápidos frecuentes y el botón «Mejorar con IA».
+- Las mejoras cuentan con fallback local cuando NVIDIA no está disponible o no responde con JSON válido, muestran estados de carga/error y permiten revisar el texto antes de registrar.
+- El selector de bienes acepta filtros por dirección y usuario asignado; la respuesta JSON devuelve `assigned_users` y conserva el cache/adscription legacy.
+- Se corrigió el flujo posterior al registro personal: vuelve a `/personal/index.php`, confirma la creación y conserva el contexto de la bandeja.
+- `tests/Unit/NvidiaMaintenanceNarrativeTest.php` cubre extracción de JSON, validación de campos obligatorios/longitudes, preservación de notas vacías y fallbacks locales.
+
+---
+
+## 2026-11-21 — Actualización integral de operación, interfaz y sincronización
+
+- Se renovaron las vistas de Dashboard, Mantenimientos, Inventario, Tickets, Usuarios, Importaciones, Reportes e Historiales con filtros, modales, tablas responsivas y mensajes toast consistentes.
+- `dashboard.php` y `maintenances.php` incorporaron mejoras de búsqueda, selección y actualización de estado; la consulta de inventario ya no depende de PostgreSQL legacy durante cada GET.
+- `include/inventory_import.php` amplió la lectura de CSV/XLS y el snapshot legacy local; `sync-assignments.php` y `updates.php` separan explícitamente la sincronización activa de lectura en caché.
+- `users.php` pasó a gestionar cuentas, roles y contraseñas desde la interfaz; se reforzaron las rutas de alta/baja y protección contra desactivar o degradar la propia cuenta.
+- `include/repositories/` amplió los repositorios de bienes, mantenimientos y tickets para cubrir filtros, conteos y consultas nuevas.
+- `documentation.php` recibió mejoras de presentación y ahora mantiene y ofrece una copia imprimible/PDF de la documentación.
+- Se agregaron pruebas unitarias para gestión de usuarios, helpers, resúmenes del inicio, importación de inventario y narrativas NVIDIA.
+- Se conserva la persistencia en SQLite y las reglas transaccionales; no se agregaron nuevas tablas de negocio en estos cambios.
+
+---
+
 ## 2026-11-18 — Paginador Vanilla JS (sin jQuery) con estilo numérico clásico
 
 - `assets/js/table-paginator.js`: nuevo componente reutilizable `window.Systec.TablePaginator` en JavaScript nativo (ES6), sin dependencias de jQuery ni DataTables.

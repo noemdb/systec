@@ -1,6 +1,6 @@
 # CONVENTIONS.md — SysTec GMB
 
-> **Estado:** v1.4 (componentes compartidos y pruebas actuales) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (componentes compartidos, asistencia narrativa y pruebas actuales) · **Actualizado:** 2026-11-23.
 > Consistencia para un equipo pequeño y agentes IA. Este documento se subordina a `DOMAIN.md` (idioma), `DATABASE.md` (persistencia), `API.md` (rutas) y `SECURITY.md` (controles).
 
 ---

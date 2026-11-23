@@ -1,6 +1,6 @@
 # TODO.md — SysTec GMB
 
-> **Estado:** v1.4 (F2 y módulo de tickets) · **Actualizado:** 2026-11-11.
+> **Estado:** v1.5 (F2/F3, operación web y asistencia narrativa) · **Actualizado:** 2026-11-23.
 > Fuente de verdad del estado técnico y documental. Un ítem es ✅ solo cuando cumple su criterio de aceptación y está verificado. Las prioridades son `P0` (bloqueante de seguridad), `P1` (calidad/operación), `P2` (mejora), `P3` (futuro).
 
 ## Leyenda
@@ -21,7 +21,7 @@
 | `CONVENTIONS.md` | ✅ | Estilo y patrones |
 | `DECISIONS.md` | ✅ | ADR-001–018 |
 | `TODO.md` | ✅ | Este archivo |
-| `CHANGELOG.md` | ✅ | Entradas de cambios hasta 2026-11-11 |
+| `CHANGELOG.md` | ✅ | Entradas de cambios hasta 2026-11-23 |
 | `anexos/inventario-tecnico.md` | ✅ | Análisis archivo por archivo |
 | `anexos/matriz-trazabilidad.md` | ✅ | Hallazgo → código → doc → tarea |
 | `anexos/plan-documentacion.md` | ✅ | Snapshot inicial; plan vigente en `spec/documentations/plan-documentacion.md` |
@@ -36,7 +36,7 @@
 | Historial | ✅ Operativo | `historials.php` | Bien inexistente controlado |
 | Reporte de dañados | ✅ F2 | `report.php` | Deduplicado por consulta |
 | Importación | ✅ F2 | `updates.php`, `imports.php` | POST, confirmación, transacción y límite |
-| Tickets | ✅ Operativo | `tickets.php`, `personal/index.php`, `tickets/`, `personal/` | Roles separados, historial funcional y baja lógica; componentes de registro compartidos |
+| Tickets | ✅ Operativo | `tickets.php`, `personal/index.php`, `tickets/`, `personal/` | Roles separados, historial funcional, baja lógica, selector con dirección/asignado y asistencia narrativa opcional |
 | Persistencia | 🧪 F2 | `storage/db.db`, `migrations/`, `BACKUP.md` | Migraciones e índices; política de backup definida parcialmente, destino/cifrado/crontab pendientes; FK pendiente |
 | Seguridad | 🧪 F1 | `SECURITY.md` | Controles de aplicación implementados; HTTPS/HSTS, rate limiting y auditoría pendientes |
 | Pruebas | 🧪 Parciales | `composer test`, `tests/Unit/` | Suite PHPUnit básica; cobertura integral, pruebas E2E y CI pendientes |
