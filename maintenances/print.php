@@ -81,9 +81,14 @@ try {
 $adscriptionsByPropertyId = array();
 $adscriptionOptions = array();
 $assignmentFilterOptions = array('responsible' => array(), 'assigned' => array());
+$institutionalAdscriptionsByLabel = property_adscription_institutional_index($legacyAdscriptionsByIdent);
 foreach ($propertiesForAdscription as $property) {
     $propertyId = (int) $property['id'];
-    $assignment = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
+    $assignment = property_adscription_assignment(
+        $property,
+        $legacyAdscriptionsByIdent,
+        $institutionalAdscriptionsByLabel
+    );
     $adscriptionsByPropertyId[$propertyId] = $assignment;
     $adscriptionOptions[$assignment['key']] = $assignment['label'];
     if ($canViewAssignments) {

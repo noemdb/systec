@@ -24,8 +24,10 @@ $notifications = $maintenanceNotice !== ''
 $db = db();
 $maintenances = $db->index('maintenances', array(), '*', 'id DESC');
 $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canDeleteRenditionReport = auth_has_role(array('admin'));
 $canViewTickets = auth_can_view_tickets();
 $canViewAssignments = auth_has_role(array('admin', 'operador', 'tecnico'));
+$canSyncInventory = auth_has_role(array('admin', 'operador'));
 $ticketCount = $canViewTickets
     ? $db->countRows('tickets', array(array('deleted_at', 'IS', null)))
     : 0;
@@ -66,16 +68,102 @@ $adscriptionsByPropertyId = $filterMetadata['adscriptions_by_property_id'];
 $adscriptionOptions = $filterMetadata['adscription_options'];
 $localAdscriptionCount = $filterMetadata['local_adscription_count'];
 
-$adscriptionSourceWarning = '';
+$adscriptionUnitCount = count($adscriptionOptions);
+if (isset($adscriptionOptions['__unassigned__'])) {
+    // El filtro agrega una opción sintética para los bienes sin adscripción.
+    $adscriptionUnitCount--;
+}
+$adscriptionCacheCheckedAt = isset($localCache['cached_at']) && $localCache['cached_at'] !== null
+    ? date('d/m/Y H:i', (int) $localCache['cached_at'])
+    : '—';
+$adscriptionCacheRelativeAge = isset($localCache['age_seconds']) && is_int($localCache['age_seconds'])
+    ? format_relative_age($localCache['age_seconds'])
+    : '—';
+
+// Estado de la fuente de adscripciones: alimenta el badge del filtro y su modal informativo.
 if (!$legacySyncAvailable) {
-    $adscriptionSourceWarning = $localAdscriptionCount > 0
-        ? 'Sin caché institucional reciente; se usan las adscripciones locales guardadas.'
-        : 'Sin caché institucional ni adscripciones locales; sincroniza el inventario para ver unidades.';
+    if (!empty($localCache['unreadable'])) {
+        $adscriptionSourceState = 'unreadable';
+    } else {
+        $adscriptionSourceState = $localAdscriptionCount > 0 ? 'local' : 'empty';
+    }
 } elseif ($legacySyncStale) {
-    $adscriptionSourceWarning = 'Caché institucional desactualizado (>24 h); se muestran los últimos datos guardados.';
+    $adscriptionSourceState = 'stale';
+} else {
+    $adscriptionSourceState = 'synced';
 }
 
+$adscriptionSourceMeta = array(
+    'synced' => array(
+        'badge_class' => 'badge rounded-pill text-bg-light border text-success-emphasis',
+        'badge_icon' => 'bi-cloud-check',
+        'badge_label' => 'Sincronizado',
+        'badge_title' => 'Ver el detalle de la fuente de adscripciones',
+        'label_class' => 'form-label fw-semibold small mb-0',
+        'label_icon' => 'bi-patch-check-fill text-success-emphasis opacity-75',
+        'tone' => 'success',
+        'title' => 'Adscripciones sincronizadas',
+        'summary' => 'El filtro usa la caché institucional vigente, por lo que las unidades están actualizadas.',
+        'origin' => 'Caché institucional (PostgreSQL)',
+        'recommendation' => '',
+    ),
+    'stale' => array(
+        'badge_class' => 'badge rounded-pill text-bg-warning border-0',
+        'badge_icon' => 'bi-clock-history',
+        'badge_label' => 'Caché vencida',
+        'badge_title' => 'Ver el detalle de la fuente de adscripciones',
+        'label_class' => 'form-label fw-semibold small mb-0 text-warning-emphasis',
+        'label_icon' => 'bi-exclamation-triangle-fill',
+        'tone' => 'warning',
+        'title' => 'Caché institucional desactualizada',
+        'summary' => 'La última sincronización supera el umbral de vigencia (24 h); se muestran los últimos datos guardados.',
+        'origin' => 'Caché institucional (PostgreSQL), sin actualizar',
+        'recommendation' => 'Sincroniza el inventario para refrescar las unidades disponibles en el filtro.',
+    ),
+    'local' => array(
+        'badge_class' => 'badge rounded-pill text-bg-warning border-0',
+        'badge_icon' => 'bi-exclamation-triangle-fill',
+        'badge_label' => 'Datos locales',
+        'badge_title' => 'Ver el detalle de la fuente de adscripciones',
+        'label_class' => 'form-label fw-semibold small mb-0 text-warning-emphasis',
+        'label_icon' => 'bi-exclamation-triangle-fill',
+        'tone' => 'warning',
+        'title' => 'Sin caché institucional reciente',
+        'summary' => 'El filtro usa las adscripciones locales guardadas; pueden no reflejar la estructura actual.',
+        'origin' => 'Adscripciones locales guardadas',
+        'recommendation' => 'Sincroniza el inventario con la base institucional para actualizar las unidades.',
+    ),
+    'empty' => array(
+        'badge_class' => 'badge rounded-pill text-bg-danger border-0',
+        'badge_icon' => 'bi-exclamation-octagon-fill',
+        'badge_label' => 'Sin unidades',
+        'badge_title' => 'Ver el detalle de la fuente de adscripciones',
+        'label_class' => 'form-label fw-semibold small mb-0 text-danger-emphasis',
+        'label_icon' => 'bi-exclamation-octagon-fill',
+        'tone' => 'danger',
+        'title' => 'Sin adscripciones disponibles',
+        'summary' => 'No hay caché institucional ni adscripciones locales guardadas.',
+        'origin' => 'Sin datos',
+        'recommendation' => 'Sincroniza el inventario para habilitar el filtro por unidad de adscripción.',
+    ),
+    'unreadable' => array(
+        'badge_class' => 'badge rounded-pill text-bg-danger border-0',
+        'badge_icon' => 'bi-shield-lock-fill',
+        'badge_label' => 'Caché sin acceso',
+        'badge_title' => 'Ver el detalle de la fuente de adscripciones',
+        'label_class' => 'form-label fw-semibold small mb-0 text-danger-emphasis',
+        'label_icon' => 'bi-shield-lock-fill',
+        'tone' => 'danger',
+        'title' => 'Caché institucional sin acceso',
+        'summary' => 'El servidor web no puede leer el directorio de caché de adscripciones; se usan las adscripciones locales guardadas.',
+        'origin' => 'Caché institucional (sin permisos de lectura)',
+        'recommendation' => 'Revisa los permisos de storage/cache para la cuenta del servidor web (por ejemplo, www-data) y vuelve a sincronizar el inventario.',
+    ),
+);
+$adscriptionSource = $adscriptionSourceMeta[$adscriptionSourceState];
+
 $maintenanceCounts = $db->maintenances()->summarizeCounts($maintenances);
+$renditionReportCount = $canEditMaintenance ? $db->renditionReports()->countReports() : 0;
 
 $id = array_key_exists('id', $_GET) ? $_GET['id'] : null;
 $property_id = array_key_exists('property_id', $_GET) ? $_GET['property_id'] : null;
@@ -227,6 +315,7 @@ ob_start(); ?>
 
     <?php if ($canEditMaintenance) : ?>
         <?php include __DIR__ . '/maintenances/form/create_drawer.php'; ?>
+        <?php include __DIR__ . '/maintenances/form/rendition_wizard_modal.php'; ?>
     <?php endif; ?>
 
     <style nonce="<?= e(systec_csp_nonce()) ?>">
@@ -292,6 +381,27 @@ ob_start(); ?>
             overflow-wrap: anywhere;
         }
 
+        .adscription-source-badge {
+            cursor: pointer;
+            text-decoration: none;
+            transition: filter .15s ease;
+        }
+
+        .adscription-source-badge:hover {
+            filter: brightness(.95);
+        }
+
+        .adscription-source-badge:focus-visible {
+            outline: 0;
+            box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb, 13, 110, 253), .35);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .adscription-source-badge {
+                transition: none;
+            }
+        }
+
         @media (min-width: 992px) {
             .maintenance-edit-form .card-body:first-of-type {
                 display: grid;
@@ -303,6 +413,40 @@ ob_start(); ?>
             .maintenance-edit-form .property-picker {
                 grid-column: 1 / -1;
             }
+        }
+
+        .rendition-preview-scroll {
+            max-height: 24rem;
+            overflow-y: auto;
+        }
+
+        .rendition-final-preview-scroll {
+            max-height: 14rem;
+            overflow-y: auto;
+        }
+
+        .rendition-wizard-drawer {
+            --bs-offcanvas-width: min(64rem, 100vw);
+            max-width: 100vw;
+        }
+
+        .rendition-history-drawer {
+            --bs-offcanvas-width: min(48rem, 100vw);
+            max-width: 100vw;
+        }
+
+        .rendition-wizard-drawer-form {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .rendition-wizard-drawer-form .offcanvas-body {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
     </style>
 
@@ -316,7 +460,13 @@ ob_start(); ?>
             propertyTicketsUrl: <?= js(url('maintenances/actions/property-tickets.php')) ?>,
             registerMaintenanceUrl: <?= js(url('maintenances/register.php')) ?>,
             updateMaintenanceUrl: <?= js(url('maintenances/update.php')) ?>,
-            printUrl: <?= js(url('maintenances/print.php')) ?>
+            printUrl: <?= js(url('maintenances/print.php')) ?>,
+            generateRenditionReportUrl: <?= js(url('maintenances/actions/generate-rendition-report.php')) ?>,
+            saveRenditionReportUrl: <?= js(url('maintenances/actions/save-rendition-report.php')) ?>,
+            deleteRenditionReportUrl: <?= js(url('maintenances/actions/delete-rendition-report.php')) ?>,
+            canDeleteRenditionReport: <?= js($canDeleteRenditionReport) ?>,
+            renditionReportsUrl: <?= js(url('maintenances/actions/rendition-reports.php')) ?>,
+            renditionPrintUrl: <?= js(url('maintenances/rendition-print.php')) ?>
         };
     </script>
     <script nonce="<?= e(systec_csp_nonce()) ?>" src="<?= e(url('assets/js/maintenances.js')) ?>"></script>

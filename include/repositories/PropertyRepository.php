@@ -240,6 +240,7 @@ class PropertyRepository
         $propertyCategories = array();
         $propertiesById = array();
         $localAdscriptionCount = 0;
+        $institutionalAdscriptionsByLabel = property_adscription_institutional_index($legacyAdscriptionsByIdent);
 
         foreach ($properties as $property) {
             $propertyId = (int) $property['id'];
@@ -249,7 +250,11 @@ class PropertyRepository
                 $localAdscriptionCount++;
             }
 
-            $adscription = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
+            $adscription = property_adscription_assignment(
+                $property,
+                $legacyAdscriptionsByIdent,
+                $institutionalAdscriptionsByLabel
+            );
             $adscriptionsByPropertyId[$propertyId] = $adscription;
             $adscriptionOptions[$adscription['key']] = $adscription['label'];
 

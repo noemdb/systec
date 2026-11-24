@@ -12,6 +12,7 @@ require_once __DIR__ . '/csv_import.php';
  *   - cached_at:    int|null  (timestamp UNIX del cache, o null)
  *   - stale:        bool
  *   - found:        bool  (true si se encontró y leyó un archivo de cache)
+ *   - unreadable:   bool  (true si el directorio o los archivos de cache no son legibles)
  */
 function legacy_postgres_read_local_cache(?int $ttlSeconds = null, ?int $now = null): array
 {
@@ -23,10 +24,16 @@ function legacy_postgres_read_local_cache(?int $ttlSeconds = null, ?int $now = n
         'age_seconds'  => null,
         'stale'        => false,
         'found'        => false,
+        'unreadable'   => false,
     );
 
     $cacheDirectory = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
     if (!is_dir($cacheDirectory)) {
+        return $empty;
+    }
+
+    if (!is_readable($cacheDirectory)) {
+        $empty['unreadable'] = true;
         return $empty;
     }
 
@@ -37,17 +44,34 @@ function legacy_postgres_read_local_cache(?int $ttlSeconds = null, ?int $now = n
         return $empty;
     }
 
-    // Ordena por mtime descendente y toma el más reciente.
+    // Ordena por mtime descendente y usa el más reciente que se pueda leer.
     usort($files, static function ($a, $b) {
         return filemtime($b) - filemtime($a);
     });
 
-    $contents = @file_get_contents($files[0]);
-    if ($contents === false) {
-        return $empty;
+    $decoded = null;
+    foreach ($files as $cacheFile) {
+        if (!is_readable($cacheFile)) {
+            // Puede haber archivos legibles más antiguos escritos por otra cuenta de servicio.
+            $empty['unreadable'] = true;
+            continue;
+        }
+
+        $contents = @file_get_contents($cacheFile);
+        if ($contents === false) {
+            $empty['unreadable'] = true;
+            continue;
+        }
+
+        $candidate = json_decode($contents, true);
+        if (!is_array($candidate)) {
+            continue;
+        }
+
+        $decoded = $candidate;
+        break;
     }
 
-    $decoded = json_decode($contents, true);
     if (!is_array($decoded)) {
         return $empty;
     }
@@ -106,7 +130,12 @@ function legacy_postgres_write_local_cache(
 
     $cacheDirectory = SYSTEC_STORAGE . DIRECTORY_SEPARATOR . 'cache';
     if (!is_dir($cacheDirectory) && !mkdir($cacheDirectory, 0750, true) && !is_dir($cacheDirectory)) {
-        error_log('No se pudo crear el directorio de cache de adscripciones.');
+        error_log('No se pudo crear el directorio de cache de adscripciones: ' . $cacheDirectory);
+        return false;
+    }
+
+    if (!is_writable($cacheDirectory)) {
+        error_log('El directorio de cache de adscripciones no es escribible por la cuenta del servidor: ' . $cacheDirectory);
         return false;
     }
 
@@ -117,6 +146,8 @@ function legacy_postgres_write_local_cache(
         error_log('No se pudo abrir el lock del cache de adscripciones.');
         return false;
     }
+    // Permite que otra cuenta de servicio (CLI vs. FPM) comparta el lock.
+    @chmod($cachePath . '.lock', 0660);
 
     try {
         if (!flock($lock, LOCK_EX)) {
@@ -167,6 +198,7 @@ function legacy_postgres_write_local_cache(
             error_log('No se pudo guardar el cache local de inventario.');
             return false;
         }
+        @chmod($cachePath, 0640);
 
         return true;
     } finally {
@@ -469,6 +501,7 @@ function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers
             'stale' => false,
         );
     }
+    @chmod($cachePath . '.lock', 0660);
 
     try {
         if (!flock($lock, LOCK_EX)) {
@@ -531,6 +564,8 @@ function legacy_postgres_cached_property_adscriptions(array $propertyIdentifiers
                     unlink($temporaryPath);
                 }
                 error_log('No se pudo guardar el cache de adscripciones.');
+            } else {
+                @chmod($cachePath, 0640);
             }
             return $snapshot;
         } catch (Throwable $e) {
@@ -580,6 +615,7 @@ function legacy_postgres_refresh_adscription_cache(
     if ($lock === false) {
         return;
     }
+    @chmod($cachePath . '.lock', 0660);
 
     try {
         if (!flock($lock, LOCK_EX | LOCK_NB)) {
@@ -617,6 +653,7 @@ function legacy_postgres_refresh_adscription_cache(
             }
             throw new RuntimeException('No se pudo guardar el cache de adscripciones.');
         }
+        @chmod($cachePath, 0640);
     } catch (Throwable $e) {
         error_log('No se pudo refrescar el cache de adscripciones en segundo plano: ' . $e->getMessage());
     } finally {

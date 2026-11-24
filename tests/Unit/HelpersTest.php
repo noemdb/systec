@@ -112,6 +112,21 @@ class HelpersTest extends TestCase
         );
     }
 
+    public function testPropertyAdscriptionReusesInstitutionalKeyForMatchingLocalLabel(): void
+    {
+        $legacy = array(
+            '0008' => array('key' => '0001/0001/00000002', 'label' => 'Dirección de Gestión Humana'),
+        );
+
+        self::assertSame(
+            array('key' => '0001/0001/00000002', 'label' => 'Dirección de Gestión Humana'),
+            property_adscription_assignment(
+                array('ident' => '9', 'adscription' => '  DIRECCION DE GESTION HUMANA '),
+                $legacy
+            )
+        );
+    }
+
     public function testPropertyStatusLabelsAreConsistent(): void
     {
         self::assertSame('Muy malo', property_status_label(' muy malo '));

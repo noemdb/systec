@@ -29,16 +29,25 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
         </div>
 
         <div class="col-12 col-sm-6 col-xl-3">
-            <label for="filterAdscription" class="form-label fw-semibold small mb-0">Unidad de adscripción</label>
-            <select id="filterAdscription" class="form-select form-select-sm">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <label for="filterAdscription" class="<?= e($adscriptionSource['label_class']) ?>">
+                    <i class="bi <?= e($adscriptionSource['label_icon']) ?> me-1" aria-hidden="true"></i>Unidad de adscripción
+                </label>
+                <button type="button"
+                        class="<?= e($adscriptionSource['badge_class']) ?> adscription-source-badge flex-shrink-0"
+                        data-bs-toggle="modal" data-bs-target="#adscriptionSourceModal"
+                        aria-controls="adscriptionSourceModal"
+                        aria-label="Fuente de adscripciones: <?= e($adscriptionSource['badge_label']) ?>. Ver detalle"
+                        title="<?= e($adscriptionSource['badge_title']) ?>">
+                    <i class="bi <?= e($adscriptionSource['badge_icon']) ?> me-1" aria-hidden="true"></i><?= e($adscriptionSource['badge_label']) ?>
+                </button>
+            </div>
+            <select id="filterAdscription" class="form-select form-select-sm mt-1">
                 <option value="">Todas las unidades</option>
                 <?php foreach ($adscriptionOptions as $key => $label) : ?>
                     <option value="<?= e($key) ?>"><?= e($label) ?></option>
                 <?php endforeach; ?>
             </select>
-            <?php if ($adscriptionSourceWarning !== '') : ?>
-                <span class="form-text text-warning-emphasis"><?= e($adscriptionSourceWarning) ?></span>
-            <?php endif; ?>
         </div>
 
         <?php if ($canViewAssignments) : ?>
@@ -123,6 +132,25 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
                 </label>
             </div>
         </div>
+
+        <?php if ($canEditMaintenance) : ?>
+            <div class="col-12 col-xl-4 d-flex flex-wrap justify-content-xl-end gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm"
+                        id="openRenditionReportWizard"
+                        data-bs-toggle="offcanvas" data-bs-target="#renditionReportWizardModal"
+                        aria-controls="renditionReportWizardModal"
+                        title="Generar Informe de Rendición del período seleccionado con ayuda de IA">
+                    <i class="bi bi-file-earmark-richtext me-1" aria-hidden="true"></i>Informe de Rendición
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        id="openRenditionReportHistory"
+                        data-bs-toggle="offcanvas" data-bs-target="#renditionReportHistoryModal"
+                        aria-controls="renditionReportHistoryModal"
+                        title="Consultar informes de rendición guardados o aprobados">
+                    <i class="bi bi-collection me-1" aria-hidden="true"></i>Informes (<span id="renditionSavedCount"><?= e((string) ($renditionReportCount ?? 0)) ?></span>)
+                </button>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 
@@ -523,6 +551,70 @@ $canEditMaintenance = auth_has_role(array('admin', 'operador', 'tecnico'));
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal informativo de la fuente de adscripciones -->
+<div class="modal fade" id="adscriptionSourceModal" tabindex="-1"
+     aria-labelledby="adscriptionSourceModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content text-start">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title fs-5" id="adscriptionSourceModalTitle">
+                        <i class="bi bi-diagram-3 text-primary me-2" aria-hidden="true"></i>Fuente de las adscripciones
+                    </h2>
+                    <p class="small text-body-secondary mb-0">Filtro «Unidad de adscripción»</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-start gap-2 mb-3">
+                    <span class="rounded-circle bg-<?= e($adscriptionSource['tone']) ?>-subtle text-<?= e($adscriptionSource['tone']) ?> p-2 flex-shrink-0"
+                          aria-hidden="true">
+                        <i class="bi <?= e($adscriptionSource['badge_icon']) ?>"></i>
+                    </span>
+                    <div>
+                        <p class="fw-semibold mb-1"><?= e($adscriptionSource['title']) ?></p>
+                        <p class="small text-body-secondary mb-0"><?= e($adscriptionSource['summary']) ?></p>
+                    </div>
+                </div>
+
+                <dl class="row g-2 small mb-0">
+                    <dt class="col-6 fw-normal text-body-secondary">Estado</dt>
+                    <dd class="col-6 text-end mb-0">
+                        <span class="<?= e($adscriptionSource['badge_class']) ?>">
+                            <i class="bi <?= e($adscriptionSource['badge_icon']) ?> me-1" aria-hidden="true"></i><?= e($adscriptionSource['badge_label']) ?>
+                        </span>
+                    </dd>
+                    <dt class="col-6 fw-normal text-body-secondary">Origen de los datos</dt>
+                    <dd class="col-6 text-end mb-0"><?= e($adscriptionSource['origin']) ?></dd>
+                    <dt class="col-6 fw-normal text-body-secondary">Unidades disponibles</dt>
+                    <dd class="col-6 text-end fw-semibold mb-0"><?= e((string) $adscriptionUnitCount) ?></dd>
+                    <dt class="col-6 fw-normal text-body-secondary">Última sincronización</dt>
+                    <dd class="col-6 text-end mb-0">
+                        <?= e($adscriptionCacheCheckedAt) ?>
+                        <?php if ($adscriptionCacheRelativeAge !== '—') : ?>
+                            <div class="fw-normal text-body-secondary"><?= e($adscriptionCacheRelativeAge) ?></div>
+                        <?php endif; ?>
+                    </dd>
+                </dl>
+
+                <?php if ($adscriptionSource['recommendation'] !== '') : ?>
+                    <p class="small text-body-secondary border-top mt-3 pt-3 mb-0">
+                        <?= e($adscriptionSource['recommendation']) ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <?php if ($adscriptionSource['recommendation'] !== '' && $canSyncInventory) : ?>
+                    <a href="<?= e(url('updates.php')) ?>" class="btn btn-primary btn-sm">
+                        <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Sincronizar inventario
+                    </a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>

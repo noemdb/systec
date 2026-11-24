@@ -115,6 +115,15 @@ $legacySyncRelativeAge = format_relative_age(
 );
 $syncColor = !$legacySyncAvailable ? 'secondary' : ($legacySyncStale ? 'warning' : 'success');
 
+// Aviso cuando la importación institucional no pudo persistir su caché local (p. ej. permisos).
+$importCacheWarning = '';
+if ($confirmed && $importExecutionError === '' && $importSource === 'legacy_postgres'
+    && (!$legacySyncAvailable || $legacySyncStale)) {
+    $importCacheWarning = !empty($localCache['unreadable'])
+        ? 'El inventario se actualizó, pero el servidor web no puede leer storage/cache; el filtro «Unidad de adscripción» seguirá usando los datos locales hasta que se corrijan los permisos.'
+        : 'El inventario se actualizó, pero no se pudo guardar la caché institucional de adscripciones. Revisa los permisos de storage/cache y vuelve a sincronizar.';
+}
+
 ob_start(); ?>
 
     <style nonce="<?= e(systec_csp_nonce()) ?>">
@@ -358,6 +367,12 @@ ob_start(); ?>
                         <div class="alert alert-danger" role="alert"><?= e($importExecutionError) ?></div>
                     <?php else : ?>
                         <?= $importOutputHtml ?>
+                        <?php if ($importCacheWarning !== '') : ?>
+                            <div class="alert alert-warning mt-3 d-flex align-items-start gap-2" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill mt-1" aria-hidden="true"></i>
+                                <div><?= e($importCacheWarning) ?></div>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <div class="d-flex flex-wrap gap-2 mt-3">
                         <a href="<?= e(url('dashboard.php')) ?>" class="btn btn-primary">

@@ -8,6 +8,7 @@ require_once __DIR__ . '/include/helpers.php';
 require_once __DIR__ . '/include/repositories/PropertyRepository.php';
 require_once __DIR__ . '/include/repositories/MaintenanceRepository.php';
 require_once __DIR__ . '/include/repositories/TicketRepository.php';
+require_once __DIR__ . '/include/repositories/RenditionReportRepository.php';
 
 /**
  * Capa de datos de SysTec GMB.
@@ -47,6 +48,12 @@ class DB extends SQLite3
             'id', 'ticket_id', 'actor_user_id', 'action_type', 'description', 'observation',
             'from_status_id', 'to_status_id', 'created_at',
         ),
+        'rendition_reports' => array(
+            'id', 'report_code', 'title', 'date_from', 'date_to', 'scope_hash',
+            'filters_json', 'parameters_json', 'stats_json', 'maintenance_ids_json',
+            'ticket_ids_json', 'content_markdown', 'ai_generated', 'status',
+            'created_by', 'approved_by', 'created_at', 'updated_at', 'approved_at',
+        ),
     );
 
     /** @var PropertyRepository|null */
@@ -57,6 +64,9 @@ class DB extends SQLite3
 
     /** @var TicketRepository|null */
     private $ticketRepository = null;
+
+    /** @var RenditionReportRepository|null */
+    private $renditionReportRepository = null;
 
     /** @var int */
     private $executedQueries = 0;
@@ -95,6 +105,15 @@ class DB extends SQLite3
         }
 
         return $this->ticketRepository;
+    }
+
+    public function renditionReports(): RenditionReportRepository
+    {
+        if ($this->renditionReportRepository === null) {
+            $this->renditionReportRepository = new RenditionReportRepository($this);
+        }
+
+        return $this->renditionReportRepository;
     }
 
     public function queryCount(): int
@@ -189,6 +208,29 @@ class DB extends SQLite3
             to_status_id INTEGER,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )');
+
+        $this->exec("CREATE TABLE IF NOT EXISTS rendition_reports (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_code           TEXT NOT NULL UNIQUE,
+            title                 TEXT NOT NULL,
+            date_from             TEXT NOT NULL,
+            date_to               TEXT NOT NULL,
+            scope_hash            TEXT NOT NULL UNIQUE,
+            filters_json          TEXT NOT NULL DEFAULT '{}',
+            parameters_json       TEXT NOT NULL DEFAULT '{}',
+            stats_json            TEXT NOT NULL DEFAULT '{}',
+            maintenance_ids_json  TEXT NOT NULL DEFAULT '[]',
+            ticket_ids_json       TEXT NOT NULL DEFAULT '[]',
+            content_markdown      TEXT NOT NULL,
+            ai_generated          INTEGER NOT NULL DEFAULT 0,
+            status                TEXT NOT NULL DEFAULT 'borrador'
+                                  CHECK (status IN ('borrador', 'aprobado')),
+            created_by            INTEGER NOT NULL,
+            approved_by           INTEGER,
+            created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            approved_at           DATETIME
+        )");
 
         $statuses = array(
             array('iniciado', 'Iniciado', 1, 0),

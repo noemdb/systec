@@ -5,7 +5,7 @@ Sistema de Gestión de Mantenimientos de Bienes de la institución. Monolito PHP
 ## Requisitos
 
 - PHP 8.2 o superior con `sqlite3`, `mbstring` y `session`.
-- Escritura en `storage/` (base de datos, backups y logs).
+- Escritura para la cuenta que ejecuta PHP en `storage/` y sus subdirectorios (`storage/cache`, `storage/logs`). La caché de adscripciones institucionales vive en `storage/cache`; si se alterna entre CLI y el servidor web, ambos usuarios deben poder leerla y escribirla.
 
 ## Inicio rápido
 

@@ -172,9 +172,66 @@ function property_category(array $property): string
     return 'otros';
 }
 
-/** Adscripción de un bien, priorizando la fuente institucional y usando el dato local como respaldo. */
-function property_adscription_assignment(array $property, array $legacyAdscriptionsByIdent = array()): array
+/**
+ * Normaliza la etiqueta de una adscripción para comparar la fuente institucional
+ * con el respaldo local (minúsculas, espacios simples y sin diacríticos).
+ */
+function property_adscription_label_normalized(string $label): string
 {
+    $normalized = preg_replace('/\s+/u', ' ', mb_strtolower(trim($label), 'UTF-8'));
+    if (!is_string($normalized)) {
+        $normalized = mb_strtolower(trim($label), 'UTF-8');
+    }
+
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized);
+        if (is_string($ascii) && $ascii !== '') {
+            $normalized = strtolower($ascii);
+        }
+    }
+
+    return $normalized;
+}
+
+/**
+ * Índice etiqueta normalizada → adscripción institucional.
+ * Permite que el respaldo local reutilice la clave institucional de la misma unidad
+ * en lugar de crear una opción `local:` duplicada en los filtros.
+ */
+function property_adscription_institutional_index(array $legacyAdscriptionsByIdent): array
+{
+    $index = array();
+    foreach ($legacyAdscriptionsByIdent as $assignment) {
+        if (!is_array($assignment)
+            || !isset($assignment['key'], $assignment['label'])
+            || !is_string($assignment['key'])
+            || !is_string($assignment['label'])) {
+            continue;
+        }
+
+        $label = trim($assignment['label']);
+        $key = trim($assignment['key']);
+        if ($label === '' || $key === '') {
+            continue;
+        }
+
+        $normalized = property_adscription_label_normalized($label);
+        if ($normalized === '' || isset($index[$normalized])) {
+            continue;
+        }
+
+        $index[$normalized] = array('key' => $key, 'label' => $label);
+    }
+
+    return $index;
+}
+
+/** Adscripción de un bien, priorizando la fuente institucional y usando el dato local como respaldo. */
+function property_adscription_assignment(
+    array $property,
+    array $legacyAdscriptionsByIdent = array(),
+    ?array $institutionalAdscriptionsByLabel = null
+): array {
     $ident = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
     $assignment = $legacyAdscriptionsByIdent[$ident] ?? null;
     if (is_array($assignment)
@@ -188,6 +245,15 @@ function property_adscription_assignment(array $property, array $legacyAdscripti
     $localAdscription = trim((string) ($property['adscription'] ?? ''));
     if ($localAdscription === '') {
         return array('key' => '__unassigned__', 'label' => 'Sin adscripción');
+    }
+
+    if ($institutionalAdscriptionsByLabel === null) {
+        $institutionalAdscriptionsByLabel = property_adscription_institutional_index($legacyAdscriptionsByIdent);
+    }
+    $normalizedLabel = property_adscription_label_normalized($localAdscription);
+    if ($normalizedLabel !== '' && isset($institutionalAdscriptionsByLabel[$normalizedLabel])) {
+        $canonical = $institutionalAdscriptionsByLabel[$normalizedLabel];
+        return array('key' => $canonical['key'], 'label' => $canonical['label']);
     }
 
     return array(

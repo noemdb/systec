@@ -171,13 +171,18 @@ ob_start();
 
         <?php
         $letterheadOmitId = true;
+        $institutionalAdscriptionsByLabel = property_adscription_institutional_index($legacyAdscriptionsByIdent);
         foreach ($properties as $property) :
             $propertyId = (int) $property['id'];
             $propertyCode = property_code($property);
             $identPadded = str_pad(trim((string) ($property['ident'] ?? '')), 4, '0', STR_PAD_LEFT);
             $statusUpper = mb_strtoupper(trim((string) $property['status']));
             $statusLabel = property_status_label((string) $property['status']);
-            $adscriptionInfo = property_adscription_assignment($property, $legacyAdscriptionsByIdent);
+            $adscriptionInfo = property_adscription_assignment(
+                $property,
+                $legacyAdscriptionsByIdent,
+                $institutionalAdscriptionsByLabel
+            );
             $propertyAdscriptionLabel = $adscriptionInfo['label'];
             $preloadedMaintenances = $maintenancesByProperty[$propertyId] ?? array();
             $notesCollection = array();

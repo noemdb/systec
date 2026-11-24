@@ -4,4 +4,4 @@ Options -Indexes
     Require all denied
 </FilesMatch>
 
-RedirectMatch 403 ^/(storage|bck|docs|grafo|spec|bin|include|dataFile|tests|\.git|\.github|\.agents|\.skills)(/|$)
+RedirectMatch 403 ^/(storage|bck|docs|grafo|spec|bin|include|template|dataFile|tests|\.git|\.github|\.agents|\.skills)(/|$)

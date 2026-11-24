@@ -13,7 +13,7 @@ $path = parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/'
 $path = rawurldecode((string) $path);
 $path = '/' . ltrim($path, '/');
 
-$blockedPrefixes = array('/storage', '/bck', '/docs', '/grafo', '/spec', '/bin', '/include', '/.git', '/.github', '/dataFile', '/tests', '/migrations');
+$blockedPrefixes = array('/storage', '/bck', '/docs', '/grafo', '/spec', '/bin', '/include', '/template', '/.git', '/.github', '/dataFile', '/tests', '/migrations');
 $blockedFiles = array('/router.php', '/conn.php');
 
 foreach ($blockedPrefixes as $prefix) {
