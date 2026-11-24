@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Hook pre-push: ejecuta el mismo CI que GitHub Actions en local
+# (lint de PHP + PHPUnit) antes de enviar commits al remoto.
+#
+# Instalación: make hooks
+# Omitir una vez: git push --no-verify
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+# Sin refs (por ejemplo, borrado de rama remota) no hay nada que validar.
+refs="$(cat)"
+if [ -z "$refs" ]; then
+    exit 0
+fi
+
+if ! command -v composer >/dev/null 2>&1; then
+    echo "pre-push: composer no está disponible; se omite la verificación." >&2
+    exit 0
+fi
+
+if [ ! -x vendor/bin/phpunit ]; then
+    echo "pre-push: falta vendor/bin/phpunit (ejecuta 'composer install'); se omite la verificación." >&2
+    exit 0
+fi
+
+echo "pre-push: ejecutando lint de PHP y PHPUnit..."
+if ! composer ci; then
+    echo "" >&2
+    echo "pre-push: el CI local falló; push abortado." >&2
+    echo "Corrige los errores o usa 'git push --no-verify' para omitir esta verificación." >&2
+    exit 1
+fi
+
+echo "pre-push: CI local OK."

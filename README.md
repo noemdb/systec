@@ -1,10 +1,10 @@
 # SysTec GMB
 
-Sistema de Gestión de Mantenimientos de Bienes de la institución. Monolito PHP 7.4 + SQLite, sin framework ni Composer.
+Sistema de Gestión de Mantenimientos de Bienes de la institución. Monolito PHP 8.2 + SQLite, sin framework; Composer solo para dependencias de desarrollo y documentación.
 
 ## Requisitos
 
-- PHP 7.4 o superior con `sqlite3`, `mbstring` y `session`.
+- PHP 8.2 o superior con `sqlite3`, `mbstring` y `session`.
 - Escritura en `storage/` (base de datos, backups y logs).
 
 ## Inicio rápido
@@ -19,6 +19,15 @@ make dev
 ```
 
 El servidor de desarrollo usa `router.php`, que bloquea el acceso directo a `storage/`, `docs/`, `grafo/`, `spec/`, `bin/`, `include/` y a archivos `.db`, `.csv`, `.log` y `.md`.
+
+## CI local y hooks
+
+```bash
+composer install   # instala dependencias (PHPUnit, MermaidPHP)
+make hooks         # activa .githooks/pre-push
+```
+
+El hook `pre-push` ejecuta `composer ci` (lint de PHP + PHPUnit) antes de cada push, igual que el workflow de GitHub Actions. Se puede omitir puntualmente con `git push --no-verify`.
 
 ## Usuarios y roles
 
