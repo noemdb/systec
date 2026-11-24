@@ -243,7 +243,7 @@ $registerTicketContainerId = isset($ticketRegisterOptions['id']) && is_string($t
                 <button type="button" class="btn btn-outline-primary" id="ticketRegisterWizardBack" hidden>
                     <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Anterior
                 </button>
-                <button type="button" class="btn btn-primary" id="ticketRegisterWizardNext">
+                <button type="button" class="btn btn-success" id="ticketRegisterWizardNext">
                     Continuar<i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
                 </button>
                 <button type="submit" class="btn btn-primary" id="ticketRegisterWizardSubmit" hidden>
