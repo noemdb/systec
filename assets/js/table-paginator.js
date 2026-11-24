@@ -120,7 +120,7 @@
 
             this.lengthSelect = document.createElement('select');
             this.lengthSelect.id = lengthId;
-            this.lengthSelect.className = 'form-select form-select-sm w-auto';
+            this.lengthSelect.className = 'form-select form-select-sm w-auto flex-shrink-0';
             this.pageSizes.forEach((size) => {
                 const opt = new Option(String(size), String(size), size === this.pageSize, size === this.pageSize);
                 this.lengthSelect.add(opt);

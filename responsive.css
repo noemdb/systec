@@ -380,9 +380,23 @@ table.table.table-striped.table-sm,
     margin-bottom: .25rem;
 }
 
-.app-main .form-control,
-.app-main .form-select {
+.app-main .form-control {
     padding: .375rem .625rem;
+}
+
+/* Bootstrap reserva 2.25rem a la derecha para la flecha del select; si se
+   reduce ese padding, el texto se solapa con el icono. */
+.app-main .form-select {
+    padding: .375rem 2.25rem .375rem .625rem;
+}
+
+.app-main .form-select.form-select-sm {
+    padding-left: .5rem;
+}
+
+/* El selector de filas por página no debe encogerse dentro del flex. */
+.app-main .form-select.w-auto {
+    flex: 0 0 auto;
 }
 
 .app-main .btn:not(.btn-sm):not(.btn-lg) {
