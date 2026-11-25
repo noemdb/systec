@@ -390,7 +390,7 @@
                 ticketTitle.focus();
                 return;
             }
-            setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, true, 'Mejorar redacción con IA', 'Mejorando…');
+            setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, true, 'Mejorar con IA', 'Mejorando…');
             if (improveNarrativeStatus) {
                 improveNarrativeStatus.className = 'form-text text-body-secondary m-0';
                 improveNarrativeStatus.textContent = 'Solicitando mejora de redacción…';
@@ -423,7 +423,7 @@
                     improveNarrativeStatus.textContent = error.message || 'No se pudo mejorar la redacción.';
                 }
             } finally {
-                setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, false, 'Mejorar redacción con IA', 'Mejorando…');
+                setAiBusy(improveNarrativeBtn, improveNarrativeIcon, improveNarrativeLabel, false, 'Mejorar con IA', 'Mejorando…');
             }
         });
     }

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/conn.php';
 require_once __DIR__ . '/include/auth.php';
+require_once __DIR__ . '/include/inventory_import.php';
 
 if (auth_check() && auth_has_role(array('personal'))) {
     $redirect = 'personal/index.php';
@@ -23,7 +24,8 @@ $summaryCounts = $dashboardSummary['counts'];
 
 $matchingCount = $summaryCounts['total'];
 
-// PERF-02: Segunda y última consulta con JOIN a properties, users, ticket_status e historial JSON.
+// PERF-02: Segunda y última consulta con JOIN a properties, users, ticket_status,
+// historial JSON y mantenimientos asociados.
 $tickets = $matchingCount > 0
     ? $db->supportTickets($matchingCount, 0, null)
     : array();
@@ -34,25 +36,66 @@ foreach ($statuses as $statusRow) {
 }
 
 $requestedStatus = isset($_GET['status']) ? trim((string) $_GET['status']) : '';
-$activeStatusFilter = '';
-$activeStatusFilterLabel = '';
-if ($requestedStatus === 'abiertos') {
-    $activeStatusFilter = 'abiertos';
-    $activeStatusFilterLabel = 'Abiertos';
-    $tickets = array_values(array_filter($tickets, function (array $ticket) use ($statuses): bool {
-        $statusId = (int) ($ticket['status_id'] ?? 0);
-        return !isset($statuses[$statusId]) || (int) $statuses[$statusId]['is_terminal'] === 0;
-    }));
-} elseif ($requestedStatus !== '' && isset($statusLabelsByCode[$requestedStatus])) {
-    $activeStatusFilter = $requestedStatus;
-    $activeStatusFilterLabel = $statusLabelsByCode[$requestedStatus];
-    $tickets = array_values(array_filter($tickets, function (array $ticket) use ($requestedStatus): bool {
-        return (string) ($ticket['status_code'] ?? '') === $requestedStatus;
-    }));
+$activeStatusFilter = $requestedStatus === 'abiertos' || isset($statusLabelsByCode[$requestedStatus])
+    ? $requestedStatus
+    : '';
+$activeStatusFilterLabel = $activeStatusFilter === 'abiertos'
+    ? 'Abiertos'
+    : ($statusLabelsByCode[$activeStatusFilter] ?? '');
+$requestedAssigned = isset($_GET['assigned']) ? trim((string) $_GET['assigned']) : '';
+$requestedAdscription = isset($_GET['adscription']) ? trim((string) $_GET['adscription']) : '';
+
+// Mantener las asignaciones y adscripciones consistentes con Dashboard.
+$assignmentCache = legacy_postgres_read_local_cache();
+$legacyAssignmentsByIdent = isset($assignmentCache['assignments']) && is_array($assignmentCache['assignments'])
+    ? $assignmentCache['assignments']
+    : array();
+$legacyAdscriptionsByIdent = isset($assignmentCache['adscriptions']) && is_array($assignmentCache['adscriptions'])
+    ? $assignmentCache['adscriptions']
+    : array();
+$institutionalAdscriptionsByLabel = property_adscription_institutional_index($legacyAdscriptionsByIdent);
+$assignedFilterOptions = array();
+$adscriptionFilterOptions = array();
+foreach ($tickets as &$ticketRow) {
+    $assignmentIdent = str_pad(trim((string) ($ticketRow['property_ident'] ?? '')), 4, '0', STR_PAD_LEFT);
+    $propertyAssignment = $legacyAssignmentsByIdent[$assignmentIdent] ?? null;
+    if (!empty($assignmentCache['found']) && is_array($propertyAssignment)) {
+        foreach (array('assigned_name', 'assigned_status') as $assignmentField) {
+            if (array_key_exists($assignmentField, $propertyAssignment)) {
+                $ticketRow['property_' . $assignmentField] = (string) $propertyAssignment[$assignmentField];
+            }
+        }
+    }
+
+    $assignedName = trim((string) ($ticketRow['property_assigned_name'] ?? ''));
+    $assignedStatus = trim((string) ($ticketRow['property_assigned_status'] ?? ''));
+    $assignedFilterKey = property_assignment_filter_key($assignedName, $assignedStatus);
+    $assignedFilterLabel = property_assignment_filter_label($assignedName, $assignedStatus);
+    $ticketRow['property_assigned_key'] = $assignedFilterKey;
+    $ticketRow['property_assigned_filter_label'] = $assignedFilterLabel;
+    $assignedFilterOptions[$assignedFilterKey] = $assignedFilterLabel;
+
+    $propertyAdscription = property_adscription_assignment(
+        array(
+            'ident' => $ticketRow['property_ident'] ?? '',
+            'adscription' => $ticketRow['property_adscription'] ?? '',
+        ),
+        $legacyAdscriptionsByIdent,
+        $institutionalAdscriptionsByLabel
+    );
+    $ticketRow['property_adscription_key'] = $propertyAdscription['key'];
+    $ticketRow['property_adscription_label'] = $propertyAdscription['label'];
+    $adscriptionFilterOptions[$propertyAdscription['key']] = $propertyAdscription['label'];
 }
+unset($ticketRow);
+asort($assignedFilterOptions, SORT_NATURAL | SORT_FLAG_CASE);
+asort($adscriptionFilterOptions, SORT_NATURAL | SORT_FLAG_CASE);
+
+$activeAssignedFilter = isset($assignedFilterOptions[$requestedAssigned]) ? $requestedAssigned : '';
+$activeAdscriptionFilter = isset($adscriptionFilterOptions[$requestedAdscription]) ? $requestedAdscription : '';
 $displayedTicketCount = count($tickets);
 $initialTicketSearch = isset($_GET['search']) ? trim((string) $_GET['search']) : '';
-$openRegisterModalOnLoad = $canManageTickets && isset($_GET['action']) && $_GET['action'] === 'new';
+$openRegisterDrawerOnLoad = $canManageTickets && isset($_GET['action']) && $_GET['action'] === 'new';
 
 $statusClasses = array(
     'iniciado' => 'primary',
@@ -93,7 +136,8 @@ ob_start();
             </button>
             <?php if ($canManageTickets) : ?>
                 <button type="button" class="btn btn-primary"
-                        data-bs-toggle="modal" data-bs-target="#ticketRegisterModal">
+                        data-bs-toggle="offcanvas" data-bs-target="#ticketRegisterDrawer"
+                        aria-controls="ticketRegisterDrawer">
                     <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Nuevo ticket
                 </button>
             <?php endif; ?>
@@ -124,6 +168,7 @@ ob_start();
                             <p class="h3 mb-0"><?= e((string) $kpi['count']) ?></p>
                             <a href="<?= e($kpi['href']) ?>"
                                class="stretched-link"
+                               data-ticket-status-link
                                <?= $isActiveKpi ? 'aria-current="true"' : '' ?>
                                aria-label="Filtrar tickets: <?= e($kpi['label']) ?> (<?= e((string) $kpi['count']) ?>)"></a>
                         </div>
@@ -133,13 +178,16 @@ ob_start();
         <?php endforeach; ?>
     </section>
 
-    <nav class="d-flex flex-wrap align-items-center gap-2 mb-3" aria-label="Filtro rápido por estado de ticket">
+    <nav class="d-flex flex-wrap align-items-center gap-2 mb-3" id="ticketQuickStatusFilters"
+         aria-label="Filtro rápido por estado de ticket">
         <a href="<?= e(url('tickets.php')) ?>"
-           class="btn btn-sm <?= $activeStatusFilter === '' ? 'btn-primary' : 'btn-outline-secondary' ?>">
+           class="btn btn-sm <?= $activeStatusFilter === '' ? 'btn-primary' : 'btn-outline-secondary' ?>"
+           data-ticket-status-link>
             Todos
         </a>
         <a href="<?= e(url('tickets.php?status=abiertos')) ?>"
-           class="btn btn-sm <?= $activeStatusFilter === 'abiertos' ? 'btn-primary' : 'btn-outline-secondary' ?>">
+           class="btn btn-sm <?= $activeStatusFilter === 'abiertos' ? 'btn-primary' : 'btn-outline-secondary' ?>"
+           data-ticket-status-link>
             Abiertos
         </a>
         <?php foreach ($statuses as $statusItem) :
@@ -147,11 +195,62 @@ ob_start();
             $sActive = $activeStatusFilter === $sCode;
             ?>
             <a href="<?= e(url('tickets.php?status=' . rawurlencode($sCode))) ?>"
-               class="btn btn-sm <?= $sActive ? 'btn-primary' : 'btn-outline-secondary' ?>">
+               class="btn btn-sm <?= $sActive ? 'btn-primary' : 'btn-outline-secondary' ?>"
+               data-ticket-status-link>
                 <?= e((string) $statusItem['name']) ?>
             </a>
         <?php endforeach; ?>
     </nav>
+
+    <section class="card shadow-sm border-0 mb-3" aria-labelledby="ticket-filters-title">
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <h2 class="h6 mb-0" id="ticket-filters-title">
+                    <i class="bi bi-funnel text-body-secondary me-1" aria-hidden="true"></i>Filtrar
+                </h2>
+                <a href="<?= e(url('tickets.php')) ?>" class="btn btn-outline-secondary btn-sm" id="resetTicketFilters">
+                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Limpiar filtros
+                </a>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="ticketFilterAssigned" class="form-label fw-semibold small mb-0">Usuario asignado</label>
+                    <select id="ticketFilterAssigned" class="form-select form-select-sm">
+                        <option value="">Todos los usuarios asignados</option>
+                        <?php foreach ($assignedFilterOptions as $filterKey => $filterLabel) : ?>
+                            <option value="<?= e($filterKey) ?>" <?= $activeAssignedFilter === $filterKey ? 'selected' : '' ?>>
+                                <?= e($filterLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="ticketFilterAdscription" class="form-label fw-semibold small mb-0">Adscripción / unidad operativa</label>
+                    <select id="ticketFilterAdscription" class="form-select form-select-sm">
+                        <option value="">Todas las unidades</option>
+                        <?php foreach ($adscriptionFilterOptions as $filterKey => $filterLabel) : ?>
+                            <option value="<?= e($filterKey) ?>" <?= $activeAdscriptionFilter === $filterKey ? 'selected' : '' ?>>
+                                <?= e($filterLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="ticketFilterStatus" class="form-label fw-semibold small mb-0">Estado</label>
+                    <select id="ticketFilterStatus" class="form-select form-select-sm">
+                        <option value="">Todos los estados</option>
+                        <option value="abiertos" <?= $activeStatusFilter === 'abiertos' ? 'selected' : '' ?>>Abiertos</option>
+                        <?php foreach ($statuses as $statusItem) : ?>
+                            <option value="<?= e((string) $statusItem['code']) ?>" <?= $activeStatusFilter === (string) $statusItem['code'] ? 'selected' : '' ?>>
+                                <?= e((string) $statusItem['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2" id="ticketActiveFilters" aria-label="Filtros activos"></div>
+        </div>
+    </section>
 
     <?php if ($tickets === array()) : ?>
         <section class="card shadow-sm border-0 text-center" aria-label="Sin tickets">
@@ -184,13 +283,6 @@ ob_start();
                     <h2 class="h5 mb-0" id="tickets-list-title">
                         <i class="bi bi-ticket-detailed text-primary me-2" aria-hidden="true"></i>Registro de tickets
                     </h2>
-                    <?php if ($activeStatusFilter !== '') : ?>
-                        <a href="<?= e(url('tickets.php')) ?>"
-                           class="btn btn-sm btn-outline-secondary rounded-pill"
-                           aria-label="Quitar filtro de estado <?= e($activeStatusFilterLabel) ?>">
-                            Estado: <?= e($activeStatusFilterLabel) ?> ×
-                        </a>
-                    <?php endif; ?>
                 </div>
                 <span class="badge text-bg-light border text-body-secondary" id="ticketsResultCount"
                       role="status" aria-live="polite"><?= e((string) $displayedTicketCount) ?> registros</span>
@@ -205,6 +297,7 @@ ob_start();
                             <th scope="col">Bien</th>
                             <th scope="col">Título</th>
                             <th scope="col">Estado</th>
+                            <th scope="col">Asignado al bien</th>
                             <th scope="col">Actualización</th>
                             <th scope="col" class="text-end" data-orderable="false">Acción</th>
                         </tr>
@@ -222,11 +315,52 @@ ob_start();
                             $statusCode = (string) ($ticket['status_code'] ?? '');
                             $statusName = (string) ($ticket['status_name'] ?? 'Sin estado');
                             $statusClass = isset($statusClasses[$statusCode]) ? $statusClasses[$statusCode] : 'light';
+                            $assignedName = trim((string) ($ticket['property_assigned_name'] ?? ''));
+                            $assignedStatusLabel = assignment_status_label((string) ($ticket['property_assigned_status'] ?? ''));
+                            $assignedUserLabel = $assignedName !== ''
+                                ? $assignedName
+                                : ($assignedStatusLabel === 'Sin asignar' || $assignedStatusLabel === 'Sin ficha'
+                                    ? $assignedStatusLabel
+                                    : 'Nombre no registrado');
+                            $identRaw = trim($propertyRow['ident']);
+                            $identPadded = $identRaw !== '' ? str_pad($identRaw, 4, '0', STR_PAD_LEFT) : '';
+                            $ticketMaintenanceDetails = array();
+                            foreach (isset($ticket['maintenances']) && is_array($ticket['maintenances']) ? $ticket['maintenances'] : array() as $maintenanceRow) {
+                                $maintenanceDateRaw = trim((string) ($maintenanceRow['date'] ?? ''));
+                                $maintenanceDateTimestamp = $maintenanceDateRaw !== '' ? strtotime($maintenanceDateRaw) : false;
+                                $maintenanceNextRaw = trim((string) ($maintenanceRow['next_maintenance_date'] ?? ''));
+                                $maintenanceNextTimestamp = $maintenanceNextRaw !== '' ? strtotime($maintenanceNextRaw) : false;
+                                $maintenanceTime = trim((string) ($maintenanceRow['time_taken'] ?? ''));
+                                $ticketMaintenanceDetails[] = array(
+                                    'id' => (int) ($maintenanceRow['id'] ?? 0),
+                                    'code' => trim((string) ($maintenanceRow['code'] ?? '')) !== ''
+                                        ? (string) $maintenanceRow['code']
+                                        : 'Sin código',
+                                    'type' => texto_tipo((string) ($maintenanceRow['type'] ?? '')) ?: 'No disponible',
+                                    'type_badge' => badge_clase_tipo((string) ($maintenanceRow['type'] ?? '')),
+                                    'status' => texto_mantenimiento((string) ($maintenanceRow['status'] ?? '')) ?: 'Sin estado',
+                                    'status_badge' => badge_clase_mantenimiento((string) ($maintenanceRow['status'] ?? '')),
+                                    'date' => $maintenanceDateTimestamp !== false
+                                        ? date('d-m-Y H:i', $maintenanceDateTimestamp)
+                                        : ($maintenanceDateRaw !== '' ? $maintenanceDateRaw : 'No disponible'),
+                                    'technician' => trim((string) ($maintenanceRow['technician'] ?? '')) !== ''
+                                        ? (string) $maintenanceRow['technician']
+                                        : 'No disponible',
+                                    'time_taken' => $maintenanceTime !== '' ? $maintenanceTime . ' h' : 'No disponible',
+                                    'next_maintenance_date' => $maintenanceNextTimestamp !== false
+                                        ? date('d-m-Y', $maintenanceNextTimestamp)
+                                        : ($maintenanceNextRaw !== '' ? $maintenanceNextRaw : 'No disponible'),
+                                    'failure_reason' => (string) ($maintenanceRow['failure_reason'] ?? ''),
+                                    'description' => (string) ($maintenanceRow['description'] ?? ''),
+                                    'notes' => (string) ($maintenanceRow['notes'] ?? ''),
+                                );
+                            }
                             $ticketDetails = array(
                                 'id' => (int) $ticket['id'],
                                 'title' => (string) $ticket['title'],
                                 'property' => $propertyRow['description'] !== '' ? $propertyRow['description'] : 'Bien desconocido',
                                 'property_code' => $propertyRow['ident'] !== '' ? $propertyRow['ident'] : 'Sin código',
+                                'property_search_code' => $identPadded,
                                 'property_status' => $propertyRow['status'] !== '' ? $propertyRow['status'] : 'No disponible',
                                 'property_category' => property_category($propertyRow),
                                 'status' => $statusName,
@@ -240,17 +374,24 @@ ob_start();
                                 'closed_at' => (string) ($ticket['closed_at'] ?? ''),
                                 'created_by' => (int) $ticket['created_by'],
                                 'assigned_to' => (string) ($ticket['assigned_to'] ?? ''),
+                                'property_assigned_name' => $assignedName,
+                                'property_assigned_label' => $assignedUserLabel,
+                                'property_assigned_status_label' => $assignedStatusLabel,
                                 'history' => isset($ticket['history']) && is_array($ticket['history']) ? $ticket['history'] : array(),
+                                'maintenances' => $ticketMaintenanceDetails,
                             );
-                            $identRaw = trim($propertyRow['ident']);
-                            $identPadded = $identRaw !== '' ? str_pad($identRaw, 4, '0', STR_PAD_LEFT) : '';
                             ?>
                             <tr data-export-id="<?= e((string) $ticket['id']) ?>"
+                                data-filter-assigned="<?= e((string) ($ticket['property_assigned_key'] ?? '')) ?>"
+                                data-filter-adscription="<?= e((string) ($ticket['property_adscription_key'] ?? '')) ?>"
+                                data-filter-status="<?= e($statusCode) ?>"
+                                data-terminal="<?= (int) ($ticket['status_is_terminal'] ?? 0) === 1 ? '1' : '0' ?>"
                                 data-export-code="<?= e($identPadded) ?>"
                                 data-export-property="<?= e($ticketDetails['property']) ?>"
                                 data-export-title="<?= e((string) $ticket['title']) ?>"
                                 data-export-status="<?= e($statusName) ?>"
                                 data-export-creator="<?= e($ticketDetails['created_by_name']) ?>"
+                                data-export-assigned="<?= e($assignedUserLabel) ?>"
                                 data-export-updated="<?= e((string) $ticket['updated_at']) ?>">
                                 <td>
                                     <a href="<?= e(url('tickets/detail.php?id=' . (int) $ticket['id'])) ?>"
@@ -280,6 +421,16 @@ ob_start();
                                         <?= e($statusName) ?>
                                     </span>
                                 </td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span class="d-inline-flex align-items-center gap-1<?= $assignedName === '' ? ' text-body-secondary' : '' ?>">
+                                            <i class="bi bi-person-check" aria-hidden="true"></i><span class="text-break"><?= e($assignedUserLabel) ?></span>
+                                        </span>
+                                        <?php if ($assignedName !== '') : ?>
+                                            <small class="text-body-secondary"><?= e($assignedStatusLabel) ?></small>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                                 <td class="text-nowrap"><?= e((string) $ticket['updated_at']) ?></td>
                                 <td class="text-end text-nowrap">
                                     <?php
@@ -296,7 +447,8 @@ ob_start();
                                                 aria-controls="<?= e($ticketActionMenuId) ?>"
                                                 aria-expanded="false"
                                                 data-bs-toggle="dropdown">
-                                            <i class="bi bi-three-dots me-1" aria-hidden="true"></i>Acciones
+                                            <!-- <i class="bi bi-three-dots me-1" aria-hidden="true"></i> -->
+                                            Acciones
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end ticket-actions-menu"
                                             id="<?= e($ticketActionMenuId) ?>"
@@ -305,7 +457,8 @@ ob_start();
                                             <li role="none">
                                                 <button type="button" class="dropdown-item d-flex align-items-center gap-2" role="menuitem"
                                                         aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
-                                                        data-bs-toggle="modal" data-bs-target="#supportTicketDetailsModal"
+                                                        data-bs-toggle="offcanvas" data-bs-target="#supportTicketDetailsDrawer"
+                                                        aria-controls="supportTicketDetailsDrawer"
                                                         data-ticket="<?= e(js($ticketDetails)) ?>">
                                                     <i class="bi bi-eye text-primary" aria-hidden="true"></i>Ver detalle
                                                 </button>
@@ -343,16 +496,16 @@ ob_start();
                                             <?php endif; ?>
                                             <?php if (auth_has_role(array('admin', 'operador'))) : ?>
                                                 <li role="none"><hr class="dropdown-divider"></li>
+                                                <li role="none">
+                                                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 text-danger" role="menuitem"
+                                                            aria-label="Eliminar ticket #<?= e((string) $ticket['id']) ?>"
+                                                            data-bs-toggle="modal" data-bs-target="#deleteTicketModal"
+                                                            data-ticket-id="<?= e((string) $ticket['id']) ?>"
+                                                            data-ticket-title="<?= e((string) $ticket['title']) ?>">
+                                                        <i class="bi bi-trash" aria-hidden="true"></i>Eliminar
+                                                    </button>
+                                                </li>
                                             <?php endif; ?>
-                                            <li role="none">
-                                                <button type="button" class="dropdown-item d-flex align-items-center gap-2 text-danger" role="menuitem"
-                                                        aria-label="Eliminar ticket #<?= e((string) $ticket['id']) ?>"
-                                                        data-bs-toggle="modal" data-bs-target="#deleteTicketModal"
-                                                        data-ticket-id="<?= e((string) $ticket['id']) ?>"
-                                                        data-ticket-title="<?= e((string) $ticket['title']) ?>">
-                                                    <i class="bi bi-trash" aria-hidden="true"></i>Eliminar
-                                                </button>
-                                            </li>
                                         </ul>
                                     </div>
                                 </td>
@@ -368,19 +521,150 @@ ob_start();
                 const totalDisplayed = <?= js($displayedTicketCount) ?>;
                 const resultCountBadge = document.getElementById('ticketsResultCount');
                 const exportCsvButton = document.getElementById('exportTicketsCsv');
+                const assignedFilter = document.getElementById('ticketFilterAssigned');
+                const adscriptionFilter = document.getElementById('ticketFilterAdscription');
+                const statusFilter = document.getElementById('ticketFilterStatus');
+                const resetFiltersButton = document.getElementById('resetTicketFilters');
+                const activeFiltersContainer = document.getElementById('ticketActiveFilters');
+                const ticketFilterControls = [
+                    { control: assignedFilter, param: 'assigned', label: 'Usuario asignado' },
+                    { control: adscriptionFilter, param: 'adscription', label: 'Adscripción / unidad operativa' },
+                    { control: statusFilter, param: 'status', label: 'Estado' }
+                ];
+
                 const ticketsTable = new window.Systec.TablePaginator('#ticketsTable', {
                     pageLength: 10,
                     search: {
                         search: <?= js($initialTicketSearch) ?>
                     },
+                    filterPredicate: (row) => {
+                        const assignedMatches = !assignedFilter.value
+                            || row.dataset.filterAssigned === assignedFilter.value;
+                        const adscriptionMatches = !adscriptionFilter.value
+                            || row.dataset.filterAdscription === adscriptionFilter.value;
+                        const statusMatches = !statusFilter.value
+                            || (statusFilter.value === 'abiertos'
+                                ? row.dataset.terminal !== '1'
+                                : row.dataset.filterStatus === statusFilter.value);
+                        return assignedMatches && adscriptionMatches && statusMatches;
+                    },
                     language: {
                         search: 'Buscar tickets:',
-                        searchPlaceholder: 'ID, bien, código, título, estado…',
+                        searchPlaceholder: 'ID, bien, código, título, estado, asignado…',
                         emptyTable: 'No hay tickets registrados.',
-                        zeroRecords: 'Ningún ticket coincide con la búsqueda.',
+                        zeroRecords: 'Ningún ticket coincide con los filtros aplicados.',
                         unitLabel: 'tickets'
                     }
                 });
+
+                const renderTicketActiveFilters = () => {
+                    activeFiltersContainer.replaceChildren();
+                    ticketFilterControls.forEach(({ control, label }) => {
+                        if (!control.value) {
+                            return;
+                        }
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'btn btn-sm btn-outline-secondary rounded-pill';
+                        button.textContent = `${label}: ${control.selectedOptions[0].textContent.trim()} ×`;
+                        button.setAttribute('aria-label', `Quitar filtro ${label}`);
+                        button.addEventListener('click', () => {
+                            control.value = '';
+                            ticketsTable.draw();
+                            syncTicketFilterUrl();
+                        });
+                        activeFiltersContainer.appendChild(button);
+                    });
+                };
+
+                const syncTicketStatusControls = () => {
+                    const currentStatus = statusFilter.value;
+                    document.querySelectorAll('#ticketQuickStatusFilters [data-ticket-status-link]').forEach((link) => {
+                        const linkStatus = new URL(link.href, window.location.href).searchParams.get('status') || '';
+                        const isActive = linkStatus === currentStatus;
+                        link.classList.toggle('btn-primary', isActive);
+                        link.classList.toggle('btn-outline-secondary', !isActive);
+                        if (isActive) {
+                            link.setAttribute('aria-current', 'page');
+                        } else {
+                            link.removeAttribute('aria-current');
+                        }
+                    });
+                    document.querySelectorAll('.ticket-kpi-card').forEach((card) => {
+                        const link = card.querySelector('[data-ticket-status-link]');
+                        if (!link) {
+                            return;
+                        }
+                        const linkStatus = new URL(link.href, window.location.href).searchParams.get('status') || '';
+                        const isActive = linkStatus === currentStatus;
+                        card.classList.toggle('is-active', isActive);
+                        if (isActive) {
+                            link.setAttribute('aria-current', 'page');
+                        } else {
+                            link.removeAttribute('aria-current');
+                        }
+                    });
+                };
+
+                const syncTicketFilterUrl = () => {
+                    const url = new URL(window.location.href);
+                    ticketFilterControls.forEach(({ control, param }) => {
+                        if (control.value) {
+                            url.searchParams.set(param, control.value);
+                        } else {
+                            url.searchParams.delete(param);
+                        }
+                    });
+                    if (ticketsTable.search().trim()) {
+                        url.searchParams.set('search', ticketsTable.search().trim());
+                    } else {
+                        url.searchParams.delete('search');
+                    }
+                    window.history.replaceState({}, '', url);
+                    syncTicketStatusControls();
+                    renderTicketActiveFilters();
+                };
+
+                ticketFilterControls.forEach(({ control }) => {
+                    control.addEventListener('change', () => {
+                        ticketsTable.draw();
+                        syncTicketFilterUrl();
+                    });
+                });
+
+                resetFiltersButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    ticketFilterControls.forEach(({ control }) => {
+                        control.value = '';
+                    });
+                    ticketsTable.search('');
+                    ticketsTable.draw();
+                    syncTicketFilterUrl();
+                });
+
+                ticketsTable.searchInput.addEventListener('input', syncTicketFilterUrl);
+
+                document.addEventListener('click', (event) => {
+                    const link = event.target.closest('[data-ticket-status-link]');
+                    if (!link) {
+                        return;
+                    }
+                    event.preventDefault();
+                    const targetStatus = new URL(link.href, window.location.href).searchParams.get('status') || '';
+                    statusFilter.value = targetStatus;
+                    ticketsTable.draw();
+                    syncTicketFilterUrl();
+                    const scrollTarget = document.getElementById('tickets-list-title')
+                        || document.getElementById('ticket-filters-title');
+                    if (scrollTarget) {
+                        scrollTarget.scrollIntoView({
+                            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+
+                syncTicketFilterUrl();
 
                 // Los menús se mueven al body mientras están abiertos para que
                 // el overflow de .table-responsive no recorte las acciones.
@@ -412,7 +696,11 @@ ob_start();
                         }
                     });
 
-                    menu.addEventListener('keydown', (event) => {
+                    window.addEventListener('keydown', (event) => {
+                        if (!menu.contains(event.target)) {
+                            return;
+                        }
+
                         const items = Array.from(menu.querySelectorAll('.dropdown-item:not(:disabled)'));
                         const currentIndex = items.indexOf(document.activeElement);
                         let nextIndex = null;
@@ -464,8 +752,12 @@ ob_start();
 
                 const updateTicketFeedback = () => {
                     const filteredCount = ticketsTable.rows({ search: 'applied' }).count();
+                    const hasActiveFilters = ticketsTable.search().trim()
+                        || assignedFilter.value
+                        || adscriptionFilter.value
+                        || statusFilter.value;
                     if (resultCountBadge) {
-                        resultCountBadge.textContent = ticketsTable.search().trim()
+                        resultCountBadge.textContent = hasActiveFilters
                             ? `Mostrando ${filteredCount} de ${totalDisplayed} registros`
                             : `${totalDisplayed} registros`;
                     }
@@ -487,6 +779,7 @@ ob_start();
                             { header: 'Título', key: 'exportTitle' },
                             { header: 'Estado', key: 'exportStatus' },
                             { header: 'Reportado por', key: 'exportCreator' },
+                            { header: 'Asignado al bien', key: 'exportAssigned' },
                             { header: 'Actualización', key: 'exportUpdated' }
                         ];
                         const lines = [columns.map((col) => csvEscape(col.header)).join(';')];
@@ -563,8 +856,10 @@ ob_start();
     <?php include __DIR__ . '/include/support_ticket_status_modal.php'; ?>
     <?php
     $ticketRegisterOptions = array(
+        'presentation' => 'drawer',
         'properties_url' => 'tickets/actions/properties.php',
         'form_action' => 'tickets/actions/register.php',
+        'improve_narrative_url' => 'tickets/actions/improve-narrative.php',
         'selected_property_id' => '',
         'error' => '',
         'values' => array(),
@@ -572,12 +867,12 @@ ob_start();
     include __DIR__ . '/include/ticket_register_modal.php';
     unset($ticketRegisterOptions);
     ?>
-    <?php if ($openRegisterModalOnLoad) : ?>
+    <?php if ($openRegisterDrawerOnLoad) : ?>
         <script nonce="<?= e(systec_csp_nonce()) ?>">
             document.addEventListener('DOMContentLoaded', function () {
-                const modalEl = document.getElementById('ticketRegisterModal');
-                if (modalEl && window.bootstrap && window.bootstrap.Modal) {
-                    window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                const drawerEl = document.getElementById('ticketRegisterDrawer');
+                if (drawerEl && window.bootstrap && window.bootstrap.Offcanvas) {
+                    window.bootstrap.Offcanvas.getOrCreateInstance(drawerEl).show();
                 }
             });
         </script>

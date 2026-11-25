@@ -588,6 +588,11 @@ table.table.table-striped.table-sm,
     max-width: 100vw;
 }
 
+.support-ticket-details-drawer {
+    --bs-offcanvas-width: 60vw;
+    max-width: 60vw;
+}
+
 @media (max-width: 1199.98px) {
     .personal-ticket-details-drawer {
         --bs-offcanvas-width: 75vw;
@@ -605,7 +610,8 @@ table.table.table-striped.table-sm,
     max-width: 100vw;
 }
 
-.personal-ticket-drawer-form {
+.personal-ticket-drawer-form,
+.support-ticket-drawer-form {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -613,7 +619,8 @@ table.table.table-striped.table-sm,
     overflow: hidden;
 }
 
-.personal-ticket-drawer-form .offcanvas-body {
+.personal-ticket-drawer-form .offcanvas-body,
+.support-ticket-drawer-form .offcanvas-body {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -674,15 +681,6 @@ table.table.table-striped.table-sm,
 }
 
 .personal-ticket-modal-dialog .modal-content {
-    max-height: 95vh;
-}
-
-.support-ticket-modal-dialog {
-    --bs-modal-width: min(95vw, 1200px);
-    max-width: min(95vw, 1200px);
-}
-
-.support-ticket-modal-dialog .modal-content {
     max-height: 95vh;
 }
 
@@ -772,50 +770,50 @@ table.table.table-striped.table-sm,
 }
 
 
-/* Support ticket modal cards */
-.support-ticket-modal-dialog .support-ticket-modal-heading {
+/* Support ticket drawer cards */
+.support-ticket-details-drawer .support-ticket-drawer-heading {
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.support-ticket-modal-dialog .bento-card {
+.support-ticket-details-drawer .bento-card {
     height: 100%;
     min-width: 0;
     border-radius: .75rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
 }
 
-.app-main .support-ticket-modal-dialog .bento-card .card-body {
+.app-main .support-ticket-details-drawer .bento-card .card-body {
     padding: 1rem !important;
 }
 
-.app-main .support-ticket-modal-dialog .bento-card h3 {
+.app-main .support-ticket-details-drawer .bento-card h3 {
     color: var(--bs-primary);
     font-size: .95rem !important;
     font-weight: 600;
 }
 
-.support-ticket-modal-dialog .bento-card h3 i {
+.support-ticket-details-drawer .bento-card h3 i {
     font-size: .9em;
 }
 
-.support-ticket-modal-dialog #supportTicketHistory article {
+.support-ticket-details-drawer #supportTicketHistory article {
     padding: .75rem;
     border-radius: .5rem;
     background-color: var(--bs-tertiary-bg);
 }
 
-.support-ticket-modal-dialog #supportTicketHistory article .badge {
+.support-ticket-details-drawer #supportTicketHistory article .badge {
     font-size: .75rem;
     padding: .25rem .5rem;
 }
 
-.support-ticket-modal-dialog .ticket-modal-copy {
+.support-ticket-details-drawer .ticket-modal-copy {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
-.support-ticket-modal-dialog .bento-card .row.g-2 .col-6 {
+.support-ticket-details-drawer .bento-card .row.g-2 .col-6 {
     padding-block: .25rem;
 }
 

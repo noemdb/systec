@@ -208,7 +208,7 @@ $registerTicketContainerId = isset($ticketRegisterOptions['id']) && is_string($t
                             <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
                                 <button type="button" class="btn btn-outline-primary btn-sm" id="ticketRegisterImproveNarrative">
                                     <i class="bi bi-magic me-1" id="ticketRegisterImproveNarrativeIcon" aria-hidden="true"></i>
-                                    <span id="ticketRegisterImproveNarrativeLabel">Mejorar redacción con IA</span>
+                                    <span id="ticketRegisterImproveNarrativeLabel">Mejorar con IA</span>
                                 </button>
                                 <span class="form-text m-0" id="ticketRegisterImproveNarrativeStatus" role="status" aria-live="polite">
                                     Mejora la redacción antes de continuar al resumen.

@@ -12,6 +12,8 @@ class SupportTicketQueryTest extends TestCase
 
         try {
             self::assertTrue($db->exec('ALTER TABLE tickets ADD COLUMN deleted_at DATETIME'));
+            $db->exec((string) file_get_contents(__DIR__ . '/../../migrations/006_add_property_assignments.sql'));
+            $db->exec((string) file_get_contents(__DIR__ . '/../../migrations/007_link_maintenances_to_tickets.sql'));
 
             $creatorId = $db->create('users', array(
                 'username' => 'solicitante01',
@@ -31,6 +33,9 @@ class SupportTicketQueryTest extends TestCase
                 'ident' => '0042',
                 'description' => 'Estación de trabajo',
                 'status' => 'BUENO',
+                'adscription' => 'Informática',
+                'assigned_name' => 'RENE RAFAEL GUEVARA ALEJOS',
+                'assigned_status' => 'ACTIVO',
             ));
 
             $started = $db->getTicketStatusByCode('iniciado');
@@ -70,6 +75,50 @@ class SupportTicketQueryTest extends TestCase
                 ));
             }
 
+            $latestTicketId = (int) end($createdTicketIds);
+            $db->create('maintenances', array(
+                'property_id' => $propertyId,
+                'ticket_id' => $latestTicketId,
+                'code' => '2-0101-0001-0042',
+                'type' => 'correctivo',
+                'description' => 'Revisión anterior',
+                'date' => '2026-02-01 09:00:00',
+                'time_taken' => 1,
+                'technician' => 'tecnico01',
+                'failure_reason' => 'Falla intermitente',
+                'notes' => 'Pendiente validar',
+                'status' => 'finalizado',
+            ));
+            $db->create('maintenances', array(
+                'property_id' => $propertyId,
+                'ticket_id' => $latestTicketId,
+                'code' => '2-0101-0001-0042',
+                'type' => 'preventivo',
+                'description' => 'Mantenimiento preventivo completo',
+                'date' => '2026-02-01 10:00:00',
+                'time_taken' => 2,
+                'technician' => 'tecnico01',
+                'next_maintenance_date' => '2026-03-01',
+                'status' => 'finalizado',
+            ));
+            $db->create('maintenances', array(
+                'property_id' => $propertyId,
+                'ticket_id' => (int) $createdTicketIds[28],
+                'code' => '2-0101-0001-0042',
+                'type' => 'evaluativo',
+                'description' => 'Mantenimiento de otro ticket',
+                'date' => '2026-02-01 11:00:00',
+                'status' => 'iniciado',
+            ));
+            $db->create('maintenances', array(
+                'property_id' => $propertyId,
+                'code' => '2-0101-0001-0042',
+                'type' => 'correctivo',
+                'description' => 'Mantenimiento sin ticket',
+                'date' => '2026-02-01 12:00:00',
+                'status' => 'finalizado',
+            ));
+
             // Crear un ticket eliminado que no debe aparecer en conteos ni páginas
             $db->create('tickets', array(
                 'property_id' => $propertyId,
@@ -93,14 +142,25 @@ class SupportTicketQueryTest extends TestCase
             self::assertSame(10, $dashboardSummary['counts']['in_progress']);
             self::assertCount(25, $page1);
 
-            // Verificar que la primera fila es el ticket más reciente (#30) y trae JOINs + historial
+            // Verificar que la primera fila es el ticket más reciente (#30) y trae JOINs + historial + mantenimientos
             $latest = $page1[0];
             self::assertSame('Incidencia #30', $latest['title']);
             self::assertSame('42', (string) $latest['property_ident']);
             self::assertSame('Estación de trabajo', $latest['property_description']);
             self::assertSame('solicitante01', $latest['creator_username']);
+            self::assertNull($latest['assigned_to']);
+            self::assertSame('RENE RAFAEL GUEVARA ALEJOS', $latest['property_assigned_name']);
+            self::assertSame('ACTIVO', $latest['property_assigned_status']);
+            self::assertSame('Informática', $latest['property_adscription']);
+            self::assertSame(1, (int) $latest['status_is_terminal']);
             self::assertSame('finalizado', $latest['status_code']);
             self::assertCount(2, $latest['history']);
+            self::assertCount(2, $latest['maintenances']);
+            self::assertSame('Mantenimiento preventivo completo', $latest['maintenances'][0]['description']);
+            self::assertSame('preventivo', $latest['maintenances'][0]['type']);
+            self::assertSame(2, (int) $latest['maintenances'][0]['time_taken']);
+            self::assertSame('Revisión anterior', $latest['maintenances'][1]['description']);
+            self::assertArrayNotHasKey('maintenances_json', $latest);
             self::assertSame('created', $latest['history'][0]['action_type']);
             self::assertSame('solicitante01', $latest['history'][0]['actor_username']);
             self::assertSame('comment', $latest['history'][1]['action_type']);

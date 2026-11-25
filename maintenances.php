@@ -320,7 +320,8 @@ ob_start(); ?>
 
     <style nonce="<?= e(systec_csp_nonce()) ?>">
         .maintenance-create-drawer {
-            --bs-offcanvas-width: min(34rem, 100vw);
+            --bs-offcanvas-width: 60vw;
+            max-width: 60vw;
         }
 
         .js-kpi-filter,

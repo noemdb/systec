@@ -245,7 +245,8 @@ class TicketRepository
 
     /**
      * PERF-02: Lista paginada de tickets para soporte en una única consulta JOIN
-     * que incluye bien, creador, estado e historial con actores (sin N+1).
+     * que incluye bien, creador, asignación del bien, estado, historial con
+     * actores y mantenimientos asociados (sin N+1).
      */
     public function supportTickets(int $limit, int $offset, ?int $createdBy = null): array
     {
@@ -272,8 +273,11 @@ class TicketRepository
                     p.ident AS property_ident, p.description AS property_description,
                     p.status AS property_status, p.grupo AS property_grupo,
                     p.subgrupo AS property_subgrupo, p.seccion AS property_seccion,
+                    p.adscription AS property_adscription,
+                    p.assigned_name AS property_assigned_name,
+                    p.assigned_status AS property_assigned_status,
                     u.username AS creator_username,
-                    s.code AS status_code, s.name AS status_name,
+                    s.code AS status_code, s.name AS status_name, s.is_terminal AS status_is_terminal,
                     (
                         SELECT json_group_array(
                             json_object(
@@ -293,7 +297,30 @@ class TicketRepository
                             WHERE th_inner.ticket_id = t.id
                             ORDER BY th_inner.created_at ASC, th_inner.id ASC
                         ) th
-                    ) AS history_json
+                    ) AS history_json,
+                    (
+                        SELECT json_group_array(
+                            json_object(
+                                'id', COALESCE(m.id, 0),
+                                'code', COALESCE(m.code, ''),
+                                'type', COALESCE(m.type, ''),
+                                'description', COALESCE(m.description, ''),
+                                'date', COALESCE(m.date, ''),
+                                'time_taken', COALESCE(m.time_taken, ''),
+                                'technician', COALESCE(m.technician, ''),
+                                'next_maintenance_date', COALESCE(m.next_maintenance_date, ''),
+                                'failure_reason', COALESCE(m.failure_reason, ''),
+                                'notes', COALESCE(m.notes, ''),
+                                'status', COALESCE(m.status, '')
+                            )
+                        )
+                        FROM (
+                            SELECT m_inner.*
+                            FROM maintenances m_inner
+                            WHERE m_inner.ticket_id = t.id
+                            ORDER BY m_inner.date DESC, m_inner.id DESC
+                        ) m
+                    ) AS maintenances_json
              FROM tickets t
              LEFT JOIN properties p ON p.id = t.property_id
              LEFT JOIN users u ON u.id = t.created_by
@@ -310,6 +337,12 @@ class TicketRepository
                 : array();
             $row['history'] = is_array($decoded) ? $decoded : array();
             unset($row['history_json']);
+
+            $decodedMaintenances = isset($row['maintenances_json'])
+                ? json_decode((string) $row['maintenances_json'], true)
+                : array();
+            $row['maintenances'] = is_array($decodedMaintenances) ? $decodedMaintenances : array();
+            unset($row['maintenances_json']);
         }
         unset($row);
 
