@@ -206,7 +206,7 @@ ob_start();
                             <th scope="col">Título</th>
                             <th scope="col">Estado</th>
                             <th scope="col">Actualización</th>
-                            <th scope="col" class="text-end">Acción</th>
+                            <th scope="col" class="text-end" data-orderable="false">Acción</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -281,37 +281,79 @@ ob_start();
                                     </span>
                                 </td>
                                 <td class="text-nowrap"><?= e((string) $ticket['updated_at']) ?></td>
-                                <td class="text-end">
-                                    <div class="d-inline-flex gap-1">
-                                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
-                                                aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
-                                                data-bs-toggle="modal" data-bs-target="#supportTicketDetailsModal"
-                                                data-ticket="<?= e(js($ticketDetails)) ?>">
-                                            <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver detalle
+                                <td class="text-end text-nowrap">
+                                    <?php
+                                    $ticketActionMenuId = 'ticketActionsMenu' . (int) $ticket['id'];
+                                    $ticketActionToggleId = 'ticketActionsToggle' . (int) $ticket['id'];
+                                    ?>
+                                    <div class="dropdown ticket-actions-dropdown">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary dropdown-toggle text-nowrap"
+                                                id="<?= e($ticketActionToggleId) ?>"
+                                                aria-label="Mostrar acciones del ticket #<?= e((string) $ticket['id']) ?>"
+                                                title="Mostrar acciones del ticket #<?= e((string) $ticket['id']) ?>"
+                                                aria-haspopup="menu"
+                                                aria-controls="<?= e($ticketActionMenuId) ?>"
+                                                aria-expanded="false"
+                                                data-bs-toggle="dropdown">
+                                            <i class="bi bi-three-dots me-1" aria-hidden="true"></i>Acciones
                                         </button>
-                                        <?php if ($canManageTickets) : ?>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
-                                                    aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
-                                                    data-bs-toggle="modal" data-bs-target="#supportTicketFollowupModal"
-                                                    data-ticket="<?= e(js($ticketDetails)) ?>">
-                                                <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Seguimiento
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-success text-nowrap"
-                                                    aria-label="Cambiar estado del ticket #<?= e((string) $ticket['id']) ?>"
-                                                    data-bs-toggle="modal" data-bs-target="#supportTicketStatusModal"
-                                                    data-ticket="<?= e(js($ticketDetails)) ?>">
-                                                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Estado
-                                            </button>
-                                        <?php endif; ?>
-                                        <?php if (auth_has_role(array('admin', 'operador'))) : ?>
-                                            <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
-                                                    aria-label="Eliminar ticket #<?= e((string) $ticket['id']) ?>"
-                                                    data-bs-toggle="modal" data-bs-target="#deleteTicketModal"
-                                                    data-ticket-id="<?= e((string) $ticket['id']) ?>"
-                                                    data-ticket-title="<?= e((string) $ticket['title']) ?>">
-                                                <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
-                                            </button>
-                                        <?php endif; ?>
+                                        <ul class="dropdown-menu dropdown-menu-end ticket-actions-menu"
+                                            id="<?= e($ticketActionMenuId) ?>"
+                                            aria-labelledby="<?= e($ticketActionToggleId) ?>"
+                                            role="menu">
+                                            <li role="none">
+                                                <button type="button" class="dropdown-item d-flex align-items-center gap-2" role="menuitem"
+                                                        aria-label="Ver detalle del ticket #<?= e((string) $ticket['id']) ?>"
+                                                        data-bs-toggle="modal" data-bs-target="#supportTicketDetailsModal"
+                                                        data-ticket="<?= e(js($ticketDetails)) ?>">
+                                                    <i class="bi bi-eye text-primary" aria-hidden="true"></i>Ver detalle
+                                                </button>
+                                            </li>
+                                            <?php if ($identPadded !== '') : ?>
+                                                <li role="none">
+                                                    <a class="dropdown-item d-flex align-items-center gap-2" role="menuitem"
+                                                       href="<?= e(url('maintenances.php?search=' . rawurlencode($identPadded))) ?>"
+                                                       aria-label="Ver mantenimientos del bien <?= e($identPadded) ?> del ticket #<?= e((string) $ticket['id']) ?>"
+                                                       title="Ver mantenimientos del bien <?= e($identPadded) ?>">
+                                                        <i class="bi bi-tools text-body-secondary" aria-hidden="true"></i>Mantenimientos del bien
+                                                    </a>
+                                                </li>
+                                            <?php endif; ?>
+                                            <?php if ($canManageTickets || auth_has_role(array('admin', 'operador'))) : ?>
+                                                <li role="none"><hr class="dropdown-divider"></li>
+                                            <?php endif; ?>
+                                            <?php if ($canManageTickets) : ?>
+                                                <li role="none">
+                                                    <button type="button" class="dropdown-item d-flex align-items-center gap-2" role="menuitem"
+                                                            aria-label="Añadir seguimiento al ticket #<?= e((string) $ticket['id']) ?>"
+                                                            data-bs-toggle="modal" data-bs-target="#supportTicketFollowupModal"
+                                                            data-ticket="<?= e(js($ticketDetails)) ?>">
+                                                        <i class="bi bi-chat-left-text text-body-secondary" aria-hidden="true"></i>Seguimiento
+                                                    </button>
+                                                </li>
+                                                <li role="none">
+                                                    <button type="button" class="dropdown-item d-flex align-items-center gap-2" role="menuitem"
+                                                            aria-label="Cambiar estado del ticket #<?= e((string) $ticket['id']) ?>"
+                                                            data-bs-toggle="modal" data-bs-target="#supportTicketStatusModal"
+                                                            data-ticket="<?= e(js($ticketDetails)) ?>">
+                                                        <i class="bi bi-arrow-repeat text-success" aria-hidden="true"></i>Estado
+                                                    </button>
+                                                </li>
+                                            <?php endif; ?>
+                                            <?php if (auth_has_role(array('admin', 'operador'))) : ?>
+                                                <li role="none"><hr class="dropdown-divider"></li>
+                                            <?php endif; ?>
+                                            <li role="none">
+                                                <button type="button" class="dropdown-item d-flex align-items-center gap-2 text-danger" role="menuitem"
+                                                        aria-label="Eliminar ticket #<?= e((string) $ticket['id']) ?>"
+                                                        data-bs-toggle="modal" data-bs-target="#deleteTicketModal"
+                                                        data-ticket-id="<?= e((string) $ticket['id']) ?>"
+                                                        data-ticket-title="<?= e((string) $ticket['title']) ?>">
+                                                    <i class="bi bi-trash" aria-hidden="true"></i>Eliminar
+                                                </button>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
@@ -338,6 +380,86 @@ ob_start();
                         zeroRecords: 'Ningún ticket coincide con la búsqueda.',
                         unitLabel: 'tickets'
                     }
+                });
+
+                // Los menús se mueven al body mientras están abiertos para que
+                // el overflow de .table-responsive no recorte las acciones.
+                document.querySelectorAll('.ticket-actions-dropdown').forEach((wrapper) => {
+                    const toggle = wrapper.querySelector('[data-bs-toggle="dropdown"]');
+                    const menu = wrapper.querySelector('.ticket-actions-menu');
+                    if (!toggle || !menu || !window.bootstrap || !window.bootstrap.Dropdown) {
+                        return;
+                    }
+
+                    const dropdown = window.bootstrap.Dropdown.getOrCreateInstance(toggle, {
+                        boundary: 'viewport'
+                    });
+
+                    wrapper.addEventListener('show.bs.dropdown', () => {
+                        document.body.appendChild(menu);
+                    });
+
+                    wrapper.addEventListener('shown.bs.dropdown', () => {
+                        const firstItem = menu.querySelector('.dropdown-item:not(:disabled)');
+                        if (firstItem) {
+                            firstItem.focus();
+                        }
+                    });
+
+                    wrapper.addEventListener('hide.bs.dropdown', () => {
+                        if (menu.parentNode !== wrapper) {
+                            wrapper.appendChild(menu);
+                        }
+                    });
+
+                    menu.addEventListener('keydown', (event) => {
+                        const items = Array.from(menu.querySelectorAll('.dropdown-item:not(:disabled)'));
+                        const currentIndex = items.indexOf(document.activeElement);
+                        let nextIndex = null;
+
+                        if (event.key === 'ArrowDown') {
+                            nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                        } else if (event.key === 'ArrowUp') {
+                            nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                        } else if (event.key === 'Home') {
+                            nextIndex = 0;
+                        } else if (event.key === 'End') {
+                            nextIndex = items.length - 1;
+                        } else if (event.key === 'Escape') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            dropdown.hide();
+                            toggle.focus();
+                            return;
+                        } else if (event.key === 'Tab') {
+                            const atFirstItem = currentIndex === 0;
+                            const atLastItem = currentIndex === items.length - 1;
+                            if ((event.shiftKey && atFirstItem) || (!event.shiftKey && atLastItem)) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                dropdown.hide();
+
+                                if (event.shiftKey) {
+                                    toggle.focus();
+                                    return;
+                                }
+
+                                const focusable = Array.from(document.querySelectorAll(
+                                    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                                )).filter((element) => !menu.contains(element) && element.offsetParent !== null);
+                                const toggleIndex = focusable.indexOf(toggle);
+                                const nextControl = toggleIndex >= 0 ? focusable[toggleIndex + 1] : null;
+                                (nextControl || toggle).focus();
+                            }
+                            return;
+                        }
+
+                        if (nextIndex !== null && items[nextIndex]) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            items[nextIndex].focus();
+                        }
+                    }, true);
                 });
 
                 const updateTicketFeedback = () => {
@@ -395,6 +517,23 @@ ob_start();
     <?php endif; ?>
 </div>
 <style nonce="<?= e(systec_csp_nonce()) ?>">
+    .ticket-actions-dropdown > .btn {
+        min-height: 2.4rem;
+    }
+
+    .ticket-actions-menu {
+        min-width: min(14rem, calc(100vw - 1rem));
+        max-width: calc(100vw - 1rem);
+    }
+
+    .ticket-actions-menu .dropdown-item {
+        min-height: 2.4rem;
+    }
+
+    .ticket-actions-menu .dropdown-divider {
+        margin-inline: .75rem;
+    }
+
     .ticket-kpi-card {
         transition: box-shadow .15s ease, transform .15s ease;
     }
