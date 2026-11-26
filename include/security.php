@@ -122,6 +122,6 @@ if (PHP_SAPI !== 'cli' && !headers_sent()) {
     header(
         "Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . $nonce . "'" . $documentationCsp
         . "; " . $stylePolicy
-        . " style-src-attr 'unsafe-inline'; object-src 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        . " style-src-attr 'unsafe-inline'; object-src 'none'; img-src 'self' data: http: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     );
 }

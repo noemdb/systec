@@ -1,6 +1,6 @@
 # grafo/ — Lógica de negocio de SysTec GMB
 
-> **Estado:** v1.2 (post-F2) · **Actualizado:** 2026-11-09 · **Fuente:** código, migraciones y datos actuales en `storage/db.db`.
+> **Estado:** v1.6 (usuarios/perfiles, tickets e informes de rendición) · **Actualizado:** 2026-11-26 · **Fuente:** código, migraciones y datos actuales en `storage/db.db`.
 > Este directorio responde una sola pregunta: **¿cómo funciona el negocio hoy, tal como está implementado?** No describe el sistema deseado; eso vive en `docs/`.
 
 ## Archivos
@@ -35,4 +35,4 @@ Los identificadores `H-xx` usados aquí son los mismos de `docs/anexos/matriz-tr
 
 ## Advertencia de vigencia
 
-El directorio no tiene control de versiones. El grafo refleja el estado de `storage/db.db` al **2026-11-09**, después de F2. Si cambia el esquema o los estados sin actualizar `docs/`, el grafo queda obsoleto: trátalo como documentación viva, no como verdad eterna.
+El directorio está bajo control de versiones. El grafo refleja el estado del código y de `storage/db.db` al **2026-11-26**. Si cambia el esquema, los roles o los estados sin actualizar `docs/` y `grafo/`, la documentación queda obsoleta: trátala como documentación viva, no como verdad eterna.

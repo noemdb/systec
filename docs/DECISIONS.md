@@ -1,11 +1,30 @@
 # DECISIONS.md — SysTec GMB
 
-> **Estado:** v1.1 (F2) · **Actualizado:** 2026-11-09.
+> **Estado:** v1.6 (decisiones de facto y ADR recientes) · **Actualizado:** 2026-11-26.
 > Registro de decisiones de arquitectura (ADR). No se edita ni se borra una entrada: un cambio de rumbo crea una nueva entrada que referencia la anterior.
 >
 > **Naturaleza:** la mayoría son **reconstruidas** a partir del código (decisiones de facto, no necesariamente deliberadas). Las propuestas se marcan como tales y no deben implementarse sin aprobación del dueño.
 >
 > Workflow: `Reconstruida` → `Aceptada` (si el dueño la ratifica) → `Reemplazada por ADR-NNN`. `Propuesta` → `Aceptada` / `Rechazada`.
+
+## Vigencia de decisiones anteriores
+
+Las entradas históricas se conservan como evidencia. Su aplicación actual se resume así:
+
+| ADR | Vigencia al 2026-11-26 |
+|---|---|
+| 003 | Reemplazada en la práctica por ADR-019: Bootstrap sigue, pero las tablas usan `TablePaginator`, no jQuery/DataTables. |
+| 005 | Reemplazada por importación POST con confirmación, transacción y reporte; ver `API.md` y ADR-016/017. |
+| 006 | Complementada por validación en servidor y triggers SQLite. |
+| 007 | Reemplazada por ADR-021: selector explícito de estado del bien. |
+| 008 | Sigue vigente para reportes legacy; los Informes de Rendición persistentes se rigen por ADR-022. |
+| 009 | Reemplazada por ADR-015. |
+| 010 | Reemplazada por ADR-017. |
+| 012 | Reemplazada por ADR-016. |
+| 013 | Aceptada e implementada por fases. |
+| 014 | Parcialmente implementada: repositorios y migraciones existen; no se creó `src/Database.php` ni se migró a PDO. |
+| 015 | Implementada y ampliada con rol `personal`, rate limiting y gestión web de usuarios. |
+| 018 | Sigue parcial: script de backup listo, cron/destino/custodia pendientes de TI. |
 
 ---
 
@@ -300,7 +319,8 @@ Conservar los valores legacy y mapear solo algunos en `include/helpers.php`.
 
 ## ADR-013 — Endurecimiento progresivo vs reescritura
 **Fecha:** 2026-11-09
-**Estado:** Propuesta
+**Estado:** Aceptada / implementada por fases
+**Actualización 2026-11-26:** el cuerpo histórico decía “Propuesta”; la implementación F1/F2/F3 confirma la aceptación.
 
 ### Contexto
 El sistema tiene deudas críticas de seguridad y calidad. Se puede reescribir o endurecer por fases.
@@ -375,7 +395,8 @@ El sistema no tenía autenticación, CSRF, escape sistemático ni SQL parametriz
 ### Consecuencias
 - **Gana:** el sistema deja de ser anónimo y de exponer la base; las rutas actuales se conservan.
 - **Sacrifica:** `storage/` sigue dentro del árbol del proyecto (aunque denegado); la separación `public/`/`src/` queda para ADR-014.
-- **Pendiente:** HTTPS/HSTS, rate limiting, auditoría y pruebas automatizadas.
+- **Pendiente:** HTTPS/HSTS, auditoría general, revocación centralizada de sesiones y pruebas E2E. Rate limiting de login y suite PHPUnit/CI ya están implementados.
+- **Actualización 2026-11-26:** se añadió el rol `personal`, la gestión web de usuarios/perfiles y el bloqueo temporal de login.
 - **Evidencia:** `php -l`, pruebas de humo y mutaciones documentadas en `CHANGELOG.md`.
 
 ---
@@ -442,28 +463,134 @@ F2 verificó un backup y una restauración aislada, pero no había frecuencia, r
 
 ---
 
+## ADR-019 — Tablas con `TablePaginator` Vanilla JS
+
+**Fecha:** 2026-11-26 (reconstruida)
+**Estado:** Aceptada / implementada; reemplaza la parte DataTables de ADR-003.
+
+### Contexto
+Las tablas necesitan búsqueda, orden y paginación sin build step ni dependencias de frontend pesadas.
+
+### Decisión
+Usar `window.Systec.TablePaginator` en `assets/js/table-paginator.js` con JavaScript nativo. `include/head.php` carga este componente; las vistas actuales no cargan jQuery ni DataTables.
+
+### Consecuencias
+- **Gana:** menos dependencias, mejor control de accesibilidad y estilos consistentes.
+- **Sacrifica:** las funciones se implementan en el componente interno en lugar de una biblioteca madura.
+- **Alcance:** la paginación puede ser cliente; no implica paginación en servidor.
+
+---
+
+## ADR-020 — Perfiles de usuario y guardado transaccional
+
+**Fecha:** 2026-11-26 (reconstruida)
+**Estado:** Aceptada / implementada.
+
+### Contexto
+La cuenta de acceso necesitaba datos de presentación sin mezclarlos con el rol de autorización ni crear cuentas duplicadas.
+
+### Decisión
+1. `users` conserva credenciales, rol, estado y email informativo.
+2. `profile` almacena `user_id`, `first_name`, `last_name` y `avatar_url`, con unicidad por usuario y FK en cascada.
+3. El drawer administrativo gestiona cuenta y perfil juntos.
+4. `auth_admin_save_user()` valida y guarda ambos en una transacción.
+5. `bin/seed-profiles.php` sincroniza nombres por username, conserva avatares y no crea usuarios.
+
+### Consecuencias
+- **Gana:** relación 1:1, reversión ante fallo y operación repetible.
+- **Sacrifica:** el seeder exige que existan todos los usernames canónicos; una variante manual provoca rollback.
+- **Límite:** email no se edita desde el drawer; avatar es URL externa, no archivo.
+- **Sesiones:** rol/estado se consultan al login; la sesión abierta conserva el rol anterior hasta cerrarse.
+
+---
+
+## ADR-021 — Selector explícito de estado del bien
+
+**Fecha:** 2026-11-26 (reconstruida)
+**Estado:** Aceptada / implementada; reemplaza ADR-007.
+
+### Contexto
+El ciclo automático de estado era ambiguo, no lineal y no permitía elegir directamente la condición destino.
+
+### Decisión
+El dashboard abre un selector con los cuatro estados válidos. El POST recibe `property_id` y `status`, valida rol/CSRF y aplica el destino de forma idempotente. La acción registra actor y estados anterior/nuevo en el log.
+
+### Consecuencias
+- **Gana:** selección clara y filtros de retorno.
+- **Sacrifica:** un paso adicional frente al botón cíclico.
+- **Pendiente:** motivo estructurado y auditoría persistente `audit_events`.
+
+---
+
+## ADR-022 — Informes de Rendición persistentes
+
+**Fecha:** 2026-11-26 (reconstruida)
+**Estado:** Aceptada / implementada; complementa ADR-008 para reportes formales.
+
+### Contexto
+Los reportes legacy se generan desde datos vivos y no son reproducibles. Se necesitaba un informe formal por período con alcance y aprobación.
+
+### Decisión
+1. Crear `rendition_reports` con `scope_hash`, parámetros, estadísticas, IDs de origen, Markdown y estado.
+2. Generar borradores desde mantenimientos/tickets del alcance.
+3. Permitir editar Markdown y aprobar; los aprobados son inmutables.
+4. Imprimir o descargar `.md`; eliminación solo para Administrador.
+5. Usar NVIDIA opcionalmente, con alternativa local para secciones del informe.
+
+### Consecuencias
+- **Gana:** reproducibilidad, trazabilidad y aprobación.
+- **Sacrifica:** mayor superficie de datos y dependencia opcional de IA.
+- **Excepción técnica:** el repositorio conserva una salvaguarda runtime que crea tabla/índices si faltan; el proceso normal sigue siendo aplicar la migración 008 por CLI.
+
+---
+
+## ADR-023 — Avatares externos y CSP de imágenes
+
+**Fecha:** 2026-11-26 (reconstruida)
+**Estado:** Aceptada / implementada con riesgo documentado.
+
+### Contexto
+El perfil necesita una imagen, pero la CSP original solo permitía imágenes `self` y `data:`. Subir archivos habría añadido almacenamiento, validación de contenido y limpieza.
+
+### Decisión
+1. Guardar una URL `http/https` validada, con límite de 2048 caracteres.
+2. Permitir en CSP `img-src 'self' data: http: https:`.
+3. Usar `referrerpolicy="no-referrer"` al mostrar avatares.
+
+### Consecuencias
+- **Gana:** simplicidad y compatibilidad con imágenes institucionales remotas.
+- **Riesgo:** el navegador contacta terceros y puede revelar datos de red/IP; no hay caché, proxy ni lista blanca de hosts.
+- **Pendiente:** decidir si producción debe restringir hosts o incorporar almacenamiento local.
+
+---
+
 ## Índice
 
 | ADR | Tema | Estado |
 |---|---|---|
 | 001 | Monolito PHP + SQLite | Reconstruida |
 | 002 | Layout por output buffering | Reconstruida |
-| 003 | Bootstrap + DataTables vendorizados | Reconstruida |
+| 003 | Bootstrap + DataTables vendorizados | Reemplazada en frontend por ADR-019 |
 | 004 | Código de bien compuesto | Reconstruida |
-| 005 | Importación CSV directa | Reconstruida |
-| 006 | Estados de mantenimiento | Reconstruida |
-| 007 | Ciclo de estado del bien | Reconstruida / cuestionada |
-| 008 | Reportes desde datos vivos | Reconstruida |
+| 005 | Importación CSV directa | Reemplazada por importación segura |
+| 006 | Estados de mantenimiento | Implementada con validación servidor/SQLite |
+| 007 | Ciclo de estado del bien | Reemplazada por ADR-021 |
+| 008 | Reportes desde datos vivos | Vigente para reportes legacy; complementada por ADR-022 |
 | 009 | Sin autenticación | Reemplazada por ADR-015 |
-| 010 | Sin migraciones | Deuda / Propuesta |
+| 010 | Sin migraciones | Reemplazada por ADR-017 |
 | 011 | `time_taken` en horas | Aceptada / corregida F1 |
-| 012 | Datos legacy sin normalizar | Reconstruida / deuda |
+| 012 | Datos legacy sin normalizar | Reemplazada por ADR-016 |
 | 013 | Endurecimiento vs reescritura | Aceptada (F1 ejecutada) |
-| 014 | Repositorios + migraciones | Propuesta |
-| 015 | Contención F1: auth, CSRF y storage | Implementada |
+| 014 | Repositorios + migraciones | Parcialmente implementada |
+| 015 | Contención F1: auth, CSRF y storage | Implementada y ampliada |
 | 016 | Normalización de datos legacy | Aceptada / implementada |
 | 017 | Migraciones SQLite versionadas | Aceptada / implementada |
 | 018 | Política operativa inicial de backups | Parcial; requiere despliegue TI |
+| 019 | TablePaginator Vanilla JS | Implementada |
+| 020 | Perfiles y guardado transaccional | Implementada |
+| 021 | Selector explícito de estado del bien | Implementada |
+| 022 | Informes de Rendición persistentes | Implementada |
+| 023 | Avatares externos y CSP | Implementada con riesgo documentado |
 
 ---
 

@@ -89,9 +89,12 @@ try {
             $targetUsername = trim((string) ($_POST['username'] ?? ''));
             $targetRole = trim((string) ($_POST['role'] ?? ''));
             $targetActive = (isset($_POST['active']) && (string) $_POST['active'] === '0') ? 0 : 1;
+            $profileNote = (isset($_POST['first_name']) && trim((string) $_POST['first_name']) !== '')
+                ? ' (perfil actualizado)'
+                : '';
             $verb = $isNew ? 'creó' : 'actualizó';
             $pwdNote = $passwordChanged ? ' (contraseña actualizada)' : '';
-            error_log("Auditoría usuarios: '{$actorUsername}' {$verb} usuario #{$result['id']} ('{$targetUsername}', rol={$targetRole}, active={$targetActive}){$pwdNote}.");
+            error_log("Auditoría usuarios: '{$actorUsername}' {$verb} usuario #{$result['id']} ('{$targetUsername}', rol={$targetRole}, active={$targetActive}){$pwdNote}{$profileNote}.");
         }
         $_SESSION['users_feedback'] = array(
             'type' => $result['ok'] ? 'success' : 'danger',

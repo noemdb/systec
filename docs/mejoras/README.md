@@ -13,17 +13,17 @@ Las oportunidades identificadas complementan y refinan el backlog histórico de 
 | **SEC-01** | Seguridad | Eliminar archivos sensibles del webroot y git (`db.db`, `.xls`, `bck/`) | P0 | Bajo | ✅ Completado |
 | **SEC-02** | Seguridad | Rate limiting y bloqueo por fuerza bruta en login | P0 | Bajo | ✅ Completado |
 | **PERF-01** | Rendimiento | Desacoplar sincronización PostgreSQL de peticiones GET en dashboard | P1 | Medio | ✅ Completado |
-| **PERF-02** | Rendimiento | Resolver consulta N+1 y paginar en servidor en `tickets.php` | P1 | Medio | ✅ Completado |
-| **PERF-03** | Rendimiento | Retirar DDL `ensureSchema()` del constructor de `DB` | P1 | Bajo | ✅ Completado |
-| **ARCH-01** | Arquitectura | Modularizar monolitos en repositorios y servicios (ADR-014) | P2 | Alto | ✅ Completado |
-| **ARCH-02** | Arquitectura | Catálogos dinámicos en base de datos (técnicos y estados) | P2 | Medio | ✅ Completado |
-| **UI-01** | UI/UX | Selector de estado del bien con confirmación y motivo (ADR-007) | P2 | Medio | ✅ Completado |
+| **PERF-02** | Rendimiento | Resolver consulta N+1 y paginar en servidor en `tickets.php` | P1 | Medio | 🧪 JOIN resuelto; paginación actual en cliente |
+| **PERF-03** | Rendimiento | Retirar DDL `ensureSchema()` del constructor de `DB` | P1 | Bajo | 🧪 Parcial; `RenditionReportRepository` aún crea tabla/índices en GET |
+| **ARCH-01** | Arquitectura | Modularizar monolitos en repositorios y servicios (ADR-014) | P2 | Alto | 🧪 Repositorios listos; páginas aún superan 300 líneas y contienen SQL |
+| **ARCH-02** | Arquitectura | Catálogos dinámicos en base de datos (técnicos y estados) | P2 | Medio | ✅ Catálogo híbrido de técnicos + `ticket_status` |
+| **UI-01** | UI/UX | Selector de estado del bien con confirmación y motivo (ADR-007) | P2 | Medio | 🧪 Selector/POST/log listos; motivo y auditoría persistente pendientes |
 | **UI-02** | UI/UX | Corregir técnico vacío en firma de historial (`historials.php`) | P2 | Bajo | ✅ Completado |
 | **UI-03** | UI/UX | Subsanar accesibilidad y etiquetas semánticas (h1, text-body-secondary, caption) | P2 | Bajo | ✅ Completado |
-| **TEST-01** | Testing/CI | Pruebas de integración para auth, roles, CSRF y transiciones | P2 | Medio | ✅ Completado |
-| **TEST-02** | Testing/CI | Pipeline de integración continua (GitHub Actions / CI local) | P2 | Bajo | ✅ Completado |
-| **OPS-01** | Operaciones | Automatización de backups vía cron con rotación y verificación | P3 | Medio | ✅ Completado |
-| **OPS-02** | Operaciones | Interfaz de administración de usuarios y cambio de contraseña | P3 | Medio | ✅ Completado |
+| **TEST-01** | Testing/CI | Pruebas de integración para auth, roles, CSRF y transiciones | P2 | Medio | 🧪 Suite unitaria/local; E2E HTTP pendiente |
+| **TEST-02** | Testing/CI | Pipeline de integración continua (GitHub Actions / CI local) | P2 | Bajo | ✅ CI en PHP 8.2; hook local pre-push |
+| **OPS-01** | Operaciones | Automatización de backups vía cron con rotación y verificación | P3 | Medio | 🧪 Script listo; cron/destino/custodia pendientes de TI |
+| **OPS-02** | Operaciones | Interfaz de administración de usuarios y cambio de contraseña | P3 | Medio | ✅ Drawer de cuenta/perfil + CLI + seeder |
 
 ---
 
@@ -61,12 +61,14 @@ Las oportunidades identificadas complementan y refinan el backlog histórico de 
 * **Archivos:** `tickets.php`, `conn.php`.
 * **Solución propuesta:** Migrar la consulta a un único `JOIN` con `properties`, `users` y `ticket_status`, agregando paginación `LIMIT / OFFSET` similar a la implementada en `personal/index.php`.
 * **Criterio de aceptación:** La carga de la bandeja de tickets ejecuta un número constante de consultas (≤ 2).
+* **Estado 2026-11-26:** el JOIN/N+1 está resuelto, pero `tickets.php` carga todos los tickets activos y pagina en cliente; la paginación en servidor quedó pendiente.
 
 #### PERF-03 · Retirar DDL `ensureSchema()` del constructor de `DB`
 * **Diagnóstico:** Cada request ejecuta 6 sentencias `CREATE TABLE IF NOT EXISTS` y 5 `INSERT OR IGNORE`, sumando sobrecarga innecesaria en SQLite.
 * **Archivos:** `conn.php`, `bin/migrate.php`.
 * **Solución propuesta:** Trasladar la inicialización exclusivamente a las migraciones versionadas y asegurar que `new DB()` sea ligero.
 * **Criterio de aceptación:** Ningún `CREATE TABLE` se ejecuta en peticiones web ordinarias.
+* **Estado 2026-11-26:** `ensureSchema()` omite DDL cuando `users` existe, pero `RenditionReportRepository::ensureTableExists()` todavía puede crear tabla/índices durante un GET de Mantenimientos.
 
 ---
 
@@ -77,6 +79,7 @@ Las oportunidades identificadas complementan y refinan el backlog histórico de 
 * **Archivos:** `conn.php`, `maintenances.php`, `dashboard.php`.
 * **Solución propuesta:** Extraer repositorios especializados (`PropertyRepository`, `MaintenanceRepository`, `TicketRepository`) y desacoplar controladores de vistas.
 * **Criterio de aceptación:** Clases con responsabilidades únicas y páginas PHP con menos de 300 líneas de lógica coordinadora.
+* **Estado 2026-11-26:** los repositorios existen, pero `dashboard.php`, `maintenances.php`, `tickets.php` y `users.php` superan ese límite y varias páginas conservan consultas SQL directas.
 
 #### ARCH-02 · Catálogos de técnicos y estados administrables
 * **Diagnóstico:** La lista de técnicos autorizados está fija en `conn.php` (`jmedina`, `ndominguez`).
@@ -93,6 +96,7 @@ Las oportunidades identificadas complementan y refinan el backlog histórico de 
 * **Archivos:** `dashboard.php`, `dashboard/actions/status.php`, `dashboard/table/index.php`.
 * **Solución propuesta:** Sustituir la acción cíclica por un modal o selector con confirmación y campo de motivo opcional.
 * **Criterio de aceptación:** El cambio exige selección explícita del estado destino y registra la acción mediante POST con CSRF.
+* **Estado 2026-11-26:** selector, POST, CSRF y log están implementados; no hay campo de motivo ni auditoría persistente.
 
 #### UI-02 · Firma en reportes de historial de mantenimientos
 * **Diagnóstico:** En `historials.php` la variable `$technician = '';` está vacía, imprimiendo "Realizado por:" en blanco en la firma.
@@ -127,6 +131,7 @@ Las oportunidades identificadas complementan y refinan el backlog histórico de 
 * **Archivos:** `bin/backup.sh` (por crear), `docs/BACKUP.md`.
 * **Solución propuesta:** Script de respaldo con sqlite3 `.backup` o copia segura, compresión y rotación automática.
 * **Criterio de aceptación:** Ejecución sin intervención humana con log de verificación de integridad (`PRAGMA integrity_check`).
+* **Estado 2026-11-26:** el script está implementado y verificado, pero no instala cron ni envía alertas; el cifrado solo es obligatorio con `--require-encryption`.
 
 #### OPS-02 · Gestión de usuarios y contraseñas en interfaz web
 * **Diagnóstico:** Los usuarios no pueden cambiar su propia contraseña; los administradores no tienen panel web para crear/desactivar usuarios.

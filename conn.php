@@ -35,7 +35,10 @@ class DB extends SQLite3
             'failure_reason', 'notes', 'status',
         ),
         'users' => array(
-            'id', 'username', 'password_hash', 'role', 'active', 'created_at',
+            'id', 'username', 'email', 'password_hash', 'role', 'active', 'created_at',
+        ),
+        'profile' => array(
+            'id', 'user_id', 'first_name', 'last_name', 'avatar_url',
         ),
         'ticket_status' => array(
             'id', 'code', 'name', 'sort_order', 'is_terminal', 'active',
@@ -172,6 +175,14 @@ class DB extends SQLite3
             role TEXT NOT NULL DEFAULT \'consulta\',
             active INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )');
+
+        $this->exec('CREATE TABLE IF NOT EXISTS profile (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            avatar_url TEXT
         )');
 
         $this->exec('CREATE TABLE IF NOT EXISTS ticket_status (

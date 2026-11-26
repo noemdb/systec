@@ -1,9 +1,9 @@
 # Lógica de negocio — SysTec GMB
 
 > **Sistema:** Gestión de Mantenimientos de Bienes (GMB) de la Oficina de Informática, San Felipe, Edo. Yaracuy.
-> **Alcance:** inventario de bienes, registro y seguimiento de mantenimientos, historial por bien, reporte de bienes dañados e importación de datos legacy.
-> **Fecha de análisis:** 2026-11-09 (actualizado tras F2).
-> **Nota de vigencia:** F1 agregó controles de aplicación; F2 agregó importaciones transaccionales, normalización, migraciones, triggers e índices. Los datos se respaldaron antes de normalizar.
+> **Alcance:** inventario de bienes, registro y seguimiento de mantenimientos, tickets de soporte, portal personal, usuarios y perfiles, historial por bien, informes de rendición, reporte de bienes dañados e importación de datos legacy.
+> **Fecha de análisis:** 2026-11-26.
+> **Nota de vigencia:** F1 agregó autenticación y roles; F2 agregó importaciones transaccionales, normalización, migraciones, triggers e índices; F3 incorporó tickets, portal personal, informes de rendición, gestión web de usuarios/perfiles y el seeder de perfiles.
 
 ---
 
@@ -16,8 +16,12 @@ La institución mantiene un inventario de bienes (equipos, mobiliario, instalaci
 3. Consultar el historial completo de un bien.
 4. Producir un reporte imprimible de bienes dañados y desincorporados.
 5. Cargar inventario y mantenimientos históricos desde archivos CSV.
+6. Registrar tickets asociados a bienes y dar seguimiento según el rol.
+7. Permitir que el personal consulte únicamente sus propios tickets.
+8. Administrar cuentas, roles y perfiles de usuario.
+9. Generar informes de rendición a partir de mantenimientos y tickets.
 
-No hay API pública ni framework. El sistema es una aplicación PHP monolítica que escribe sobre un archivo SQLite en `storage/db.db` (fuera del webroot lógico). Desde F1 exige sesión, aplica roles y protege las mutaciones con CSRF; F2 valida catálogos y transiciones en SQLite. No hay auditoría de cambios.
+No hay API pública ni framework. El sistema es una aplicación PHP monolítica que escribe sobre un archivo SQLite en `storage/db.db` (fuera del webroot lógico). Desde F1 exige sesión, aplica roles y protege las mutaciones con CSRF; F2 valida catálogos y transiciones en SQLite. No hay auditoría general de cambios.
 
 ---
 
@@ -25,13 +29,14 @@ No hay API pública ni framework. El sistema es una aplicación PHP monolítica 
 
 | Actor | Rol / permiso | Qué hace | Dónde |
 |---|---|---|---|
-| **Administrador** | `admin` | Todo: inventario, mantenimientos, importación y estado | Todas las rutas |
-| **Operador de inventario** | `operador` | Carga CSV, consulta dashboard, cambia el estado de un bien | `updates.php`, `dashboard.php` |
-| **Técnico / encargado de mantenimiento** | `tecnico` | Registra, edita y cambia el estado de mantenimientos | `maintenances.php` |
-| **Dirección / auditor** | `consulta` | Consulta historiales y reportes imprimibles; no muta | `historials.php`, `report.php`, `batch.php` |
-| **Sistema** | — | Calcula códigos, vencimientos, horas y genera HTML | `conn.php`, `include/helpers.php` |
+| **Administrador** | `admin` | Inventario, mantenimientos, tickets, importación, usuarios y perfiles | Rutas operativas y `users.php` |
+| **Operador de inventario** | `operador` | Carga CSV, consulta dashboard, cambia el estado de un bien y gestiona tickets | `updates.php`, `dashboard.php`, `tickets.php` |
+| **Técnico / encargado de mantenimiento** | `tecnico` | Registra, edita y cambia el estado de mantenimientos; gestiona tickets | `maintenances.php`, `tickets.php` |
+| **Dirección / auditor** | `consulta` | Consulta inventario, historiales, reportes y tickets; no muta | `dashboard.php`, `historials.php`, `report.php`, `tickets.php` |
+| **Personal institucional** | `personal` | Registra tickets y consulta o amplía el seguimiento de los suyos | `/personal/` |
+| **Sistema** | — | Calcula códigos, vencimientos, horas, perfiles y genera HTML | `conn.php`, `include/helpers.php`, repositorios |
 
-> Desde F1 toda ruta de aplicación exige `require_login()`; las mutaciones exigen rol y token CSRF. Los usuarios se gestionan por CLI (`bin/create-user.php`). Ver `docs/SECURITY.md`.
+> Las rutas funcionales exigen `require_login()`; las mutaciones exigen rol y token CSRF. Los administradores gestionan cuentas y perfiles en `/users.php` mediante un drawer; `bin/create-user.php` y `bin/seed-profiles.php` siguen disponibles para operación CLI. Ver `docs/SECURITY.md`.
 
 ---
 
@@ -41,26 +46,44 @@ No hay API pública ni framework. El sistema es una aplicación PHP monolítica 
 graph TD
     A[Operador] --> C1[C1. Inventario de bienes]
     A --> C5[C5. Importación CSV]
+    A --> C6[C6. Tickets de soporte]
     B[Técnico] --> C2[C2. Gestión de mantenimientos]
     B --> C3[C3. Historial por bien]
+    B --> C6
     D[Dirección / Auditor] --> C4[C4. Reportes imprimibles]
+    D --> C6
+    P[Personal] --> C7[C7. Portal de tickets propios]
     ADM[Administrador] --> C1
     ADM --> C2
     ADM --> C5
+    ADM --> C6
+    ADM --> C8[C8. Usuarios y perfiles]
+    ADM --> C9[C9. Informes de rendición]
     AUTH[Login + roles + CSRF] -.-> C1
     AUTH -.-> C2
     AUTH -.-> C5
+    AUTH -.-> C6
+    AUTH -.-> C7
+    AUTH -.-> C8
     C1 --> DB[(storage/db.db · SQLite)]
     C2 --> DB
     C3 --> DB
     C4 --> DB
     C5 --> DB
+    C6 --> DB
+    C7 --> DB
+    C8 --> DB
+    C9 --> DB
 
     C1 --> S1[Dashboard + búsqueda + estado]
     C2 --> S2[Registro / edición / transición de estado]
     C3 --> S3[Historial cronológico + membrete]
     C4 --> S4[Reporte de bienes dañados + lote de 2]
     C5 --> S5[Inventario CSV/XLS o PostgreSQL readonly / mantenimientos CSV]
+    C6 --> S6[Bandeja global + wizard + seguimiento]
+    C7 --> S7[Registro y consulta de tickets propios]
+    C8 --> S8[Drawer de cuenta + perfil + avatar]
+    C9 --> S9[Wizard de informe + aprobación + impresión]
 ```
 
 | Capacidad | Estado | Implementación principal |
@@ -70,6 +93,10 @@ graph TD
 | C3 Historial | Operativa, con auth | `historials.php`, `historials/main.php`, `historials/report.php` |
 | C4 Reportes | Operativa, con auth | `report.php`, `batch.php` |
 | C5 Importación | POST, confirmación, transacción, límite 5000 filas/5 MB; inventario en CSV, XLS o PostgreSQL readonly | `updates.php`, `imports.php`, `include/inventory_import.php`, `include/csv_import.php` |
+| C6 Tickets | Operativa; bandeja global, wizard, historial y baja lógica | `tickets.php`, `tickets/`, `include/ticket_register_modal.php` |
+| C7 Portal Personal | Operativo; acceso restringido a tickets propios | `personal/`, `TicketRepository::personalTickets()` |
+| C8 Usuarios y perfiles | Operativo; drawer administrativo, guardado transaccional y seeder CLI | `users.php`, `include/user_manage_drawer.php`, `bin/seed-profiles.php` |
+| C9 Informes de rendición | Operativo; borrador/aprobado, Markdown, impresión y pantalla | `maintenances/form/rendition_wizard_modal.php`, `RenditionReportRepository` |
 
 ---
 
@@ -171,6 +198,43 @@ Reglas observadas:
 - El estado se fija en `finalizado`.
 - `time_taken` se guarda **nulo** (F1 eliminó el valor aleatorio).
 - La página reporta insertados, omitidos y errores dentro de una transacción; límite de 5000 filas y 5 MB.
+
+---
+
+### 5.3 Tickets y portal personal
+
+```mermaid
+flowchart LR
+    U[Usuario autenticado] --> R{rol}
+    R -->|personal| P[Portal /personal]
+    R -->|admin/operador/tecnico| S[Bandeja global de tickets]
+    R -->|consulta| V[Consulta de tickets]
+    P --> W[Wizard de ticket propio]
+    S --> W
+    W --> T[(tickets)]
+    T --> H[(ticket_histories)]
+    P -->|solo created_by = usuario| T
+```
+
+- El rol `personal` crea tickets desde su portal y solo puede consultar o ampliar seguimientos de los tickets donde `created_by` coincide con su `users.id`.
+- `admin`, `operador` y `tecnico` gestionan la bandeja global; `consulta` solo lee.
+- La baja es lógica (`deleted_at`) y se limita a `admin`/`operador`.
+
+### 5.4 Usuarios y perfiles
+
+```mermaid
+flowchart LR
+    A[Administrador] --> D[Drawer de users.php]
+    D -->|POST + CSRF| S[users/actions/save.php]
+    S --> U[(users)]
+    S --> P[(profile)]
+    U -->|user_id FK ON DELETE CASCADE| P
+    CLI[bin/seed-profiles.php] -->|upsert por username| P
+```
+
+- El drawer reúne cuenta y perfil: `username`, rol, estado, contraseña, `first_name`, `last_name` y `avatar_url`.
+- El guardado de cuenta y perfil ocurre en una transacción.
+- El seeder de perfiles es idempotente y conserva `avatar_url`.
 
 ---
 
@@ -277,6 +341,10 @@ Reglas observadas:
 | R-15 | Toda mutación exige POST + token CSRF | `verify_csrf()` en acciones y formularios | Sí desde F1 |
 | R-16 | Solo transiciones de mantenimiento permitidas | `maintenance_transition_allowed()` + trigger SQLite | Sí en servidor y BD |
 | R-17 | La salida HTML se escapa | `e()` / `js()` | Sí desde F1 |
+| R-18 | El personal solo accede a sus propios tickets | `created_by = users.id` en consultas y `auth_can_access_ticket_for_user()` | Sí en servidor |
+| R-19 | Un usuario tiene como máximo un perfil | `profile.user_id UNIQUE` + FK en cascada | Sí en SQLite |
+| R-20 | El avatar debe ser una URL http/https | Validación en `auth_admin_save_user()` y CSP `img-src` | Sí en servidor y navegador |
+| R-21 | Cuenta y perfil se guardan juntos | Transacción en `auth_admin_save_user()` | Sí; revierte ante fallo |
 
 ---
 
@@ -294,6 +362,10 @@ graph LR
         BATCH[batch.php]
         UPD[updates.php]
         IMP[imports.php]
+        TICK[tickets.php]
+        PERS[personal/index.php]
+        USERS[users.php]
+        DOC[documentation.php]
     end
 
     subgraph Núcleo
@@ -328,6 +400,10 @@ graph LR
     BATCH --> AUTH
     UPD --> AUTH
     IMP --> AUTH
+    TICK --> AUTH
+    PERS --> AUTH
+    USERS --> AUTH
+    DOC --> AUTH
 
     DASH --> DT[dashboard/table/index.php]
     DASH --> DACT[dashboard/actions/status.php]
@@ -350,6 +426,11 @@ graph LR
 
     UPD --> PCSV[properties/table/propertiesCsv.php]
     IMP --> MIMP[maintenances/table/import.php]
+    TICK --> TREG[include/ticket_register_modal.php]
+    TICK --> TACT[tickets/actions/]
+    PERS --> PACT[personal/actions/]
+    USERS --> UDRAW[include/user_manage_drawer.php]
+    USERS --> USAVE[users/actions/save.php]
 ```
 
 ---
@@ -370,7 +451,7 @@ graph LR
 | H-10 | Fechas y nombres hardcodeados | Reportes con datos incorrectos | ✅ F1 |
 | H-11 | `DB::create()` y `createOrUpdate()` cerraban la conexión | Patrón frágil | ✅ F1 |
 | H-12 | `db.db`, backups y CSV vivían bajo el webroot | Descarga directa de datos | ✅ F1 |
-| H-13 | Sin migraciones ni pruebas automatizadas | Cambios y regresiones sin red de seguridad | 🧪 F2 migraciones listas; suite F3 pendiente |
+| H-13 | Sin migraciones ni pruebas automatizadas | Cambios y regresiones sin red de seguridad | ✅ Migraciones 001–011 y suite PHPUnit activa |
 | H-14 | `es-ES.json` no se referenciaba | Configuración muerta | ✅ F1 (eliminado) |
 | H-15 | Importación sin transacción ni reporte | Pérdida silenciosa de filas | ✅ F2 (transacción, límites e informe) |
 

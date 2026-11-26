@@ -450,7 +450,28 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
     $role = isset($input['role']) ? trim((string) $input['role']) : '';
     $password = isset($input['password']) ? (string) $input['password'] : '';
     $active = isset($input['active']) && (string) $input['active'] === '0' ? 0 : 1;
+    $firstName = isset($input['first_name']) ? trim((string) $input['first_name']) : '';
+    $lastName = isset($input['last_name']) ? trim((string) $input['last_name']) : '';
+    $avatarUrl = isset($input['avatar_url']) ? trim((string) $input['avatar_url']) : '';
     $roles = $dbInstance->getListRoles();
+
+    if (mb_strlen($firstName) > 120 || mb_strlen($lastName) > 120) {
+        return array('ok' => false, 'message' => 'El nombre y los apellidos no pueden superar 120 caracteres.');
+    }
+    if (($firstName === '') !== ($lastName === '')) {
+        return array('ok' => false, 'message' => 'Debes indicar tanto el nombre como los apellidos del perfil.');
+    }
+    if ($avatarUrl !== '' && (
+        mb_strlen($avatarUrl) > 2048
+        || !filter_var($avatarUrl, FILTER_VALIDATE_URL)
+        || !preg_match('/^https?:\/\//i', $avatarUrl)
+    )) {
+        return array('ok' => false, 'message' => 'La URL del avatar debe ser una dirección http o https válida.');
+    }
+    if ($firstName === '' && $avatarUrl !== '') {
+        return array('ok' => false, 'message' => 'Debes indicar el nombre y los apellidos antes de guardar un avatar.');
+    }
+    $saveProfile = $firstName !== '' && $lastName !== '';
 
     if (!array_key_exists($role, $roles)) {
         return array('ok' => false, 'message' => 'Selecciona un rol válido.');
@@ -463,8 +484,8 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
                 'message' => 'El usuario debe tener entre 3 y 64 caracteres alfanuméricos, punto, guion o guion bajo.',
             );
         }
-        if (strlen($password) < 6) {
-            return array('ok' => false, 'message' => 'La contraseña inicial debe tener al menos 6 caracteres.');
+        if (strlen($password) < 4) {
+            return array('ok' => false, 'message' => 'La contraseña inicial debe tener al menos 4 caracteres.');
         }
         $existingRows = $dbInstance->fetchAllQuery(
             'SELECT id FROM users WHERE LOWER(username) = LOWER(:username) LIMIT 1',
@@ -474,12 +495,29 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
             return array('ok' => false, 'message' => 'Ya existe un usuario con ese nombre.');
         }
 
-        $newId = $dbInstance->create('users', array(
-            'username' => $username,
-            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-            'role' => $role,
-            'active' => $active,
-        ));
+        if (!$dbInstance->exec('BEGIN IMMEDIATE')) {
+            throw new RuntimeException('No se pudo iniciar la transacción: ' . $dbInstance->lastErrorMsg());
+        }
+
+        try {
+            $newId = $dbInstance->create('users', array(
+                'username' => $username,
+                'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                'role' => $role,
+                'active' => $active,
+            ));
+
+            if ($saveProfile) {
+                auth_admin_save_profile((int) $newId, $firstName, $lastName, $avatarUrl, $dbInstance);
+            }
+
+            if (!$dbInstance->exec('COMMIT')) {
+                throw new RuntimeException('No se pudo confirmar el alta: ' . $dbInstance->lastErrorMsg());
+            }
+        } catch (Throwable $e) {
+            $dbInstance->exec('ROLLBACK');
+            throw $e;
+        }
 
         return array(
             'ok' => true,
@@ -513,7 +551,24 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
         $updates['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
     }
 
-    $dbInstance->update('users', (int) $existing['id'], $updates);
+    if (!$dbInstance->exec('BEGIN IMMEDIATE')) {
+        throw new RuntimeException('No se pudo iniciar la transacción: ' . $dbInstance->lastErrorMsg());
+    }
+
+    try {
+        $dbInstance->update('users', (int) $existing['id'], $updates);
+        if ($saveProfile) {
+            auth_admin_save_profile((int) $existing['id'], $firstName, $lastName, $avatarUrl, $dbInstance);
+        }
+
+        if (!$dbInstance->exec('COMMIT')) {
+            throw new RuntimeException('No se pudo confirmar la actualización: ' . $dbInstance->lastErrorMsg());
+        }
+    } catch (Throwable $e) {
+        $dbInstance->exec('ROLLBACK');
+        throw $e;
+    }
+
     if ($password !== '') {
         auth_throttle_clear((string) $existing['username']);
     }
@@ -523,6 +578,36 @@ function auth_admin_save_user(array $input, int $actorUserId, ?DB $database = nu
         'id' => (int) $existing['id'],
         'message' => 'Usuario «' . $existing['username'] . '» actualizado correctamente.',
     );
+}
+
+/**
+ * Crea o actualiza el perfil de un usuario dentro de la transacción del alta/edición.
+ */
+function auth_admin_save_profile(
+    int $userId,
+    string $firstName,
+    string $lastName,
+    string $avatarUrl,
+    ?DB $database = null
+): void {
+    $dbInstance = $database ?: db();
+    $existing = $dbInstance->getFirstForConditions('profile', array('user_id' => $userId));
+
+    if ($existing) {
+        $dbInstance->update('profile', (int) $existing['id'], array(
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'avatar_url' => $avatarUrl !== '' ? $avatarUrl : null,
+        ));
+        return;
+    }
+
+    $dbInstance->create('profile', array(
+        'user_id' => $userId,
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'avatar_url' => $avatarUrl !== '' ? $avatarUrl : null,
+    ));
 }
 
 /**

@@ -7,7 +7,13 @@ require_role(array('admin'));
 $db = db();
 $currentUser = auth_user();
 $roles = $db->getListRoles();
-$users = $db->index('users', array(), 'id, username, role, active, created_at', 'id ASC');
+$users = $db->fetchAllQuery(
+    'SELECT users.id, users.username, users.email, users.role, users.active, users.created_at,
+            profile.first_name, profile.last_name, profile.avatar_url
+     FROM users
+     LEFT JOIN profile ON profile.user_id = users.id
+     ORDER BY users.id ASC'
+);
 
 $ticketCountsByUser = array();
 foreach ($db->fetchAllQuery('SELECT created_by, COUNT(*) AS total FROM tickets GROUP BY created_by') as $row) {
@@ -67,7 +73,7 @@ ob_start();
              aria-labelledby="users-page-title">
         <div>
             <h1 class="h3 mb-1" id="users-page-title">Usuarios</h1>
-            <p class="text-body-secondary mb-0">Administración de cuentas, roles, técnicos activos y credenciales de acceso.</p>
+            <p class="text-body-secondary mb-0">Administración de cuentas, perfiles, roles, técnicos y credenciales de acceso.</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-self-md-start flex-shrink-0">
             <button type="button" class="btn btn-outline-secondary" id="exportUsersCsv"
@@ -76,7 +82,7 @@ ob_start();
                 <i class="bi bi-filetype-csv me-1" aria-hidden="true"></i>Exportar CSV
             </button>
             <button type="button" class="btn btn-primary"
-                    data-bs-toggle="modal" data-bs-target="#userManageModal">
+                    data-bs-toggle="offcanvas" data-bs-target="#userManageDrawer">
                 <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Nuevo usuario
             </button>
         </div>
@@ -197,6 +203,7 @@ ob_start();
                     <tr>
                         <th scope="col">ID</th>
                         <th scope="col">Usuario</th>
+                        <th scope="col">Perfil</th>
                         <th scope="col">Rol</th>
                         <th scope="col">Estado</th>
                         <th scope="col">Fecha de alta</th>
@@ -214,9 +221,17 @@ ob_start();
                         $throttle = $throttleByUserId[$accountId] ?? array('blocked' => false, 'retry_minutes' => 0);
                         $isBlocked = !empty($throttle['blocked']);
                         $retryMinutes = (int) ($throttle['retry_minutes'] ?? 0);
+                        $firstName = trim((string) ($account['first_name'] ?? ''));
+                        $lastName = trim((string) ($account['last_name'] ?? ''));
+                        $fullName = trim($firstName . ' ' . $lastName);
+                        $avatarUrl = trim((string) ($account['avatar_url'] ?? ''));
                         $userData = array(
                             'id' => $accountId,
                             'username' => (string) $account['username'],
+                            'email' => (string) ($account['email'] ?? ''),
+                            'first_name' => $firstName,
+                            'last_name' => $lastName,
+                            'avatar_url' => $avatarUrl,
                             'role' => $roleCode,
                             'active' => $isActive ? 1 : 0,
                             'is_self' => $isSelf,
@@ -226,6 +241,8 @@ ob_start();
                             data-active="<?= $isActive ? '1' : '0' ?>"
                             data-export-id="<?= e((string) $accountId) ?>"
                             data-export-username="<?= e((string) $account['username']) ?>"
+                            data-export-profile="<?= e($fullName !== '' ? $fullName : 'Sin perfil') ?>"
+                            data-export-email="<?= e((string) ($account['email'] ?? '')) ?>"
                             data-export-role="<?= e($roleLabel) ?>"
                             data-export-status="<?= e($isActive ? 'Activo' : 'Inactivo') ?>"
                             data-export-blocked="<?= e($isBlocked ? 'Sí (' . $retryMinutes . ' min)' : 'No') ?>"
@@ -236,6 +253,30 @@ ob_start();
                                 <?php if ($isSelf) : ?>
                                     <span class="badge text-bg-light border ms-1">Sesión actual</span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <?php if ($avatarUrl !== '') : ?>
+                                        <img alt="Avatar de <?= e((string) $account['username']) ?>" src="<?= e($avatarUrl) ?>"
+                                             class="rounded-circle border user-avatar-thumb" width="40" height="40"
+                                             loading="lazy" referrerpolicy="no-referrer">
+                                    <?php else : ?>
+                                        <span class="rounded-circle border bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center user-avatar-thumb"
+                                              aria-hidden="true">
+                                            <i class="bi bi-person"></i>
+                                        </span>
+                                    <?php endif; ?>
+                                    <div class="user-profile-text">
+                                        <?php if ($fullName !== '') : ?>
+                                            <span class="fw-semibold text-break"><?= e($fullName) ?></span>
+                                        <?php else : ?>
+                                            <span class="text-body-secondary">Sin perfil</span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($account['email'])) : ?>
+                                            <span class="d-block small text-body-secondary text-break"><?= e((string) $account['email']) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 <span class="badge text-bg-<?= e($roleBadge) ?>">
@@ -283,7 +324,7 @@ ob_start();
                                     <?php endif; ?>
                                     <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
                                             aria-label="Editar usuario <?= e((string) $account['username']) ?>"
-                                            data-bs-toggle="modal" data-bs-target="#userManageModal"
+                                            data-bs-toggle="offcanvas" data-bs-target="#userManageDrawer"
                                             data-user="<?= e(js($userData)) ?>">
                                         <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Editar
                                     </button>
@@ -311,6 +352,39 @@ ob_start();
 </div>
 
 <style nonce="<?= e(systec_csp_nonce()) ?>">
+    .user-manage-drawer {
+        --bs-offcanvas-width: min(34rem, 100vw);
+        max-width: 100vw;
+    }
+
+    .user-manage-drawer-form {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .user-manage-drawer-form .offcanvas-body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .user-avatar-thumb {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        object-fit: cover;
+    }
+
+    .user-avatar-preview {
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+    }
+
+    .user-profile-text {
+        min-width: 0;
+    }
+
     .js-users-kpi {
         appearance: none;
         font: inherit;
@@ -353,7 +427,7 @@ ob_start();
             pageLength: 10,
             language: {
                 search: 'Buscar usuarios:',
-                searchPlaceholder: 'Usuario, rol, estado…',
+                searchPlaceholder: 'Usuario, perfil, rol, estado…',
                 emptyTable: 'No hay cuentas registradas.',
                 zeroRecords: 'Ningún usuario coincide con los filtros aplicados.',
                 unitLabel: 'usuarios'
@@ -444,6 +518,8 @@ ob_start();
                 const columns = [
                     { header: 'ID', key: 'exportId' },
                     { header: 'Usuario', key: 'exportUsername' },
+                    { header: 'Perfil', key: 'exportProfile' },
+                    { header: 'Email', key: 'exportEmail' },
                     { header: 'Rol', key: 'exportRole' },
                     { header: 'Estado', key: 'exportStatus' },
                     { header: 'Bloqueado', key: 'exportBlocked' },
@@ -476,7 +552,7 @@ ob_start();
         updateFeedback();
     })();
 </script>
-<?php include __DIR__ . '/include/user_manage_modal.php'; ?>
+<?php include __DIR__ . '/include/user_manage_drawer.php'; ?>
 <?php include __DIR__ . '/include/user_delete_modal.php'; ?>
 <?php
 $main = ob_get_clean();

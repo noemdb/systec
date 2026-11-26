@@ -1,6 +1,6 @@
 # CONVENTIONS.md — SysTec GMB
 
-> **Estado:** v1.5 (componentes compartidos, asistencia narrativa y pruebas actuales) · **Actualizado:** 2026-11-23.
+> **Estado:** v1.6 (PHP 8.2, TablePaginator, drawers, perfiles y pruebas actuales) · **Actualizado:** 2026-11-26.
 > Consistencia para un equipo pequeño y agentes IA. Este documento se subordina a `DOMAIN.md` (idioma), `DATABASE.md` (persistencia), `API.md` (rutas) y `SECURITY.md` (controles).
 
 ---
@@ -18,9 +18,12 @@ systec/
 ├── bin/                      # Comandos operativos CLI
 │   ├── create-user.php
 │   ├── migrate.php
+│   ├── seed-profiles.php
 │   ├── deduplicate-maintenances.php
 │   └── improve-maintenance-narrative.php
-├── include/                  # config, security, auth, layout y helpers
+├── include/                  # config, security, auth, layout, drawers y helpers
+├── migrations/               # Evoluciones SQL versionadas 001-011
+├── users/                    # Administración de cuentas y perfiles
 ├── dashboard/                # Módulo inventario
 ├── maintenances/             # Módulo mantenimientos
 ├── tickets/                   # Acciones y detalle de soporte
@@ -75,7 +78,7 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 | Métodos | camelCase, verbo | `getCodeId`, `indexWithMaintenances` |
 | Funciones helper | snake_case en español | `badge_clase_bien`, `texto_tipo` |
 | Variables | camelCase o snake_case según contexto | `$property_id`, `$maintenances` |
-| Tablas | snake_case, plural | `properties`, `maintenances` |
+| Tablas | snake_case; plural salvo excepciones explícitas | `properties`, `maintenances`, `profile` |
 | Columnas | snake_case | `next_maintenance_date`, `failure_reason` |
 | Estados | minúsculas para mantenimiento; mayúsculas para bien | `finalizado`, `BUENO` |
 | Documentos | MAYÚSCULAS en la raíz de `docs/`; kebab-case en anexos | `DOMAIN.md`, `matriz-trazabilidad.md` |
@@ -93,7 +96,7 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 
 ### 3.1 PHP
 
-- Mantener compatibilidad con PHP 7.4 (no usar `match`, `str_contains`, named arguments, enums ni tipos union).
+- Mantener PHP 8.2 como mínimo efectivo del proyecto. Composer y MermaidPHP exigen 8.2; no usar sintaxis de versiones posteriores sin actualizar plataforma y CI.
 - Usar `declare(strict_types=1)` solo en archivos nuevos que no dependan de coerciones legacy.
 - Una página = una ruta; `router.php` solo enruta/deniega en el servidor embebido.
 - Incluir siempre con `__DIR__`; no depender de `$_SERVER['DOCUMENT_ROOT']`.
@@ -121,8 +124,9 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 ### 3.4 HTML y UI
 
 - Bootstrap 5.3.2 como base.
-- Badges con `sat_badge()` y helpers de `include/helpers.php`.
-- Tablas con DataTables 1.13.7; inicializar con `new DataTable('#myTable', {...})`.
+- Badges con helpers de `include/helpers.php`.
+- Tablas con `window.Systec.TablePaginator` (`assets/js/table-paginator.js`), JavaScript nativo; no cargar jQuery/DataTables en vistas nuevas.
+- Formularios largos y edición sobre tablas: drawer `offcanvas-end` con ancho `min(34rem, 100vw)`, cuerpo desplazable y pie fijo.
 - Mantener el layout de `include/layout.php` y el patrón `ob_start()` / `$main` / `include layout`.
 - Etiquetas y mensajes en español.
 - No agregar dependencias nuevas sin vendorizarlas o documentar el CDN.
@@ -144,7 +148,10 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 | POST + CSRF | Mutaciones | `maintenances/register.php` |
 | Parcial de tabla | Reutilización | `dashboard/table/index.php` |
 | Parcial de formulario | Alta/edición | `maintenances/form/fields.php` |
-| Componente PHP configurable | Wizard compartido entre áreas | `include/ticket_register_modal.php` |
+| Componente PHP configurable | Wizard compartido entre áreas | `include/ticket_register_modal.php` (renderiza drawer) |
+| Drawer de alta/edición | Formularios largos sobre tablas | `include/user_manage_drawer.php`, `maintenances/form/create_drawer.php` |
+| Guardado transaccional de agregado | Cuenta + perfil | `auth_admin_save_user()` + `auth_admin_save_profile()` |
+| Seeder idempotente | Datos maestros repetibles | `bin/seed-profiles.php` |
 | Endpoint JSON con permisos del área | Datos del selector de bienes | `tickets/actions/properties.php`, `personal/actions/properties.php` |
 | Helper puro de presentación | Escape/badges | `include/helpers.php` |
 | Toast de resultado | Mensajes temporales por tipo | `toast_notification()` + `include/toasts.php` |
@@ -178,7 +185,9 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 - Reglas mínimas:
   - `property_id` entero y existente.
   - `type` en `getListMaintenanceType()`.
-  - `technician` en `getListMaintenanceTechnician()`.
+  - `technician` debe pertenecer al catálogo híbrido de históricos base y usuarios `tecnico` activos; el valor almacenado sigue siendo texto.
+  - `ticket_id`, si se informa, debe ser un ticket activo del mismo bien.
+  - `first_name` y `last_name` se reciben juntos, máximo 120 caracteres; `avatar_url` máximo 2048 y esquema `http`/`https`.
   - `date` con formato válido y no futura (salvo mantenimiento programado).
   - `status` en el catálogo y transición permitida.
   - Longitudes máximas para textos.
@@ -188,7 +197,7 @@ F1 ya movió los datos a `storage/` y denegó el acceso directo. La migración a
 
 ## 7. Pruebas
 
-Existe una suite PHPUnit básica (`composer test`) y se mantienen las verificaciones manuales. La cobertura de reglas críticas, flujos HTTP y seguridad continúa incompleta.
+Existe una suite PHPUnit en `tests/Unit/` y CI local/remoto en PHP 8.2 (`make ci`, `composer ci`, hook pre-push y GitHub Actions). La última verificación de esta actualización registró **115 pruebas y 1095 aserciones**. La cobertura de flujos HTTP E2E y la medición de cobertura siguen pendientes.
 
 | Nivel | Herramienta | Qué cubrir |
 |---|---|---|
@@ -207,7 +216,8 @@ Existe una suite PHPUnit básica (`composer test`) y se mantienen las verificaci
 - Todo cambio de ruta o parámetro actualiza `API.md`.
 - Los componentes compartidos deben recibir configuración explícita, conservar autorización en cada endpoint consumidor y evitar IDs duplicados en el documento.
 - Las respuestas JSON internas deben declarar su tipo de contenido, evitar caché si contienen datos privados y devolver errores HTTP explícitos.
-- Todo cambio de esquema actualiza `DATABASE.md` y `grafo/modelo-datos.md`.
+- Todo cambio de esquema actualiza `DATABASE.md`, `grafo/modelo-datos.md` y `grafo/grafo.json`.
+- Todo cambio funcional publicado actualiza `documentation.php`, incluidas sus listas de búsqueda e impresión.
 - Toda regla nueva o cambiada actualiza `DOMAIN.md`.
 - Toda decisión con alternativas reales crea un ADR en `DECISIONS.md`.
 - Todo cambio de estado del backlog actualiza `TODO.md` y `CHANGELOG.md`.

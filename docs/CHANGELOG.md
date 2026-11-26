@@ -1,5 +1,35 @@
 # CHANGELOG docs/ — SysTec GMB
 
+## 2026-11-26 — Usuarios/perfiles, corrección de usernames y actualización integral de documentación
+
+- Se incorporaron las migraciones `009_seed_personal_users.sql`, `010_create_profile.sql` y `011_rename_personal_usernames.sql`:
+  - `users.email` con índice único parcial para valores no vacíos;
+  - 23 cuentas personales canónicas con clave inicial común y una cuenta inactiva;
+  - tabla `profile` con relación 1:1, FK en cascada, nombre, apellidos y avatar;
+  - corrección de usernames y emails derivados sin cambiar IDs, hashes ni perfiles.
+- Se añadió `bin/seed-profiles.php`: sincronización idempotente por username, conserva `avatar_url`, no crea usuarios y revierte toda la carga si falta un username canónico.
+- `users.php` pasó a mostrar avatar, nombre completo y email, y a exportarlos en CSV.
+- El modal de administración fue sustituido por `include/user_manage_drawer.php`, un drawer lateral que gestiona cuenta y perfil.
+- `include/auth.php` valida nombres/apellidos/avatar y guarda cuenta + perfil en una transacción; la eliminación de usuario conserva la cascada del perfil.
+- `include/security.php` amplió `img-src` a `http:` y `https:` para avatares remotos.
+- Se actualizaron `README.md`, `docs/`, `grafo/` y `documentation.php` al estado v1.6, incluyendo informes de rendición, PHP 8.2, TablePaginator, permisos reales, operación y pendientes.
+- La guía pública se amplió con seis secciones nuevas —fundamentos y garantías, ciclo de vida del dato, estados y transiciones, alcance y límites, glosario y preguntas frecuentes— y con fundamentos, reglas y evidencia por módulo. El pie de la guía registra versión, fecha de corte, fuentes y criterio de actualización.
+- `login.php` incorporó un membrete institucional: Contraloría Municipal San Felipe, Administración - Oficina de Informática y el lema «Transparencia y control en cada bien público». El logo institucional optimizado (`assets/img/logoInsti.png`) se usa en el membrete y en la barra superior; el favicon del proyecto se restauró a `favicon.svg`, que también se muestra bajo el título «SysTec GMB».
+- **Verificación:** 115 pruebas PHPUnit y 1095 aserciones; auditoría UI de `users.php` y drawer sin fallos/advertencias; prueba HTTP de login, CSP y guardado de perfil en base temporal. La guía se renderizó para los cinco roles y en modo impresión, con 22 secciones, 26 plantillas, sin IDs duplicados ni referencias faltantes; la auditoría de UI de `documentation.php` terminó sin fallos ni advertencias.
+- **Nota de datos:** el snapshot productivo contiene `abrizuela`, mientras migración/seeder esperan `abrizzuela`; la reconciliación queda registrada en `TODO.md` y no se modificó la base en esta actualización documental.
+
+---
+
+## 2026-11-24 — Informes de Rendición persistentes
+
+- Se agregó `rendition_reports` mediante la migración `008_create_rendition_reports.sql`, con `scope_hash`, filtros, parámetros, estadísticas, IDs de origen, Markdown, estado y actor de aprobación.
+- El módulo de Mantenimientos incorporó wizard de generación, edición Markdown, aprobación, historial, impresión y descarga `.md`.
+- Los informes aprobados son inmutables y su eliminación se reserva a Administrador.
+- Se integró generación narrativa con NVIDIA y alternativa local para secciones del informe.
+- Se documentó la salvaguarda runtime de tabla/índices como excepción al flujo normal de migraciones CLI.
+
+---
+
 ## 2026-11-23 — Asistencia narrativa NVIDIA en tickets y seguimientos
 
 - El registro de tickets comparte ahora entre personal y soporte una interacción de tres pasos con asistencia por NVIDIA:

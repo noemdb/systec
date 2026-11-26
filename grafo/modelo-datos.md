@@ -1,8 +1,8 @@
 # Modelo de datos — SysTec GMB
 
-> **Motor:** SQLite 3 (archivo `storage/db.db`).
-> **Estado:** `conn.php` crea las tablas base; F2 agrega migraciones versionadas, triggers e índices.
-> **Fecha de análisis:** 2026-11-09 (actualizado tras F2).
+> **Motor:** SQLite 3 (`storage/db.db`, configurable mediante `SYSTEC_DB`).
+> **Estado:** esquema base en `conn.php`; evoluciones versionadas `001`–`011` en `migrations/`.
+> **Fecha de análisis:** 2026-11-26.
 
 ---
 
@@ -10,7 +10,16 @@
 
 ```mermaid
 erDiagram
-    PROPERTIES ||--o{ MAINTENANCES : "property_id (implícita)"
+    PROPERTIES ||--o{ MAINTENANCES : "property_id (lógica)"
+    PROPERTIES ||--o{ TICKETS : "property_id (lógica)"
+    USERS ||--o| PROFILE : "user_id (FK)"
+    USERS ||--o{ TICKETS : "created_by (lógica)"
+    USERS ||--o{ TICKETS : "assigned_to (lógica)"
+    TICKET_STATUS ||--o{ TICKETS : "status_id (lógica)"
+    TICKETS ||--o{ TICKET_HISTORIES : "ticket_id (lógica)"
+    USERS ||--o{ TICKET_HISTORIES : "actor_user_id (lógica)"
+    USERS ||--o{ RENDITION_REPORTS : "created_by (lógica)"
+    USERS ||--o{ RENDITION_REPORTS : "approved_by (lógica)"
 
     PROPERTIES {
         integer id PK
@@ -19,19 +28,24 @@ erDiagram
         string seccion
         string ident
         string adscription
-        string description
+        text description
         string model
         string color
         string serial
         string status
+        text responsible_name
+        text responsible_status
+        text assigned_name
+        text assigned_status
     }
 
     MAINTENANCES {
         integer id PK
-        integer property_id FK
+        integer property_id
+        integer ticket_id
         string code
         string type
-        string description
+        text description
         datetime date
         integer time_taken
         string technician
@@ -44,146 +58,157 @@ erDiagram
     USERS {
         integer id PK
         string username UK
+        string email
         string password_hash
         string role
         integer active
         datetime created_at
     }
+
+    PROFILE {
+        integer id PK
+        integer user_id FK
+        text first_name
+        text last_name
+        text avatar_url
+    }
+
+    TICKET_STATUS {
+        integer id PK
+        string code UK
+        string name
+        integer sort_order
+        integer is_terminal
+        integer active
+    }
+
+    TICKETS {
+        integer id PK
+        integer property_id
+        integer status_id
+        string title
+        text description
+        text observation
+        integer created_by
+        integer assigned_to
+        datetime created_at
+        datetime updated_at
+        datetime closed_at
+        datetime deleted_at
+    }
+
+    TICKET_HISTORIES {
+        integer id PK
+        integer ticket_id
+        integer actor_user_id
+        string action_type
+        text description
+        text observation
+        integer from_status_id
+        integer to_status_id
+        datetime created_at
+    }
+
+    RENDITION_REPORTS {
+        integer id PK
+        string report_code UK
+        string title
+        text date_from
+        text date_to
+        string scope_hash UK
+        text filters_json
+        text parameters_json
+        text stats_json
+        text maintenance_ids_json
+        text ticket_ids_json
+        text content_markdown
+        integer ai_generated
+        string status
+        integer created_by
+        integer approved_by
+        datetime created_at
+        datetime updated_at
+        datetime approved_at
+    }
 ```
 
-**Realidad física:** no existe `FOREIGN KEY`; triggers validan estados, transiciones y tipos. Existen índices secundarios en `ident`, `property_id` y `(status, next_maintenance_date)`. `users.username` es `UNIQUE`.
+**Realidad física:** `profile.user_id` es la única clave foránea declarada y apunta a `users(id)` con `ON DELETE CASCADE`. Las demás relaciones se validan en aplicación y no tienen `FOREIGN KEY` declarado. Los triggers de `properties` y `maintenances` validan catálogos y transiciones.
 
 ---
 
-## 2. DDL efectivo
+## 2. DDL efectivo de usuarios y perfiles
+
+`conn.php` crea la tabla base `users`; la migración `009_seed_personal_users.sql` agrega `email`. La migración `010_create_profile.sql` crea `profile` con unicidad por usuario.
 
 ```sql
-CREATE TABLE IF NOT EXISTS properties (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    grupo       STRING,
-    subgrupo    STRING,
-    seccion     STRING,
-    ident       STRING,
-    adscription STRING,
-    description STRING,
-    model       STRING,
-    color       STRING,
-    serial      STRING,
-    status      STRING
-);
-
-CREATE TABLE IF NOT EXISTS maintenances (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    property_id           INTEGER,
-    code                  STRING,
-    type                  STRING,
-    description           STRING,
-    date                  DATETIME,
-    time_taken            INTEGER,
-    technician            VARCHAR(255),
-    next_maintenance_date DATETIME,
-    failure_reason        TEXT,
-    notes                 TEXT,
-    status                STRING
-);
-
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role          TEXT NOT NULL DEFAULT 'consulta',
     active        INTEGER NOT NULL DEFAULT 1,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    email         TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+    ON users (email)
+    WHERE email IS NOT NULL AND trim(email) <> '';
+
+CREATE TABLE IF NOT EXISTS profile (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    first_name TEXT NOT NULL,
+    last_name  TEXT NOT NULL,
+    avatar_url TEXT
 );
 ```
 
-SQLite aplica afinidad dinámica: `STRING` y `VARCHAR(255)` se comportan como `TEXT`; `INTEGER` como entero; `DATETIME` como texto. Las fechas existentes se normalizaron a `YYYY-MM-DD HH:MM:SS`; las fechas nuevas de `next_maintenance_date` pueden seguir siendo `YYYY-MM-DD`.
-
-Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican la normalización y las restricciones actuales; `bin/migrate.php` registra su versión en `schema_migrations`.
+El DDL completo de tickets, historial, informes de rendición y tablas operativas se mantiene en `docs/DATABASE.md`.
 
 ---
 
 ## 3. Diccionario de datos
 
-### 3.1 `properties` — bien
+### 3.1 `users` — cuenta de acceso
 
-| Columna | Tipo | Nulo | Dominio observado | Regla |
-|---|---|---|---|---|
-| `id` | INTEGER | No | Autoincremental | PK |
-| `grupo` | STRING | Sí | Numérico como texto | Parte del código |
-| `subgrupo` | STRING | Sí | Numérico, rellenado a 4 | Parte del código |
-| `seccion` | STRING | Sí | Numérico, rellenado a 3 al importar y 4 al mostrar | Parte del código |
-| `ident` | STRING | Sí | Único en los datos actuales | Identidad de negocio para importar |
-| `adscription` | STRING | Sí | **Siempre vacío** (617/617) | Sin uso actual |
-| `description` | STRING | Sí | Texto libre | Se muestra con `e()` (F1) |
-| `model` | STRING | Sí | Texto libre; puede venir `marca - modelo` | 295/617 vacíos |
-| `color` | STRING | Sí | Texto libre | Se muestra con `e()` en historial |
-| `serial` | STRING | Sí | Texto libre | 321/617 vacíos |
-| `status` | STRING | Sí | `BUENO` 392, `MALO` 187, `REGULAR` 33, `MUY MALO` 5 | Trigger de catálogo; 2 `MUY BUENO` se mapearon a `BUENO` |
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | INTEGER | No | PK autoincremental |
+| `username` | TEXT | No | `UNIQUE`; login; el alta web exige 3–64 caracteres alfanuméricos, punto, guion o guion bajo |
+| `email` | TEXT | Sí | Único cuando no está vacío; las cuentas personales sembradas usan `username@cmsf.gob.ve` |
+| `password_hash` | TEXT | No | `password_hash(PASSWORD_DEFAULT)`; nunca se almacena texto plano |
+| `role` | TEXT | No | `admin`, `operador`, `tecnico`, `consulta`, `personal` |
+| `active` | INTEGER | No | `0` impide el login |
+| `created_at` | DATETIME | No | `CURRENT_TIMESTAMP` |
 
-`adscription` sigue vacío en SQLite; el dashboard lo resuelve en vivo desde las unidades organizativas legacy.
+### 3.2 `profile` — perfil del usuario
 
-### 3.2 `maintenances` — mantenimiento
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | INTEGER | No | PK autoincremental |
+| `user_id` | INTEGER | No | `UNIQUE`; FK a `users(id)` con borrado en cascada |
+| `first_name` | TEXT | No | Nombre; el guardado web limita a 120 caracteres |
+| `last_name` | TEXT | No | Apellidos; el guardado web limita a 120 caracteres |
+| `avatar_url` | TEXT | Sí | URL `http`/`https`; vacío se persiste como `NULL` |
 
-| Columna | Tipo | Nulo | Dominio observado | Regla |
-|---|---|---|---|---|
-| `id` | INTEGER | No | Autoincremental | PK |
-| `property_id` | INTEGER | Sí | 547/547 con bien existente | Relación lógica, sin FK |
-| `code` | STRING | Sí | Copia del código del bien | Snapshot de texto |
-| `type` | STRING | Sí | `correctivo` 477, `preventivo` 69, `evaluativo` 1 | Trigger de catálogo; `evaluativo` aprobado |
-| `description` | STRING | Sí | Texto libre | Se muestra con `e()` (F1) |
-| `date` | DATETIME | Sí | 1999–2026; ISO 8601 normalizado | Fecha del mantenimiento |
-| `time_taken` | INTEGER | Sí | 15 nulos; valores históricos preservados | Horas totales al finalizar; importación nueva lo deja nulo |
-| `technician` | VARCHAR | Sí | `ndominguez` 547 | Texto libre, sin FK |
-| `next_maintenance_date` | DATETIME | Sí | 474 `NULL`; hasta 2024-12-11 | Base del vencimiento |
-| `failure_reason` | TEXT | Sí | 65 vacíos | Razón del mantenimiento |
-| `notes` | TEXT | Sí | 233 vacíos; contiene `desincorporación` | Insumo del reporte de dañados |
-| `status` | STRING | Sí | `finalizado` 547 | Triggers SQLite validan catálogo y transiciones |
-
-### 3.3 `users` — usuario de la aplicación
-
-| Columna | Tipo | Nulo | Dominio observado | Regla |
-|---|---|---|---|---|
-| `id` | INTEGER | No | Autoincremental | PK |
-| `username` | TEXT | No | `admin`, `operador`, `tecnico`, `consulta` | `UNIQUE`; login |
-| `password_hash` | TEXT | No | `$2y$...` | `password_hash(PASSWORD_DEFAULT)` |
-| `role` | TEXT | No | `admin`, `operador`, `tecnico`, `consulta` | Autorización en servidor |
-| `active` | INTEGER | No | `1` / `0` | `0` impide login |
-| `created_at` | DATETIME | No | `CURRENT_TIMESTAMP` | Auditoría mínima |
+El seeder `bin/seed-profiles.php` actualiza `first_name` y `last_name` por `username`, conserva `avatar_url` y no crea usuarios. La gestión web se realiza desde el drawer de `/users.php`; el alta y la edición de usuario/perfil son transaccionales.
 
 ---
 
-## 4. Volumen y calidad de datos (snapshot 2026-11-09)
+## 4. Volumen y calidad de datos — snapshot 2026-11-26
 
 | Métrica | Valor |
-|---|---|
-| Bienes | 617 |
-| Mantenimientos | 547 |
-| Bienes sin mantenimiento | 450 |
-| Mantenimientos sin bien asociado | 0 |
-| Mantenimientos vencidos (regla actual) | 0 (todos están `finalizado`) |
-| Bienes `BUENO` | 392 |
-| Bienes `MALO` | 187 |
-| Bienes `REGULAR` | 33 |
-| Bienes `MUY MALO` | 5 |
-| Bienes `MUY BUENO` | 0 (normalizados a `BUENO`) |
-| Mantenimientos `finalizado` | 547 |
-| Mantenimientos sin `next_maintenance_date` | 474 |
-| Mantenimientos sin `notes` | 233 |
-| Mantenimientos sin `failure_reason` | 65 |
-| Bienes sin `adscription` | 617 |
-| Bienes sin `serial` | 321 |
-| Bienes sin `model` | 295 |
-| Usuarios | 4 (seed local) |
+|---|---:|
+| Bienes | 627 |
+| Mantenimientos | 324 |
+| Usuarios | 29 |
+| Perfiles | 29 |
+| Tickets | 8 |
+| Informes de rendición | 1 |
+| Migraciones aplicadas | 11 (`001`–`011`) |
 
-### 4.1 Inconsistencias detectadas
-
-1. **Estados, tipos y técnico normalizados:** migración F2 aplicada; los triggers protegen catálogos y transiciones.
-2. **Fechas normalizadas:** formatos válidos convertidos a ISO; no se encontraron fechas futuras.
-3. **`time_taken` histórico no reconstruible:** se conservaron los valores y 15 nulos; no existen fechas de inicio/fin.
-7. **`adscription` nunca poblado:** campo muerto en la práctica.
-8. **`code` snapshot puede quedar obsoleto** si cambia el código del bien.
-9. **`time_taken` legacy no reconstruible:** valores existentes preservados según ADR-016; las nuevas importaciones dejan el campo nulo.
+Los conteos son una foto operativa, no una invariante del esquema. Las migraciones `009`–`011` son la referencia canónica para las 23 cuentas personales sembradas y sus usernames; las altas manuales posteriores pueden variar el total.
 
 ---
 
@@ -191,45 +216,37 @@ Las migraciones `001_normalize_legacy_data.sql` y `002_add_indexes.sql` aplican 
 
 | Consulta | Archivo | Propósito |
 |---|---|---|
-| `SELECT * FROM properties` | `dashboard.php` | Listado completo |
-| `SELECT * FROM maintenances WHERE property_id = N` | `dashboard/table/index.php` | Conteo por bien |
-| `SELECT * FROM properties INNER JOIN maintenances ... WHERE notes LIKE '%desincorporación%' AND status IN ('MALO','MUY MALO')` | `conn.php::indexWithMaintenances` | Reporte de dañados |
-| `SELECT * FROM maintenances WHERE property_id = N ORDER BY date ASC` | `historials.php`, `historials/report.php` | Historial |
-| `SELECT * FROM properties WHERE id = N` | `getFirstForId` | Detalle |
-| `SELECT * FROM properties WHERE ident = N` | `createOrUpdate`, importación | Identidad de importación |
-| `UPDATE properties SET status = ? WHERE id = ?` | `dashboard/actions/status.php` | Cambio de estado |
-| `UPDATE maintenances SET status = ?, time_taken = ? WHERE id = ?` | `maintenances/actions/status.php` | Transición |
-| `INSERT INTO maintenances (...)` | `register.php`, importación | Alta |
-| `UPDATE maintenances SET ... WHERE id = ?` | `update.php` | Edición |
+| `SELECT ... FROM users LEFT JOIN profile ON profile.user_id = users.id` | `users.php` | Listado de cuentas con perfil |
+| `SELECT * FROM properties` | `dashboard.php` | Listado de bienes |
+| `SELECT * FROM maintenances WHERE property_id = N ORDER BY date ASC` | `historials.php` | Historial por bien |
+| `SELECT ... FROM tickets WHERE created_by = N AND deleted_at IS NULL` | `TicketRepository` | Tickets propios del personal |
+| `INSERT ... ON CONFLICT(user_id) DO UPDATE` | `bin/seed-profiles.php` | Sincronización idempotente de perfiles |
 
 ---
 
-## 6. Estrategia de migración actual y propuesta
+## 6. Estrategia de migración
 
-### Hoy (F2)
+- `bin/migrate.php --backup=RUTA` exige un backup legible con `PRAGMA integrity_check = ok` y conteos coincidentes de `properties`, `maintenances` y `users`.
+- Cada archivo se ejecuta en `BEGIN IMMEDIATE` y se registra en `schema_migrations`; un fallo revierte la transacción.
+- `001`–`002`: normalización, triggers e índices.
+- `003`–`005`: tickets, estados, historial, baja lógica e índice de tickets personales.
+- `006`–`007`: asignaciones de bienes y vínculo mantenimiento–ticket.
+- `008`: informes de rendición.
+- `009`: email y cuentas personales canónicas.
+- `010`: tabla y perfiles personales.
+- `011`: corrección de usernames y emails derivados.
 
-- `bin/migrate.php --backup=RUTA` valida integridad y conteos del backup antes de aplicar cambios.
-- Las migraciones SQL se versionan en `migrations/` y se registran en `schema_migrations`.
-- Cada migración corre en una transacción; si falla, se revierte.
-- `001_normalize_legacy_data.sql` normaliza datos y crea triggers; `002_add_indexes.sql` agrega los índices mínimos.
-- Backup previo a la normalización: `storage/backups/2026-11-09/db-before-f2-normalization.db`; restore verificado en copia aislada.
-
-### Pendiente
-
-1. Evaluar `FOREIGN KEY (property_id) REFERENCES properties(id)` mediante reconstrucción de tablas.
-2. Desplegar la política acordada parcialmente en `docs/BACKUP.md`: destino separado y método/custodia de cifrado siguen pendientes de TI; el cron aún no está activo.
-3. Agregar columnas de auditoría cuando se implemente `audit_events`.
+La reversión operativa sigue siendo restaurar un backup verificado; no existen migraciones `down`.
 
 ---
 
 ## 7. Datos sensibles y retención
 
-| Dato | Sensibilidad | Tratamiento actual | Retención sugerida |
-|---|---|---|---|
-| Inventario de bienes (descripción, serial, modelo, color) | Media | Requiere sesión; `storage/` denegado | Mientras el bien exista |
-| Historial de mantenimientos y notas | Media | Requiere sesión; `storage/` denegado | Mientras el bien exista + plazo administrativo |
-| Nombres de técnicos | Baja/Media (PII laboral) | Texto libre; acceso autenticado | Mientras el mantenimiento exista |
-| Usuarios y hashes | Alta | `storage/db.db`; hashes con `password_hash` | Mientras la cuenta exista |
-| `storage/db.db` y backups | Alta (agregado) | La base y copias existentes no están cifradas; la política futura exige cifrado, aún sin método/destino | Ver política parcialmente acordada en `docs/BACKUP.md` |
+| Dato | Sensibilidad | Tratamiento actual |
+|---|---|---|
+| Usuarios, hashes, emails y perfiles | Alta | `storage/db.db`; acceso administrativo; hashes con `password_hash()` |
+| Avatares externos | Media | URL validada `http`/`https`; la CSP permite imágenes externas y `referrerpolicy=no-referrer` |
+| Inventario, historial y tickets | Media/Alta | Sesión y roles; `storage/` denegado por router/htaccess |
+| Backups | Alta | Snapshot SQLite; cifrado obligatorio solo cuando se configura `SYSTEC_BACKUP_KEY_FILE` |
 
-Ver `docs/SECURITY.md` para el análisis de riesgos, `docs/DATABASE.md` para el detalle del esquema y `docs/BACKUP.md` para la política de respaldo.
+Ver `docs/DATABASE.md`, `docs/SECURITY.md` y `docs/BACKUP.md` para el detalle operativo.

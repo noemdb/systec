@@ -1,203 +1,183 @@
 # TODO.md — SysTec GMB
 
-> **Estado:** v1.5 (F2/F3, operación web y asistencia narrativa) · **Actualizado:** 2026-11-23.
-> Fuente de verdad del estado técnico y documental. Un ítem es ✅ solo cuando cumple su criterio de aceptación y está verificado. Las prioridades son `P0` (bloqueante de seguridad), `P1` (calidad/operación), `P2` (mejora), `P3` (futuro).
+> **Estado:** v1.6 · **Actualizado:** 2026-11-26.
+> Fuente de verdad del estado técnico y documental. Un ítem es ✅ solo cuando cumple su criterio de aceptación y está verificado.
 
 ## Leyenda
 
-- 🔲 Por hacer · 🧪 En pruebas · ✅ Hecho · ⛔ Bloqueado · ⚠️ Deuda aceptada
+- 🔲 Por hacer · 🧪 Parcial/en pruebas · ✅ Hecho · ⛔ Bloqueado · ⚠️ Deuda aceptada
 
 ## 1. Estado documental
 
 | Documento | Estado | Nota |
 |---|---|---|
-| `README.md` | ✅ | Mapa y proceso |
-| `PROJECT.md` | ✅ | Alcance as-built |
-| `ARCHITECTURE.md` | ✅ | Componentes, request y deudas |
-| `DOMAIN.md` | ✅ | Glosario, entidades, estados y casos límite |
-| `DATABASE.md` | ✅ | Esquema, datos normalizados, migraciones y calidad |
-| `API.md` | ✅ | Superficie HTTP real |
-| `SECURITY.md` | ✅ | Hallazgos P0–P3 y checklist |
-| `CONVENTIONS.md` | ✅ | Estilo y patrones |
-| `DECISIONS.md` | ✅ | ADR-001–018 |
-| `TODO.md` | ✅ | Este archivo |
-| `CHANGELOG.md` | ✅ | Entradas de cambios hasta 2026-11-23 |
-| `anexos/inventario-tecnico.md` | ✅ | Análisis archivo por archivo |
-| `anexos/matriz-trazabilidad.md` | ✅ | Hallazgo → código → doc → tarea |
-| `anexos/plan-documentacion.md` | ✅ | Snapshot inicial; plan vigente en `spec/documentations/plan-documentacion.md` |
-| `grafo/` | ✅ | Lógica de negocio, modelo y JSON |
+| `README.md` | ✅ | Índice y proceso v1.6 |
+| `PROJECT.md` | ✅ | Alcance as-built actualizado |
+| `ARCHITECTURE.md` | ✅ | Componentes, repositorios y request |
+| `DOMAIN.md` | ✅ | Usuarios/perfiles, tickets e informes de rendición |
+| `DATABASE.md` | ✅ | Esquema 001–011 y snapshot 2026-11-26 |
+| `API.md` | ✅ | HTML, JSON interno, Markdown y contratos actuales |
+| `SECURITY.md` | ✅ | Controles, cuentas seed, CSP y pendientes |
+| `BACKUP.md` | ✅ | Script real, cifrado y límites operativos |
+| `CONVENTIONS.md` | ✅ | PHP 8.2, TablePaginator y drawers |
+| `DECISIONS.md` | ✅ | ADR-001–023 y vigencia |
+| `CHANGELOG.md` | ✅ | Entradas hasta 2026-11-26 |
+| `grafo/` | ✅ | Lógica, modelo y JSON actualizados |
+| `documentation.php` | ✅ | Guía publicada ampliada: 22 secciones, fundamentos por módulo, estados, límites, glosario, FAQ y vigencia; render verificada para cinco roles e impresión |
+| `anexos/` | ✅ histórico | Baseline pre-F1/F2; no sustituye el estado vigente |
+| `templatesOthersApp/` | Referencia externa | No describe SysTec |
 
 ## 2. Estado técnico por área
 
 | Área | Estado | Evidencia | Riesgo principal |
 |---|---|---|---|
-| Inventario | ✅ Operativo | 617 bienes | Estado manual; sin selector explícito |
-| Mantenimientos | ✅ Datos F2 normalizados | 547 registros | Sin catálogo formal de técnicos ni auditoría |
-| Historial | ✅ Operativo | `historials.php` | Bien inexistente controlado |
-| Reporte de dañados | ✅ F2 | `report.php` | Deduplicado por consulta |
-| Importación | ✅ F2 | `updates.php`, `imports.php` | POST, confirmación, transacción y límite |
-| Tickets | ✅ Operativo | `tickets.php`, `personal/index.php`, `tickets/`, `personal/` | Roles separados, historial funcional, baja lógica, selector con dirección/asignado y asistencia narrativa opcional |
-| Persistencia | 🧪 F2 | `storage/db.db`, `migrations/`, `BACKUP.md` | Migraciones e índices; política de backup definida parcialmente, destino/cifrado/crontab pendientes; FK pendiente |
-| Seguridad | 🧪 F1 | `SECURITY.md` | Controles de aplicación implementados; HTTPS/HSTS, rate limiting y auditoría pendientes |
-| Pruebas | 🧪 Parciales | `composer test`, `tests/Unit/` | Suite PHPUnit básica; cobertura integral, pruebas E2E y CI pendientes |
-| Documentación | ✅ Actualizada | `docs/` | Debe mantenerse viva |
+| Inventario | ✅ Operativo | 627 bienes | Estado manual; sin auditoría persistente |
+| Mantenimientos | ✅ Operativo | 324 registros | Campo técnico texto; catálogo híbrido |
+| Tickets | ✅ Operativo | 8 tickets, 19 eventos | Política de `consulta` inconsistente entre lista y detalle |
+| Portal Personal | ✅ Operativo | `personal/` | Sin cambios de estado/eliminación por diseño |
+| Usuarios y perfiles | ✅ Operativo | 29 usuarios, 29 perfiles | Seeder falla si falta un username canónico |
+| Informes de rendición | ✅ Operativo | 1 informe aprobado | Salvaguarda DDL runtime; datos enviados a IA |
+| Persistencia | ✅ Migraciones 001–011 | `schema_migrations` | FK solo en `profile`; backups antiguos incompatibles |
+| Seguridad | 🧪 Parcial | Auth, roles, CSRF, rate limiting, CSP | HTTPS/HSTS, auditoría y revocación de sesión pendientes |
+| Pruebas | 🧪 Unitarias/locales | 115 pruebas, 1095 aserciones | Faltan E2E y medición de cobertura |
+| Backups | 🧪 Parcial | `bin/backup.sh` | Cron, destino separado y restore operativo pendientes |
 
 ## 3. Backlog priorizado
 
-### P0 — Seguridad (bloqueante para exponer)
+### P0 — Seguridad
 
-| ID | Tarea | Criterio de aceptación | Depende | Estado |
-|---|---|---|---|---|
-| P0-01 | Autenticación con sesión PHP | Sin sesión, toda ruta redirige a login; cookie `HttpOnly`, `Secure`, `SameSite=Lax` | — | ✅ F1 |
-| P0-02 | Roles y autorización | Matriz de `SECURITY.md` aplicada en servidor; `consulta` no muta | P0-01 | ✅ F1 |
-| P0-03 | Parametrizar todo el SQL | Ningún método de `DB` concatena valores; pruebas SQLi verdes | — | ✅ F1 (suite automatizada pendiente) |
-| P0-04 | Escape de salida | Helper `e()` en todas las vistas; `<script>` no ejecuta | — | ✅ F1 |
-| P0-05 | Mover `db.db`, `bck/` y CSV fuera del webroot | `/storage/db.db`, `/bck/...`, `/*.csv` devuelven 403/404 | — | ✅ F1 |
-| P0-06 | CSRF y acciones por POST | Cambios de estado y formularios con token; GET no muta | P0-01 | ✅ F1 |
-| P0-07 | Endurecer despliegue | Headers, `display_errors=Off`, logs fuera del webroot; HTTPS/HSTS en servidor real | P0-05 | 🧪 F1 (HTTPS pendiente) |
+| ID | Tarea | Criterio de aceptación | Estado |
+|---|---|---|---|
+| P0-01 | Autenticación con sesión PHP | Login, cookies y regeneración de ID | ✅ |
+| P0-02 | Roles y autorización | Matriz aplicada en servidor | 🧪 Inconsistencia conocida en tickets para `consulta` |
+| P0-03 | SQL parametrizado | Sin concatenación de valores | ✅ |
+| P0-04 | Escape de salida | `e()`/`js()` en vistas y datos | ✅ |
+| P0-05 | Protección de datos | `storage/` denegado por router/htaccess | ✅; verificar reglas Apache y mover fuera del docroot |
+| P0-06 | CSRF y POST | Toda mutación con token | ✅ |
+| P0-07 | Endurecer despliegue | Headers, debug off, HTTPS/HSTS | 🧪 HTTPS/HSTS pendiente |
+| P0-08 | Unificar política de contraseñas | Mismo mínimo en UI, backend y CLI | 🔲 Backend alta web acepta 4; UI/CLI exigen 6 |
+| P0-09 | Revocación de sesiones | Cambio de rol/estado elimina sesiones activas | 🔲 La sesión conserva el rol del login |
+| P0-10 | Rotar clave inicial de cuentas seed | Ninguna cuenta conserva la clave común de la migración 009 | 🔲 Debe rotarse antes de exponer el sistema |
+| P0-11 | Rate limiting de importación, sincronización e IA | Límites por usuario/IP y respuesta 429 | 🔲 Solo el login tiene throttle |
 
-### P1 — Calidad de datos y operación
+### P1 — Datos y operación
 
-| ID | Tarea | Criterio de aceptación | Depende | Estado |
-|---|---|---|---|---|
-| P1-01 | Normalizar estados de mantenimiento | `finalizado`/`FINALIZADO` unificados; trigger de catálogo | Backup | ✅ F2 |
-| P1-02 | Normalizar tipos | `evaluativo` válido; catálogo aplicado en UI/servidor/BD | Dueño | ✅ F2 |
-| P1-03 | Normalizar técnicos | `ndomiguez` → `ndominguez` | Dueño | ✅ F2 |
-| P1-04 | Normalizar fechas | Fechas ISO normalizadas; fechas futuras revisadas | Backup | ✅ F2 |
-| P1-05 | Corregir `time_taken` | Horas totales; prueba > 24 h | — | ✅ F1 (históricos preservados; 15 nulos) |
-| P1-06 | Máquina de estados de mantenimiento | Transiciones válidas en servidor + trigger SQLite | P1-01 | ✅ F2 |
-| P1-07 | Importación segura | POST + confirmación + transacción + reporte de válidas/omitidas/erróneas; máximo 5000 filas y 5 MB | P0-03 | ✅ F2 |
-| P1-08 | Reporte de dañados sin duplicados | `DISTINCT`/`EXISTS`; test con múltiples notas | — | ✅ F2 |
-| P1-09 | Quitar fechas/nombres hardcodeados | Fecha actual y técnico real en historial/membrete | — | ✅ F1 |
-| P1-10 | Migraciones versionadas | `migrations/` + `schema_migrations`; backup y rollback | — | ✅ F2 |
-| P1-11 | Índices mínimos | `ident`, `property_id`, `(status,next_maintenance_date)` | P1-10 | ✅ F2 |
-| P1-12 | Corregir `update.php` | Usa `validations/update.php`; valida `id` y `status` | — | ✅ F1 |
-| P1-13 | Corregir `batch.php` | Inicializa `$property_id`; sin avisos | — | ✅ F1 |
-| P1-14 | Backups operativos y restore probado | Política aprobada por TI, copia diaria cifrada en destino separado, rotación 30/12/12 y restore trimestral dentro de RPO/RTO | F2-13 | 🧪 F2: propuesta registrada y selección semanal/mensual definida; falta aprobación TI, destino, método/custodia de cifrado, cron y primera prueba operativa (`BACKUP.md`) |
-| P1-15 | Resolver compatibilidad PHP 8 (`match`) | `match` reemplazado por `switch` o versión de PHP elevada y documentada | — | ✅ F1 |
-| P1-16 | Verificar orden de carga DataTables/jQuery | Las tablas inicializan sin error en todas las vistas | — | ✅ F1 (falso positivo) |
+| ID | Tarea | Criterio de aceptación | Estado |
+|---|---|---|---|
+| P1-01…P1-04 | Normalización legacy | Estados, tipos, técnicos y fechas | ✅ F2 |
+| P1-05 | `time_taken` | Horas totales; prueba >24 h | ✅ |
+| P1-06 | Máquina de estados | Servidor + trigger SQLite | ✅ |
+| P1-07 | Importación segura | POST, confirmación, transacción, reporte y límites | ✅ |
+| P1-08 | Reporte de dañados sin duplicados | `DISTINCT`/`EXISTS` | ✅ |
+| P1-09 | Migraciones versionadas | Runner, backup y `schema_migrations` | ✅ 001–011 |
+| P1-10 | Índices mínimos y específicos | Inventario, tickets, perfiles e informes | ✅ |
+| P1-11 | Backups operativos | Política aprobada, cifrado, destino separado, cron y restore | 🧪 Script listo; despliegue TI pendiente |
+| P1-12 | Compatibilidad de restores | Backup antiguo se restaura aislado y se migra antes de servir | 📝 Documentado; falta procedimiento automatizado |
+| P1-13 | Reconciliar seed canónico | `abrizzuela` en migración/seeder y DB | 🔲 La DB contiene `abrizuela` |
 
 ### P2 — Funcionalidad y mantenibilidad
 
-| ID | Tarea | Criterio de aceptación | Depende | Estado |
-|---|---|---|---|---|
-| P2-01 | Catálogo de estados/tipos/técnicos en BD | Tablas o enums; UI alimentada desde BD | P1-01…P1-03 | ✅ F3 (`ticket_status` y `users WHERE role='tecnico'`) |
-| P2-02 | Selector explícito de estado del bien | Reemplaza botón cíclico; motivo y auditoría | P0-02 | ✅ F3 (`dashboard/actions/status.php` + modal de confirmación) |
-| P2-03 | Auditoría de cambios | Tabla `audit_events`; escritura en la misma transacción | P0-01 | 🔲 F3 |
-| P2-04 | Separar capa de datos | `src/Database.php` + repositorios; páginas sin SQL | P0-03 | ✅ F3 (`include/repositories/*`) |
-| P2-05 | Validación centralizada | Un validador por contexto (`create`/`update`/`transition`) | P1-12 | ✅ F3 (`include/maintenance_validator.php`) |
-| P2-06 | Ampliar pruebas unitarias e integración | Cubrir reglas críticas y flujos HTTP con PHPUnit; agregar CI local | P2-04 | ✅ F3 (73 pruebas + CI en `.github/workflows/ci.yml` y `make ci`) |
-| P2-07 | Logs sin PII | Archivo fuera del webroot; niveles y rotación | P0-07 | ✅ F3 (`systec_rotate_log_file()` y `systec_log()` en `include/security.php`) |
-| P2-08 | Búsqueda y filtros del dashboard | Búsqueda por código/descripción/serial; filtros persistentes | — | ✅ F3 |
-| P2-09 | Exportación CSV/PDF de reportes | Botón de exportación; PDF generado o impresión guiada | P1-08 | 🔲 F4 |
-| P2-10 | Gestión de técnicos | Alta/baja; select desde BD | P2-01 | ✅ F3 (`MaintenanceRepository::getListMaintenanceTechnician()` + `users.php`) |
-| P2-11 | Gestión de usuarios | CRUD y asignación de roles | P0-02 | ✅ F3 (CLI + UI web en `users.php` y cambio de contraseña en `personal/actions/password.php`) |
-| P2-12 | Snapshot de reportes | `report_versions` con hash; reproducibilidad | P2-03 | 🔲 F4 |
-| P2-13 | Limpiar código muerto y configuración | Archivos sin uso eliminados o justificados; `.gitignore` corregido | — | ✅ F1 |
+| ID | Tarea | Criterio de aceptación | Estado |
+|---|---|---|---|
+| P2-01 | Catálogo de técnicos | Históricos + usuarios `tecnico` activos | ✅ Híbrido; persistencia sigue en texto |
+| P2-02 | Estado del bien | Selector explícito, motivo y auditoría | 🧪 Selector/POST/log hechos; motivo y `audit_events` pendientes |
+| P2-03 | Auditoría general | `audit_events` en misma transacción | 🔲 |
+| P2-04 | Separar capa de datos | Repositorios; páginas sin SQL directo | 🧪 Repositorios existen; varias páginas conservan SQL |
+| P2-05 | Validación centralizada | Create/update/transition | ✅ Mantenimientos; perfiles tienen validación propia |
+| P2-06 | Pruebas y CI | Reglas críticas y flujos HTTP | 🧪 PHPUnit/CI listos; E2E pendiente |
+| P2-07 | Logs sin PII | Rotación y niveles | ✅ |
+| P2-08 | Búsqueda y filtros | Dashboard, mantenimientos, tickets y usuarios | ✅ |
+| P2-09 | Exportaciones | CSV, impresión y PDF/snapshot | 🧪 CSV/impresión/Markdown listos; PDF servidor y snapshot legacy pendientes |
+| P2-10 | Gestión de técnicos | Alta/baja y selector | ✅ Con catálogo híbrido |
+| P2-11 | Gestión de usuarios/perfiles | CRUD, roles, perfiles y avatar | ✅ Drawer + CLI + seeder |
+| P2-12 | Snapshot de reportes | `report_versions` reproducibles | 🧪 Informes de rendición persistentes; reportes legacy siguen en vivo |
+| P2-13 | Limpiar código muerto | Archivos sin uso eliminados o justificados | 🔲 `properties/table/properties.php`, `historials/chart.php` e `include/es-ES.json` siguen presentes |
+| P2-14 | Política única para `consulta` en tickets | Listado, detalle y endpoints coherentes | 🔲 Listado/drawer permitidos; detalle/acciones 403 |
+| P2-15 | Paginación servidor de tickets | `LIMIT/OFFSET` real | 🔲 La vista carga todos y pagina en cliente |
+| P2-16 | DDL runtime de informes | Ningún `CREATE TABLE` en GET normal | 🔲 `RenditionReportRepository::ensureTableExists()` sigue creando tabla/índices |
+| P2-17 | Alinear router y `.htaccess` | Mismas reglas para `conn.php`, `router.php` y extensiones | 🔲 |
+| P2-18 | Política de avatares | Lista blanca, proxy o almacenamiento local | 🔲 CSP permite cualquier host HTTP/HTTPS |
+| P2-19 | Separar estado de informe y filtro de mantenimiento | `save-rendition-report.php` no reutiliza `status` para dos fines | 🔲 El alcance guardado puede diferir del generado |
 
 ### P3 — Futuro
 
 | ID | Tarea | Nota |
 |---|---|---|
-| P3-01 | Adjuntos/fotos por mantenimiento | Evidencia visual |
-| P3-02 | Avisos programados de vencimiento | Correo/panel persistente; los toast actuales son mensajes temporales de resultado |
-| P3-03 | API pública JSON | Solo si se integra con otro sistema; ya hay endpoints JSON privados de uso interno |
-| P3-04 | Multi-institución | Solo si el sistema se comparte |
-| P3-05 | App móvil / PWA | Solo si la operación lo exige |
-| P3-06 | Dashboard de indicadores | Tendencias, cumplimiento, costos |
-| P3-07 | Decidir persistencia de `adscription` | Dashboard y selector de tickets resuelven unidades operativas desde SIA; la columna SQLite permanece vacía |
+| P3-01 | Adjuntos por mantenimiento | Evidencia visual |
+| P3-02 | Avisos de vencimiento | Correo/panel persistente |
+| P3-03 | API pública | Solo si hay integración externa |
+| P3-04 | Multi-institución | Requiere modelo de datos y despliegue |
+| P3-05 | App móvil/PWA | Solo si la operación lo exige |
+| P3-06 | Dashboard de indicadores | Tendencias y cumplimiento |
 
 ## 4. Bloqueos de definición
 
-| Bloqueo | Decisión / pregunta | Responsable | Impacta | Estado |
-|---|---|---|---|---|
-| B-01 | Escala aprobada: `BUENO`, `REGULAR`, `MALO`, `MUY MALO` | Dueño / Oficina | ADR-007, P2-02 | ✅ Resuelto |
-| B-02 | `MUY BUENO` no es válido; dos registros se mapearon a `BUENO` | Dueño | P1-01, P1-02 | ✅ Resuelto |
-| B-03 | `evaluativo` es un tipo válido | Dueño | P1-02 | ✅ Resuelto |
-| B-04 | `time_taken` se mide en horas totales; históricos se conservan | Dueño | P1-05, ADR-011 | ✅ Resuelto |
-| B-05 | ¿El estado del bien se deriva de mantenimientos? | Dueño | P2-02 | ⛔ Pendiente |
-| B-06 | Importar solo el estado de bienes existentes | Dueño | P1-07, ADR-005 | ✅ Resuelto |
-| B-07 | ¿Quién autoriza cambios de estado? | Dueño | P0-02, P2-03 | ⛔ Pendiente |
-| B-08 | ¿Se requiere PDF firmado o basta impresión? | Dueño | P2-09, P2-12 | ⛔ Pendiente |
-| B-09 | ¿Se expondrá fuera de la red local? | Dueño / TI | P0 completo | ⛔ Pendiente |
-| B-10 | Normalizar datos legacy según las reglas aprobadas | Dueño | P1-01…P1-04, ADR-012 | ✅ Resuelto |
+| Bloqueo | Decisión / pregunta | Estado |
+|---|---|---|
+| B-01 | Escala de estado del bien | ✅ Resuelto |
+| B-02 | `MUY BUENO` no válido | ✅ Resuelto |
+| B-03 | `evaluativo` válido | ✅ Resuelto |
+| B-04 | `time_taken` en horas totales | ✅ Resuelto |
+| B-05 | ¿El estado del bien se deriva de mantenimientos? | ⛔ Pendiente |
+| B-06 | Importación de existentes: solo estado, salvo PostgreSQL | ✅ Resuelto |
+| B-07 | ¿Quién autoriza cambios de estado? | ⛔ Pendiente |
+| B-08 | ¿PDF firmado o impresión basta? | ⛔ Pendiente |
+| B-09 | ¿Exposición fuera de la red local? | ⛔ Pendiente |
+| B-10 | Política de acceso de `consulta` a tickets | ⛔ Pendiente |
+| B-11 | Hosts permitidos para avatares | ⛔ Pendiente |
 
 ## 5. Plan por fases
 
-### F0 — Documentación baseline ✅ (2026-11-09)
+### F0 — Documentación baseline ✅
 
-- [x] Inventario archivo por archivo.
-- [x] Grafo de lógica de negocio.
-- [x] Estructura documental completa.
-- [x] Matriz de trazabilidad.
-- [x] Plan de ejecución.
+- Inventario técnico, grafo, matriz de trazabilidad y plan inicial.
 
-### F1 — Contención de seguridad (P0) 🧪 2026-11-09
+### F1 — Seguridad 🧪
 
-- [x] Autenticación y roles.
-- [x] SQL parametrizado y escape.
-- [x] Base y backups fuera del webroot.
-- [x] CSRF y acciones por POST.
-- [ ] Cierre del checklist de despliegue (`SECURITY.md`): HTTPS/HSTS y confirmación de servidor real.
+- Auth, roles, CSRF, SQL parametrizado, escape y protección de datos.
+- Rate limiting de login y gestión web de usuarios.
+- Pendiente: HTTPS/HSTS, revocación centralizada y auditoría.
 
-### F2 — Integridad de datos (P1) 🧪 2026-11-09
+### F2 — Integridad de datos 🧪
 
-- [x] Normalizar estados, tipos, técnicos y fechas.
-- [x] Migraciones versionadas e índices.
-- [x] Importación transaccional con límite de 5000 filas y 5 MB.
-- [x] Reporte de dañados sin duplicados.
-- [x] Corregir `time_taken` (horas totales; valores históricos preservados).
-- [x] Corregir `update.php` y `batch.php`.
-- [x] Reporte de dañados sin duplicados.
-- [x] Resolver compatibilidad PHP 7.4 y verificar DataTables/jQuery.
-- [x] Backup/restore de trabajo probado; falta calendario y cifrado.
+- Normalización, triggers, importación transaccional, migraciones e índices.
+- Backup de trabajo verificado; operación periódica pendiente de TI.
 
-### F3 — Mantenibilidad (P2)
+### F3 — Producto y mantenibilidad 🧪
 
-- [x] Repositorios y servicios (`include/repositories/*`).
-- [x] Validación centralizada (`include/maintenance_validator.php`).
-- [ ] Auditoría (`audit_events`).
-- [x] Pruebas y CI local (`make ci`, `.github/workflows/ci.yml`).
-- [x] Catálogos en BD (`ticket_status` y técnicos desde `users`).
-- [x] Limpiar código muerto y configuración.
+- Tickets, Portal Personal, repositorios, validación, CI, informes de rendición, usuarios y perfiles.
+- Pendiente: cerrar inconsistencias de autorización, DDL runtime y paginación.
 
-### F4 — Producto (P3)
+### F4 — Evolución
 
-- [ ] Exportaciones.
-- [ ] Avisos programados de vencimiento (no cubiertos por los toast de resultado existentes).
-- [ ] API (si aplica).
-- [ ] Indicadores.
+- Auditoría general, snapshots legacy, E2E, adjuntos, API e indicadores.
 
-## 6. Checklist por cambio
+## 6. Métricas de seguimiento
 
-- [ ] La funcionalidad funciona en el caso feliz.
-- [ ] Los errores y casos límite están cubiertos.
-- [ ] El SQL está parametrizado.
-- [ ] La salida está escapada.
-- [ ] La acción que muta usa POST + CSRF.
-- [ ] Se actualizó `API.md` si cambió una ruta/parámetro.
-- [ ] Se actualizó `DATABASE.md` si cambió el esquema.
-- [ ] Se actualizó `DOMAIN.md` si cambió una regla o estado.
-- [ ] Se actualizó `TODO.md` y `CHANGELOG.md`.
-- [ ] Se creó un ADR si cambió el rumbo.
-- [ ] Se probó el backup/restore si el cambio toca datos.
+| Métrica | Línea base 2026-11-09 | Estado 2026-11-26 |
+|---|---|---|
+| Rutas funcionales sin sesión | 100 % | 0 % |
+| Consultas con valores concatenados | 5 | 0 |
+| Vistas sin escape identificadas | ≥ 7 | 0 |
+| Datos bajo webroot sin protección | 4 rutas | 0; `storage/` sigue en el árbol pero denegado |
+| Migraciones registradas | 0 | 11 |
+| Usuarios / perfiles | 4 / 0 | 29 / 29 |
+| Bienes / mantenimientos | 617 / 547 | 627 / 324 |
+| Pruebas PHPUnit | Sin baseline | 115 pruebas, 1095 aserciones |
+| Backups con restore probado | 0 | 1 histórico + copias operativas recientes verificadas |
+| Cobertura HTTP E2E | 0 | 0 |
 
-## 7. Métricas de seguimiento
+## 7. Checklist por cambio
 
-| Métrica | Línea base 2026-11-09 | Estado actual | Objetivo |
-|---|---|---|---|
-| Rutas sin auth | 100 % | 0 % | 0 % |
-| Consultas concatenadas | 5 métodos de `DB` | 0 | 0 |
-| Vistas con salida sin escape | ≥ 7 | 0 | 0 |
-| Datos sensibles bajo webroot | 4 rutas | 0 | 0 |
-| Estados/tipos fuera de catálogo | 2 (`FINALIZADO`, `MUY BUENO`) + `evaluativo` | 0 | 0 |
-| Registros con técnico typo | 153 | 0 | 0 |
-| Migraciones registradas | 0 | 5 | Cada cambio de esquema/datos versionado |
-| Duraciones históricas verificables | 15 nulos + valores legacy no reconstruibles | Se conservan; no se recalculan sin fuente | Sin valores inventados |
-| Filas de importación omitidas sin reporte | Todas | 0 (reporte por fila) | 0 |
-| Cobertura de pruebas | Sin baseline | Suite PHPUnit básica + manual | Medir y cubrir ≥ 60 % en reglas críticas |
-| Backups con restore probado | 0 | 1 (F2) | 1 por trimestre |
+- [ ] Funcionalidad y errores verificados.
+- [ ] SQL parametrizado y salida escapada.
+- [ ] Mutaciones con POST + CSRF.
+- [ ] `API.md` actualizada si cambió ruta/parámetro.
+- [ ] `DATABASE.md`, `DOMAIN.md` y `grafo/` actualizados si corresponde.
+- [ ] `documentation.php` actualizada si cambió la guía funcional.
+- [ ] `TODO.md`, `CHANGELOG.md` y ADR actualizados.
+- [ ] Backup/restore probado si el cambio toca datos.
 
 ---
 
-Ver también: `README.md`, `PROJECT.md`, `SECURITY.md`, `DECISIONS.md`, `CHANGELOG.md`, `docs/anexos/plan-documentacion.md`.
+Ver también: `README.md`, `PROJECT.md`, `SECURITY.md`, `DECISIONS.md`, `CHANGELOG.md`.

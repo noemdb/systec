@@ -28,8 +28,8 @@ $importPageActive = in_array($currentPage, array('updates.php', 'imports.php', '
     <nav class="navbar navbar-expand-xl p-0" aria-label="Navegación principal">
         <a class="d-inline-flex align-items-center gap-2 text-decoration-none text-body flex-shrink-0"
            href="<?= e(url('index.php')) ?>" aria-label="SysTec, inicio">
-            <img src="<?= e(url('favicon.svg')) ?>" width="36" height="36"
-                 class="flex-shrink-0" alt="" aria-hidden="true">
+            <img src="<?= e(url('assets/img/logoInsti.png')) ?>" width="36" height="36"
+                 class="flex-shrink-0" alt="Contraloría Municipal San Felipe">
             <span class="fw-bold fs-5 lh-1">SysTec</span>
         </a>
 

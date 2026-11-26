@@ -1,7 +1,7 @@
 # API.md — SysTec GMB
 
-> **Estado:** v1.5 (repositorios, paginación de soporte, gestión de usuarios y asistencia NVIDIA) · **Actualizado:** 2026-11-23.
-> **No existe una API pública.** El sistema expone una superficie HTTP de páginas y formularios que devuelven HTML y redirecciones. Este documento describe esa superficie real, no un contrato REST ideal.
+> **Estado:** superficie HTTP real del repositorio · **Actualizado:** 2026-11-26.
+> **No existe una API pública ni un directorio `/api`.** SysTec expone páginas PHP que devuelven HTML, endpoints JSON internos para la interfaz y documentos Markdown de los Informes de Rendición. Este documento describe ese contrato tal como está implementado, no una API REST ideal.
 
 ---
 
@@ -9,510 +9,532 @@
 
 | Ítem | Situación actual |
 |---|---|
-| Estilo | Scripts PHP por ruta; `router.php` para el servidor embebido |
-| Métodos | `GET` solo lectura; `POST` para toda mutación |
-| Formato de respuesta | HTML completo, redirección `Location` o texto plano de error |
-| Formato de error | Texto plano con código HTTP explícito |
-| Autenticación | Sesión PHP (`systec_session`), `password_hash`/`password_verify` |
-| Autorización | `require_login()` y `require_role()`; roles `admin`, `operador`, `tecnico`, `consulta`, `personal` |
-| CSRF | Token por sesión en todos los POST (`csrf_field()` / `verify_csrf()`) |
-| Idempotencia | Las lecturas sí; las mutaciones no (cada POST crea o cambia) |
-| Validación | `maintenances/validations/register.php` y `update.php`; validación adicional en cada acción |
-| Codificación | UTF-8; zona horaria `America/Caracas` |
-| Base de datos | SQLite `storage/db.db` (fuera del webroot) |
+| Entrada | Scripts PHP por ruta; `router.php` solo para el servidor embebido |
+| Autenticación | Sesión PHP `systec_session`; `password_hash`/`password_verify` |
+| Autorización | `require_login()`, `require_role()` y comprobaciones de propietario |
+| Roles | `admin`, `operador`, `tecnico`, `consulta`, `personal` |
+| Métodos | `GET` para lecturas; `POST` para mutaciones |
+| CSRF | Token por sesión en los POST; los JSON de lectura no lo requieren |
+| Formatos | HTML completo, redirección, texto plano de error, JSON interno y `text/markdown` |
+| Base de datos | SQLite en `storage/db.db` por defecto; PostgreSQL legacy solo se consulta en modo lectura |
+| Zona horaria | `America/Caracas` |
+| Errores HTML | Algunas páginas muestran errores en el propio HTML con `200`; no hay un esquema único de errores |
+| Errores JSON | Objeto `{ "error": "..." }` y código HTTP explícito |
+| Cache de JSON | `Content-Type: application/json; charset=utf-8` y `Cache-Control: private, no-store` |
 
-### 1.1 Patrón de respuesta
+### 1.1 Patrones de respuesta
 
-- **Éxito en página:** HTML completo con layout.
-- **Avisos:** las páginas pueden definir `$notifications` como lista de `toast_notification($tipo, $mensaje)`; el layout muestra toast temporales, no una respuesta HTTP aparte.
-- **Éxito en acción:** `header('Location: ...')` + `exit()` (PRG).
-- **Error de validación:** `422` con texto plano.
-- **Error de autenticación:** `302` a `login.php`.
-- **Error de autorización:** `403` con HTML breve.
-- **CSRF inválido o método incorrecto:** `419` o `405`.
-- **Error de base de datos:** `500` con mensaje genérico; detalle en `storage/logs/php-error.log`.
+- **Página:** HTML completo renderizado mediante `include/layout.php`.
+- **Mutación correcta:** mensaje en `$_SESSION` y redirección `302`; el alta personal usa `303`.
+- **Validación en acción HTML:** texto plano con `400`, `404`, `405`, `419`, `422` o `500`, según el caso.
+- **JSON interno:** respuestas `200` con datos o errores con estado HTTP y cuerpo JSON.
+- **Markdown:** el Informe de Rendición guardado se puede descargar como adjunto `.md`.
+- **Notificaciones:** toasts de sesión; no son un endpoint aparte.
 
-### 1.2 Códigos de estado HTTP
+### 1.2 Códigos HTTP relevantes
 
-| Código | Uso |
+| Código | Uso actual |
 |---|---|
-| `200` | Página renderizada o resultado de importación |
-| `302` | Redirección tras login, logout o mutación |
-| `400` | Parámetros incompletos o inválidos |
-| `403` | Rol sin permiso o acceso directo denegado |
-| `404` | Recurso inexistente o ticket fuera de alcance |
-| `405` | Método distinto de POST en una acción de mutación |
-| `419` | Token CSRF ausente o inválido |
-| `422` | Validación de negocio (fecha, estado, transición, bien) |
-| `429` | Límite de intentos de login excedido (bloqueo temporal por usuario/IP) |
-| `503` | Fuente o datos necesarios no disponibles para una lectura JSON |
-| `500` | Error interno controlado |
+| `200` | Página, lectura JSON, generación de informe o descarga Markdown |
+| `302` | Redirección habitual después de login, logout o mutación |
+| `303` | Alta personal: vuelve a `/personal/index.php`, también cuando conserva un error del formulario |
+| `400` | Parámetro incompleto o inválido en una acción HTML |
+| `401` | Sesión ausente en endpoints JSON; las páginas HTML suelen redirigir a `login.php` |
+| `403` | Rol sin permiso, ticket fuera de alcance o acceso directo denegado |
+| `404` | Recurso inexistente, ticket eliminado o informe no encontrado en JSON |
+| `405` | Método distinto del admitido; incluye `Allow` en los endpoints JSON |
+| `409` | Conflicto de estado: seguimiento personal sobre ticket finalizado o informe aprobado/inmutable |
+| `419` | Token CSRF ausente, inválido o expirado |
+| `422` | Validación de negocio, campos, fechas, estados o transiciones |
+| `429` | Login bloqueado temporalmente por intentos fallidos |
+| `500` | Error interno controlado; detalle generalmente en `storage/logs/php-error.log` |
+| `502` | Fallo del proveedor NVIDIA en acciones de mejora/procesamiento que no usan fallback |
+| `503` | No se pueden cargar inventario/direcciones para el selector JSON |
 
 ---
 
 ## 2. Mapa de rutas
 
-| # | Método | Ruta | Archivo | Auth / rol | Efecto | Respuesta |
-|---|---|---|---|---|---|---|
-| 1 | GET | `/login.php` | `login.php` | Público | Formulario de login | HTML |
-| 2 | POST | `/login.php` | `login.php` | Público + CSRF | Autentica y redirige | `302` |
-| 3 | POST | `/logout.php` | `logout.php` | Sesión + CSRF | Cierra sesión | `302` |
-| 4 | GET | `/index.php` o `/` | `index.php` | Sesión | Portada | HTML |
-| 4a | GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja paginada; acepta `q`, `status`, `category`, `date_from`, `date_to`, `adscription` y `page` | HTML |
-| 4b | GET | `/personal/register.php` | `personal/register.php` | `personal` | Formulario de alta de ticket del ámbito personal | HTML |
-| 4c | POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket propio o vuelve a la bandeja con el modal y los valores conservados | `302` / `303` |
-| 4d | GET | `/personal/detail.php?id={id}` | `personal/detail.php` | `personal` + propietario | Detalle y historial del ticket personal | HTML |
-| 4e | POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + CSRF | Agrega seguimiento a un ticket propio | `302` |
-| 4f | GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | Devuelve detalle e historial del ticket | JSON |
-| 4g | GET | `/personal/actions/properties.php` | `personal/actions/properties.php` | `personal` | Devuelve bienes y direcciones para el selector | JSON |
-| 4h | POST | `/personal/actions/password.php` | `personal/actions/password.php` | Sesión + CSRF | Cambia la contraseña de la cuenta autenticada | `302` |
-| 4i | POST | `/personal/actions/process-narrative.php` | `personal/actions/process-narrative.php` | `personal` + CSRF | Convierte un relato libre en título, descripción y observación; admite fallback local | JSON |
-| 4j | POST | `/personal/actions/improve-narrative.php` | `personal/actions/improve-narrative.php` | `personal` + CSRF | Mejora los campos narrativos de un ticket personal | JSON |
-| 4k | POST | `/personal/actions/improve-history-note.php` | `personal/actions/improve-history-note.php` | `personal` + CSRF | Mejora una nota de seguimiento propia y valida que el ticket siga activo | JSON |
-| 5 | GET | `/dashboard.php` | `dashboard.php` | Sesión | Lista de bienes; acepta `search`, `category`, `status`, `adscription` | HTML |
-| 6 | POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Actualiza el estado físico de un bien previa confirmación | `302` |
-| 7 | GET | `/maintenances.php` | `maintenances.php` | Sesión | Lista, alta o edición según parámetros | HTML |
-| 8 | POST | `/maintenances/register.php` | `maintenances/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea mantenimiento | `302` |
-| 9 | POST | `/maintenances/update.php` | `maintenances/update.php` | `admin`, `operador`, `tecnico` + CSRF | Actualiza mantenimiento | `302` |
-| 10 | POST | `/maintenances/actions/status.php` | `maintenances/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y calcula horas | `302` |
-| 10a | POST | `/tickets/actions/delete.php` | `tickets/actions/delete.php` | `admin`, `operador` + CSRF | Oculta ticket y registra eliminación en su historial | `302` |
-| 10b | GET | `/tickets.php` | `tickets.php` | `admin`, `operador`, `tecnico` | Bandeja de soporte paginada (`page`) y modal de alta | HTML |
-| 10i | GET | `/users.php` | `users.php` | `admin` | Administración de cuentas, roles y técnicos activos | HTML |
-| 10j | POST | `/users/actions/save.php` | `users/actions/save.php` | `admin` + CSRF | Crea o actualiza usuario, rol, estado o contraseña | `302` |
-| 10c | GET | `/tickets/register.php` | `tickets/register.php` | `personal`, `admin`, `operador`, `tecnico` | Formulario de alta independiente, conservado junto al modal | HTML |
-| 10d | POST | `/tickets/actions/register.php` | `tickets/actions/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea ticket y su evento inicial | `302` |
-| 10e | GET | `/tickets/actions/properties.php` | `tickets/actions/properties.php` | `admin`, `operador`, `tecnico` | Devuelve bienes y direcciones para el selector | JSON |
-| 10f | GET | `/tickets/detail.php?id={id}` | `tickets/detail.php` | `admin`, `operador`, `tecnico` | Detalle, historial y formularios autorizados | HTML |
-| 10g | POST | `/tickets/actions/history.php` | `tickets/actions/history.php` | `admin`, `operador`, `tecnico` + CSRF | Agrega seguimiento a ticket activo | `302` |
-| 10h | POST | `/tickets/actions/status.php` | `tickets/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambia estado y agrega evento | `302` |
-| 10k | POST | `/tickets/actions/improve-narrative.php` | `tickets/actions/improve-narrative.php` | `admin`, `operador`, `tecnico` + CSRF | Mejora los campos narrativos de un ticket de soporte | JSON |
-| 10l | POST | `/tickets/actions/process-narrative.php` | `tickets/actions/process-narrative.php` | `admin`, `operador`, `tecnico` + CSRF | Convierte un relato libre en campos de ticket de soporte | JSON |
-| 10m | POST | `/tickets/actions/improve-history-note.php` | `tickets/actions/improve-history-note.php` | `admin`, `operador`, `tecnico` + CSRF | Mejora una nota de seguimiento de soporte | JSON |
-| 11 | GET | `/historials.php` | `historials.php` | Sesión | Historial de un bien | HTML |
-| 12 | GET | `/report.php` | `report.php` | Sesión | Reporte de bienes dañados | HTML imprimible |
-| 13 | GET | `/batch.php` | `batch.php` | Sesión | Dos historiales en una página | HTML imprimible |
-| 14 | GET | `/imports.php` | `imports.php` | `admin`, `operador` | Pantalla de confirmación de importación | HTML |
-| 15 | POST | `/imports.php` | `imports.php` | `admin`, `operador` + CSRF | Importa `storage/maintenances.csv` | HTML con reporte |
-| 16 | GET | `/updates.php` | `updates.php` | `admin`, `operador` | Pantalla de confirmación de inventario | HTML |
-| 17 | POST | `/updates.php` | `updates.php` | `admin`, `operador` + CSRF | Importa archivo o consulta PostgreSQL legacy en solo lectura | HTML con resumen detallado |
-| 18 | GET | `/vendor/...` | `vendor/` | Público | Assets estáticos | CSS/JS |
-| 19 | GET | `/storage/...`, `/docs/...`, `/grafo/...`, `/spec/...`, `/bin/...`, `/include/...` | — | Denegado | `403` por `router.php`/`.htaccess` | Texto plano |
+| Método | Ruta | Archivo | Acceso | Respuesta / efecto |
+|---|---|---|---|---|
+| GET / POST | `/login.php` | `login.php` | Público + CSRF en POST | HTML / autentica y redirige |
+| POST | `/logout.php` | `logout.php` | Sesión + CSRF | Cierra sesión |
+| GET | `/index.php` o `/` | `index.php` | Sesión | Portada |
+| GET | `/documentation.php` | `documentation.php` | Sesión, incluido `personal` | Manual HTML; admite `print=1` |
+| GET | `/dashboard.php` | `dashboard.php` | Sesión no personal | Inventario y filtros |
+| POST | `/dashboard/actions/status.php` | `dashboard/actions/status.php` | `admin`, `operador` + CSRF | Cambia estado explícito del bien |
+| GET | `/maintenances.php` | `maintenances.php` | Sesión no personal | Listado, alta, edición e informes |
+| POST | `/maintenances/register.php` | `maintenances/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea mantenimiento |
+| POST | `/maintenances/update.php` | `maintenances/update.php` | `admin`, `operador`, `tecnico` + CSRF | Edita mantenimiento |
+| POST | `/maintenances/actions/status.php` | `maintenances/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Transición individual |
+| POST | `/maintenances/actions/bulk-status.php` | `maintenances/actions/bulk-status.php` | `admin`, `operador`, `tecnico` + CSRF | Transición de lote, hasta 500 IDs |
+| GET | `/maintenances/actions/property-tickets.php` | `maintenances/actions/property-tickets.php` | `admin`, `operador`, `tecnico` | JSON de tickets activos del bien |
+| GET | `/maintenances/print.php` | `maintenances/print.php` | Sesión | HTML imprimible de historiales filtrados |
+| POST | `/maintenances/actions/improve-narrative.php` | `maintenances/actions/improve-narrative.php` | `admin`, `operador`, `tecnico` + CSRF | JSON con textos mejorados por NVIDIA |
+| POST | `/maintenances/actions/generate-rendition-report.php` | `maintenances/actions/generate-rendition-report.php` | `admin`, `operador`, `tecnico` + CSRF | JSON con Markdown generado; no persiste |
+| POST | `/maintenances/actions/save-rendition-report.php` | `maintenances/actions/save-rendition-report.php` | `admin`, `operador`, `tecnico` + CSRF | Guarda borrador o aprueba |
+| GET | `/maintenances/actions/rendition-reports.php` | `maintenances/actions/rendition-reports.php` | Roles no personales, incluido `consulta` | JSON con informe o últimos 50 |
+| POST | `/maintenances/actions/delete-rendition-report.php` | `maintenances/actions/delete-rendition-report.php` | `admin` + CSRF | Elimina informe permanentemente |
+| GET | `/maintenances/rendition-print.php` | `maintenances/rendition-print.php` | Sesión no personal | HTML imprimible; `download=md` descarga Markdown |
+| GET | `/personal/index.php` | `personal/index.php` | `personal` | Bandeja propia paginada a 25 |
+| GET | `/personal/register.php` | `personal/register.php` | `personal` | Formulario independiente de alta |
+| POST | `/personal/actions/register.php` | `personal/actions/register.php` | `personal` + CSRF | Crea ticket propio y vuelve a la bandeja |
+| GET | `/personal/detail.php?id={id}` | `personal/detail.php` | `personal` + propietario | Detalle propio |
+| GET | `/personal/actions/details.php?ticket_id={id}` | `personal/actions/details.php` | `personal` + propietario | JSON de detalle e historial |
+| GET | `/personal/actions/properties.php` | `personal/actions/properties.php` | `personal` | JSON del selector; `mode=adscriptions` |
+| POST | `/personal/actions/history.php` | `personal/actions/history.php` | `personal` + propietario + CSRF | Seguimiento propio; rechaza finalizados |
+| POST | `/personal/actions/password.php` | `personal/actions/password.php` | Sesión + CSRF | Cambia contraseña propia |
+| POST | `/personal/actions/process-narrative.php` | `personal/actions/process-narrative.php` | `personal` + CSRF | JSON; usa fallback local si NVIDIA falla |
+| POST | `/personal/actions/improve-narrative.php` | `personal/actions/improve-narrative.php` | `personal` + CSRF | JSON o `502` |
+| POST | `/personal/actions/improve-history-note.php` | `personal/actions/improve-history-note.php` | `personal` + propietario + CSRF | JSON; `409` si está finalizado |
+| GET | `/tickets.php` | `tickets.php` | `admin`, `operador`, `tecnico`, `consulta` | Bandeja global; `personal` se redirige |
+| GET | `/tickets/register.php` | `tickets/register.php` | Roles operativos; `personal` termina redirigido por el layout | Formulario independiente de soporte |
+| POST | `/tickets/actions/register.php` | `tickets/actions/register.php` | `admin`, `operador`, `tecnico` + CSRF | Crea ticket; `personal` se redirige a su formulario |
+| GET | `/tickets/actions/properties.php` | `tickets/actions/properties.php` | `admin`, `operador`, `tecnico` | JSON del selector |
+| GET | `/tickets/detail.php?id={id}` | `tickets/detail.php` | `admin`, `operador`, `tecnico` | Detalle completo y acciones |
+| POST | `/tickets/actions/history.php` | `tickets/actions/history.php` | `admin`, `operador`, `tecnico` + CSRF | Seguimiento |
+| POST | `/tickets/actions/status.php` | `tickets/actions/status.php` | `admin`, `operador`, `tecnico` + CSRF | Cambio de estado |
+| POST | `/tickets/actions/delete.php` | `tickets/actions/delete.php` | `admin`, `operador` + CSRF | Borrado lógico |
+| POST | `/tickets/actions/improve-narrative.php` | `tickets/actions/improve-narrative.php` | Roles operativos + CSRF | JSON o `502` |
+| POST | `/tickets/actions/process-narrative.php` | `tickets/actions/process-narrative.php` | Roles operativos + CSRF | JSON o `502` |
+| POST | `/tickets/actions/improve-history-note.php` | `tickets/actions/improve-history-note.php` | Roles operativos + CSRF | JSON con fallback local |
+| GET | `/historials.php?property_id={id}` | `historials.php` | Sesión | Historial del bien; admite `embed=1` |
+| GET | `/report.php` | `report.php` | Sesión no personal | Reporte HTML de bienes dañados |
+| GET | `/batch.php` | `batch.php` | Sesión | Historiales legacy en dos columnas |
+| GET | `/users.php` | `users.php` | `admin` | Administración de cuentas y perfiles |
+| POST | `/users/actions/save.php` | `users/actions/save.php` | `admin` + CSRF | `save`, `toggle_active`, `unlock` o `delete` |
+| GET / POST | `/imports.php` | `imports.php` | `admin`, `operador` + CSRF en POST | Importa mantenimientos desde servidor o subida |
+| GET / POST | `/updates.php` | `updates.php` | `admin`, `operador` + CSRF en POST | Importa inventario CSV/XLS o PostgreSQL |
+| GET / POST | `/sync-assignments.php` | `sync-assignments.php` | `admin`, `operador` + CSRF en POST | Sincroniza responsables/asignados desde legacy |
+| GET | `/vendor/...`, `/assets/...` | Assets | Público | CSS/JS/imágenes estáticas |
 
-> `router.php` también deniega `.db`, `.csv`, `.log`, `.md` y `.env` en cualquier ruta.
+Las rutas de datos y código interno no son API. `router.php` y `.htaccess` aplican denegaciones diferentes; el detalle está en `SECURITY.md`.
 
 ---
 
-## 3. Detalle por módulo
-
-### 3.1 Autenticación
-
-#### `GET /login.php`
-
-- **Parámetros:** ninguno.
-- **Respuesta:** formulario con token CSRF.
-- **Nota:** si ya hay sesión, redirige a `dashboard.php`.
-
-#### `POST /login.php`
-
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `username` | string | Sí | Usuario |
-| `password` | string | Sí | Contraseña |
-
-- **Efecto:** verifica con `password_verify`; regenera el ID de sesión; guarda `user` y `csrf`.
-- **Respuesta:** `302` a la URL pretendida o `dashboard.php`; en error, `200` con mensaje.
-- **Errores:** `419` si el CSRF falla.
-
-#### `POST /logout.php`
-
-- **Campos:** `csrf_token`.
-- **Efecto:** destruye la sesión y la cookie.
-- **Respuesta:** `302` a `login.php`.
-
-### 3.2 Portada
-
-#### `GET /index.php`
-
-- **Parámetros:** ninguno.
-- **Auth:** sesión obligatoria.
-- **Respuesta:** HTML con descripción y enlace al dashboard.
-
-### 3.3 Dashboard de bienes
-
-#### `GET /dashboard.php`
-
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `search` | string | No | Texto inicial para DataTables; se serializa con `js()` |
-| `category` | string | No | Categoría de bien: `informatica`, `redes` u `otros` |
-| `status` | string | No | Estado del bien o `__attention__` |
-| `adscription` | string | No | Código jerárquico `cod_dependencia/cod_direccion/cod_departamento`, `local:<sha256>` o `__unassigned__`; permite filtrar por unidad operativa |
-
-- **Efecto:** lee `properties`, resuelve adscripciones con `legacy_postgres_inventory_snapshot()` en la transacción PostgreSQL de solo lectura, cuenta mantenimientos por bien y muestra el total de tickets a `admin`, `operador` y `tecnico`.
-- **Etiqueta de adscripción:** usa el nombre del departamento de `BIEN006`; si falta, el nombre de dirección (`BIEN005`) y luego el de dependencia (`BIEN001`). Los bienes sin asignación reciben el filtro `__unassigned__`.
-- **Disponibilidad:** si PostgreSQL no responde, usa `properties.adscription` local cuando exista; de lo contrario, muestra “Sin adscripción”.
-- **Alcance de la consulta:** busca en SIA todos los identificadores locales, incluso bienes desincorporados que permanecen en SysTec; la comprobación/importación legacy sigue limitada a `desincorporado = 'N'`.
-- **Permisos PostgreSQL:** el usuario de solo lectura requiere acceso a `BIEN015`, `BIEN001`, `BIEN005` y `BIEN006` para resolver la adscripción; la importación también usa `BIEN004`.
-- **Respuesta:** HTML con tabla, badges, conteo y acciones.
-- **Acciones por fila:**
-  - **Mantenimiento:** enlace a `maintenances.php?modeCreate=true&property_id={id}`.
-  - **Historial:** enlace a `historials.php?property_id={id}`.
-  - **Estado:** formulario POST a `dashboard/actions/status.php` (solo `admin`/`operador`).
-
-#### `POST /dashboard/actions/status.php`
-
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `property_id` | int | Sí | ID del bien |
-| `ident` | string | No | Identificador para el `search` de la redirección |
-
-- **Lógica de transición:** `BUENO→MALO`, `MALO→REGULAR`, `REGULAR→BUENO`, otro→`BUENO`.
-- **Efecto:** `UPDATE properties SET status = ? WHERE id = ?`.
-- **Respuesta:** `302` a `dashboard.php?search={ident}`.
-- **Errores:** `400` bien inválido, `404` bien inexistente, `419` CSRF, `403` rol no permitido.
-
-### 3.4 Mantenimientos
-
-#### `GET /maintenances.php`
-
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `modeCreate` | `true` | No | Muestra el formulario de alta |
-| `modeEdit` | `true` | No | Muestra el formulario de edición |
-| `id` | int | No | ID del mantenimiento a editar o resaltar |
-| `property_id` | int | No | Bien preseleccionado al crear |
-| `search` | string | No | Búsqueda inicial de DataTables |
-
-- **Modos:** lista; lista + alta; lista + edición.
-- **Respuesta:** HTML con tabla, filtros, checkbox “Solo vencidos” y modal de detalle.
-- **Datos:** todos los mantenimientos ordenados por `id DESC`; el detalle viaja como JSON escapado en `data-detail`.
-
-#### `POST /maintenances/register.php`
+## 3. Autenticación y navegación
 
-| Campo | Tipo | Obligatorio | Validación |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `register` | any | Sí | Marca de envío |
-| `property_id` | int | Sí | Entero y bien existente |
-| `type` | string | Sí | Debe existir en `getListMaintenanceType()` |
-| `technician` | string | Sí | Debe existir en `getListMaintenanceTechnician()` |
-| `date` | datetime-local | Sí | `strtotime()` válido |
-| `failure_reason` | string | Sí | No vacío |
-| `description` | string | Sí | No vacío |
-| `notes` | string | No | — |
-| `next_maintenance_date` | date | No | `strtotime()` válido si se envía |
+### `GET /login.php`
 
-- **Efecto:** calcula `code` con `getCodeId(property_id)`, inserta con `status = 'iniciado'`, redirige a `maintenances.php`.
-- **Errores:** `422` si el bien o las fechas no son válidos; `500` controlado.
+- Devuelve el formulario con `csrf_token`, `username` y `password`.
+- Si ya existe sesión, redirige a `personal/index.php` para `personal` y a `dashboard.php` para los demás roles.
 
-#### `POST /maintenances/update.php`
+### `POST /login.php`
 
-| Campo | Tipo | Obligatorio | Validación |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `update` | any | Sí | Marca de envío |
-| `id` | int | Sí | Mantenimiento existente |
-| `property_id` | int | Sí | Bien existente |
-| `type`, `technician` | string | Sí | Catálogos |
-| `date` | datetime-local | Sí | Fecha válida |
-| `failure_reason`, `description` | string | Sí | No vacíos |
-| `notes` | string | No | — |
-| `next_maintenance_date` | date | No | Fecha válida si se envía |
-| `status` | string | Sí | Catálogo + transición permitida |
+- Verifica CSRF y credenciales con `password_verify`; solo acepta cuentas `active = 1`.
+- Regenera el ID de sesión y guarda `id`, `username`, `role` y un nuevo token CSRF.
+- Sin destino pretendido, `personal` va a `/personal/index.php` y los demás a `/dashboard.php`.
+- Si `require_login()` guardó una URL local en `$_SESSION['intended']`, se respeta esa URL después del login; las rutas posteriores vuelven a validar rol y propietario.
+- Credenciales incorrectas: HTML `200` con mensaje. Bloqueo: `429`.
 
-- **Efecto:** recalcula `code`, actualiza todos los campos y redirige a `maintenances.php?id={id}`.
-- **Errores:** `404` mantenimiento inexistente, `422` estado/transición/fecha inválidos.
+### `POST /logout.php`
 
-#### `POST /maintenances/actions/status.php`
+- Requiere `csrf_token`; destruye la sesión y la cookie y redirige a `login.php`.
 
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `id` | int | Sí | ID del mantenimiento |
-| `status` | string | Sí | `revision` o `finalizado` según transición |
+---
 
-- **Transiciones permitidas:** `iniciado→revision`, `iniciado→finalizado`, `revision→finalizado`, `finalizado→revision`.
-- **Efecto:** actualiza `status`; si el nuevo estado es `finalizado`, calcula `time_taken` como diferencia total en horas.
-- **Respuesta:** `302` a `maintenances.php?id={id}`.
-- **Errores:** `422` transición no permitida o estado inválido.
+## 4. Documentación funcional
 
-### 3.5 Historial
+### `GET /documentation.php`
 
-#### `GET /historials.php`
+- **Acceso:** cualquier sesión, incluido `personal`.
+- **Parámetro:** `print=1` abre la versión imprimible.
+- **Respuesta:** HTML con índice, búsqueda del lado cliente, detalles en offcanvas y guía según el rol.
+- **Diagramas:** se generan con Mermaid; la página carga `mermaid@10.9.3` desde jsDelivr. Si el CDN no está disponible, el contenido textual sigue disponible.
+- No lee ni publica los archivos de `docs/` como endpoint y no ofrece JSON.
 
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `property_id` | int | Sí (para datos) | Bien a historiar |
+---
 
-- **Efecto:** lee el bien y sus mantenimientos ordenados por `date ASC`.
-- **Respuesta:** HTML con membrete, tabla, observaciones y firma.
-- **Casos límite:** si el bien no existe o el ID no es entero, muestra “No se encontró el bien solicitado”.
-- **Uso:** imprimible desde el navegador; no genera PDF en servidor.
+## 5. Bienes y dashboard
 
-### 3.6 Tickets
+### `GET /dashboard.php`
 
-#### `GET /personal/index.php`
+Filtros reconocidos por la interfaz:
 
-- **Auth:** rol `personal`.
-- **Filtros:** `q`, `status`, `category` (`informatica`, `redes`, `otros`), `date_from`, `date_to` y `adscription`.
-- **Paginación:** 25 resultados por página mediante `page`; las tarjetas de estado aplican el filtro correspondiente.
-- **Adscripción:** se resuelve desde el snapshot de SIA cacheado; si la fuente y el cache no están disponibles, el filtro falla cerrado y muestra un aviso.
-- **Alta:** abre el wizard compartido en un modal; el selector carga los bienes al abrirse y ofrece categoría, dirección y búsqueda.
+| Parámetro | Valores / significado |
+|---|---|
+| `search` | Texto para la tabla |
+| `category` | `informatica`, `redes`, `otros` |
+| `status` | `BUENO`, `REGULAR`, `MALO`, `MUY MALO`, `__attention__` |
+| `adscription` | Clave jerárquica, `local:<sha256>` o `__unassigned__` |
+| `responsible`, `assigned` | Claves SHA-256 de la asignación; disponibles para roles operativos |
 
-#### `GET /personal/register.php`
+La página carga el inventario y resuelve adscripciones/asignaciones desde la caché local. Las acciones por fila incluyen mantenimiento, historial y, para `admin`/`operador`, cambio de estado.
 
-- **Auth:** rol `personal`.
-- **Uso:** formulario de alta independiente que se conserva como ruta directa; la bandeja usa el wizard modal.
+### `POST /dashboard/actions/status.php`
 
-#### `POST /personal/actions/register.php`
-
-| Campo | Tipo | Obligatorio | Regla |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `property_id` | int | Sí | Bien existente |
-| `title` | string | Sí | Máximo 255 caracteres |
-| `description` | string | Sí | Máximo 5000 caracteres |
-| `observation` | string | No | Máximo 5000 caracteres |
-
-- **Auth:** rol `personal`; el creador del ticket es la sesión y no se acepta desde el formulario.
-- **Efecto:** crea el ticket y el evento inicial dentro de una transacción; si falla, conserva los valores y vuelve a `/personal/index.php` con el modal abierto.
-- **Respuesta:** `302` al detalle del ticket o `303` a la bandeja al volver con error.
-- **Límites:** el título admite 255 caracteres; descripción y observación, 5000 cada una.
-
-#### `GET /personal/actions/details.php?ticket_id={id}`
-
-- **Auth:** rol `personal`; solo devuelve tickets activos creados por la sesión.
-- **Efecto:** consulta bajo demanda el ticket, bien asociado y su historial.
-- **Respuesta:** JSON privado/no almacenable; `404` si el ticket no pertenece al usuario o ya no está disponible.
-
-#### `GET /personal/actions/properties.php`
-
-- **Auth:** rol `personal`.
-- **Efecto:** devuelve los bienes locales, dirección de dependencia y unidades de adscripción; la página carga las unidades en segundo plano y el selector solicita los bienes al abrirse.
-- **Cache:** las adscripciones de SIA se guardan por cinco minutos; si la fuente falla se informa si se está usando un cache vencido. Sin datos disponibles, devuelve `503`.
-- **Respuesta JSON:** `properties`, `directions`, `adscriptions`, `stale` y `cached_at`; usa `Cache-Control: private, no-store`.
-
-#### `GET /tickets.php`
-
-- **Auth:** `admin`, `operador` o `tecnico`.
-- **Efecto:** lista tickets activos y ofrece alta en el wizard compartido. `admin` y `operador` pueden además solicitar la baja lógica.
-
-#### `GET /tickets/register.php`
-
-- **Auth:** `personal`, `admin`, `operador` o `tecnico`.
-- **Uso:** formulario independiente de alta que se conserva como alternativa al wizard modal.
-
-#### `POST /tickets/actions/register.php`
-
-| Campo | Tipo | Obligatorio | Regla |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `property_id` | int | Sí | Bien existente |
-| `title` | string | Sí | No vacío |
-| `description` | string | Sí | No vacía |
-| `observation` | string | No | — |
-
-- **Auth:** `admin`, `operador` o `tecnico`; si la sesión es `personal`, redirige al flujo del área personal.
-- **Efecto:** crea el ticket en estado inicial `iniciado`, registra evento `created` y redirige al detalle.
-- **Errores:** `403` rol no permitido; `419` CSRF; `422` campos incompletos o bien inexistente; `500` error de base de datos.
-
-#### `GET /tickets/actions/properties.php`
-
-- **Auth:** `admin`, `operador` o `tecnico`.
-- **Efecto:** comparte el contrato de carga de bienes/direcciones con el endpoint personal mediante `include/property_picker_api.php`.
-- **Respuesta JSON:** `properties`, `directions`, `adscriptions`, `stale` y `cached_at`; los datos no se cachean en el navegador.
-- **Errores:** `503` si no se pueden obtener los bienes o direcciones.
-
-#### `GET /tickets/detail.php?id={id}`
-
-- **Auth:** `admin`, `operador` o `tecnico`; solo muestra tickets activos. El rol `personal` se redirige al detalle personal.
-- **Efecto:** presenta los datos del ticket y su historial; el soporte puede registrar seguimiento y cambiar el estado.
-
-#### `POST /tickets/actions/history.php`
-
-| Campo | Tipo | Obligatorio | Regla |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `ticket_id` | int | Sí | Ticket activo |
-| `description` | string | Sí | Nota de seguimiento no vacía |
-
-- **Auth:** `admin`, `operador` o `tecnico`.
-- **Efecto:** agrega evento `comment` y actualiza `updated_at`.
-- **Respuesta:** `302` al detalle del ticket.
-
-#### `POST /tickets/actions/status.php`
-
-| Campo | Tipo | Obligatorio | Regla |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `ticket_id` | int | Sí | Ticket activo |
-| `status_id` | int | Sí | Estado existente |
-
-- **Auth:** `admin`, `operador` o `tecnico`.
-- **Efecto:** actualiza el estado, registra `status_change` y actualiza `closed_at` cuando el estado es `finalizado`.
-- **Respuesta:** `302` a `/tickets.php`.
-- **Errores:** `403` rol no permitido; `419` CSRF; `422` parámetros/estado inválidos; `404` ticket inexistente o dado de baja.
-
-#### `POST /tickets/actions/delete.php`
-
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `csrf_token` | string | Sí | Token de sesión |
-| `ticket_id` | int | Sí | ID del ticket |
-
-- **Auth:** `admin` u `operador`.
-- **Efecto:** eliminación lógica transaccional, registra al actor en `ticket_histories` y conserva el historial previo.
-- **Respuesta:** `302` a `/tickets.php` con confirmación.
-- **Errores:** `403` rol no permitido; `404` ticket inexistente/eliminado; `419` CSRF; `422` ID inválido; `500` error de base de datos.
-
-### 3.7 Reportes
-
-#### `GET /report.php`
-
-- **Parámetros:** ninguno.
-- **Auth:** sesión.
-- **Efecto:** ejecuta `indexWithMaintenances('properties.*', 'date ASC')`.
-- **Consulta base:** bienes `MALO`/`MUY MALO` con al menos un mantenimiento cuya nota contiene `desincorporación`.
-- **Respuesta:** HTML imprimible con un bloque por bien.
-- **Nota F2:** la consulta usa `SELECT DISTINCT` para no repetir bienes con varias notas coincidentes.
-
-#### `GET /batch.php`
-
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `property_id` | int | No | Primer bien |
-| `property_id2` | int | No | Segundo bien |
-
-- **Efecto:** renderiza dos historiales lado a lado.
-- **Casos límite:** si falta un parámetro o el bien no existe, muestra “Bien no encontrado”.
-
-### 3.8 Importación
-
-#### `GET /imports.php` / `POST /imports.php`
-
-- **Auth:** `admin` u `operador`.
-- **GET:** pantalla de advertencia con botón de confirmación y CSRF.
-- **POST:** lee `storage/maintenances.csv` y procesa cada fila mediante `include/csv_import.php`.
-- **Reporte:** insertados, omitidos (bien no encontrado) y errores (fecha inválida o fallo de inserción).
-- **Efecto por fila válida:** inserta `maintenances` con `status = 'finalizado'` y `time_taken = NULL`.
-- **Formato esperado:** `id_mantenimiento,tipo,descripcion,fname,usuario,coment_user,fecha,obs,estado`.
-- **Delimitador:** `,`.
-- **Límites:** 5 MB y 5000 filas no vacías; las filas inválidas se reportan y omiten. El archivo se procesa en transacción; un fallo no capturado revierte la operación.
-- **Errores:** `419` CSRF; `403` rol no permitido.
-
-#### `GET /updates.php` / `POST /updates.php`
-
-- **Auth:** `admin` u `operador`.
-- **GET:** pantalla de advertencia con botón de confirmación y CSRF.
-- **POST:** ofrece tres fuentes: CSV, reporte `.xls` descargado del sistema de bienes o PostgreSQL legacy. La conexión PostgreSQL se realiza con PDO dentro de una transacción `REPEATABLE READ READ ONLY`; la base legacy no recibe escrituras.
-- **PostgreSQL:** consulta `public.bien015` y `public.bien004`, exige una sola empresa con código `38`, y selecciona `desincorporado = 'N'`. No excluye `bien_en_salida = 'S'`, en concordancia con el reporte oficial. El límite es 5000 bienes.
-- **Configuración PostgreSQL:** variables de entorno `SYSTEC_LEGACY_PG_USER` y `SYSTEC_LEGACY_PG_PASSWORD` obligatorias; `SYSTEC_LEGACY_PG_HOST` (por defecto `localhost`), `SYSTEC_LEGACY_PG_PORT` (5432) y `SYSTEC_LEGACY_PG_DATABASE` (`DATOS`). Se leen del entorno o del `.env` local, ignorado por Git y denegado por Apache/router. Se requiere `pdo_pgsql`; configurar el usuario del servicio web con privilegios mínimos de lectura.
-- **Mapeo de código para empresa 38:** grupo = posición 1 de `cod_clasificacion`; subgrupo = posiciones 3–6; sección = posiciones 8–10; identificador = `num_bien`. Se valida la reconstrucción contra `cod_bien_mue` y se cancela si hay identificadores repetidos.
-- **Mapeo:** denominación, características, material y color se conservan en descripción cuando no aparecen allí; marca/modelo se componen para el campo modelo; `serial1` va a serial, `color` a color y `edo_bien` al estado. `MUY BUENO` se normaliza como `BUENO`. No se importan valor de incorporación, `serial2` ni datos organizativos porque no tienen campos equivalentes en el modelo SysTec.
-- **Reporte final:** filas consideradas, bienes nuevos, estados actualizados, sin cambios y errores, además del resultado por bien.
-- **CSV esperado:** filas de 11 columnas delimitadas por `;`: `grupo;subgrupo;seccion;ident;description;marca;modelo;serial;material;color;status`.
-- **Reporte XLS esperado:** columnas `CODIGO`, `DENOMINACION DEL BIEN`, `MARCA`, `MODELO`, `SERIAL`, `MATERIAL`, `COLOR` y `ESTADO`; `CODIGO` debe tener cuatro segmentos numéricos separados por guiones. Los campos `MATERIAL` y `COLOR` se conservan en la descripción si aún no aparecen en ella.
-- **Normalización de estado:** `MUY BUENO` se importa como `BUENO`, de acuerdo con el catálogo vigente.
-- **Campos no almacenados:** `VALOR INCORP.` no tiene un campo equivalente en el modelo actual y no se importa.
-- **Regla:** si el bien existe, solo actualiza `status`; si no, lo inserta.
-- **Límites de archivos:** 5 MB y 5000 bienes; los errores de datos por fila se reportan y omiten. Un XLS sin encabezados requeridos o con un código no válido se rechaza antes de iniciar la transacción. Un fallo no capturado durante el procesamiento revierte la operación.
-- **Errores:** `419` CSRF; `403` rol no permitido.
-
-### 3.9 Archivos estáticos y datos
-
-| Ruta | Contenido | Acceso |
+| Campo | Obligatorio | Regla |
 |---|---|---|
-| `/vendor/bootstrap/...` | CSS/JS de Bootstrap | Público |
-| `/vendor/datatables/...` | DataTables + jQuery 3.7.0 | Público |
-| `/storage/db.db` | Base completa | `403` |
-| `/storage/backups/...` | Backups | `403` |
-| `/storage/*.csv` | Datos legacy | `403` |
-| `/storage/logs/...` | Logs | `403` |
-| `/docs/...`, `/grafo/...`, `/spec/...` | Documentación | `403` |
-| `/bin/...`, `/include/...`, `/conn.php` | Código interno | `403` |
+| `csrf_token` | Sí | Token de sesión |
+| `property_id` | Sí | Entero de bien existente |
+| `status` | Sí | `bueno`, `regular`, `malo` o `muy malo`; se normaliza a mayúsculas |
+| `return_category` | No | Categoría de retorno válida |
+| `return_status` | No | Estado de retorno válido o `__attention__` |
+| `return_adscription` | No | Clave de adscripción de retorno |
+| `return_responsible`, `return_assigned` | No | Claves SHA-256 de retorno |
+| `return_search` | No | Búsqueda de retorno |
+
+- **No hay ciclo automático ni campo `ident`:** el destino debe enviarse explícitamente en `status`.
+- Si el bien ya tiene ese estado, no escribe y muestra un aviso informativo: la operación es idempotente respecto al estado.
+- Si cambia, actualiza `properties.status`, registra un mensaje en el log y redirige al dashboard conservando los `return_*` permitidos.
+- Errores: `400` bien/estado inválido, `404` bien inexistente, `419` CSRF, `403` rol, `500` fallo de actualización.
 
 ---
 
-## 4. Catálogo de errores actual
+## 6. Mantenimientos
 
-| Origen | Mensaje / comportamiento | Código |
+### `GET /maintenances.php`
+
+- Carga todos los mantenimientos y los pagina en el navegador en páginas de 10.
+- Modos: `modeCreate=true`, `modeEdit=true`, `id`, `property_id`; `search` inicializa la búsqueda.
+- Filtros de la URL del listado: `category`, `adscription`, `responsible`, `assigned`, `search`, `estado`, `tipo`, `tecnico`, `desde`, `hasta`, `proximo=30` y `vencido=1`.
+- `responsible` y `assigned` solo se ofrecen a `admin`, `operador` y `tecnico`.
+- Tipos: `preventivo`, `correctivo`, `predictivo`, `evaluativo`.
+- Estados: `iniciado`, `revision`, `finalizado`.
+- La exportación CSV usa los registros filtrados, no solo la página visible.
+
+### `POST /maintenances/register.php`
+
+| Campo | Obligatorio | Validación |
 |---|---|---|
-| Validación de alta/edición | `Error: El código es obligatorio...` | `200` (texto de `die()`) |
-| Validación de alta/edición | `Error: El tipo es obligatorio...` | `200` |
-| Validación de alta/edición | `Error: El técnico es obligatorio...` | `200` |
-| Validación de alta/edición | `Error: la fecha es obligatoria...` | `200` |
-| Validación de alta/edición | `Error: La Razón del mantenimiento es obligatoria...` | `200` |
-| Validación de alta/edición | `Error: La descripción es obligatorio...` | `200` |
-| Bien inexistente | `El bien seleccionado no existe.` | `422` |
-| Fecha inválida | `La fecha de inicio no es válida.` | `422` |
-| Estado inválido | `El estado del mantenimiento no es válido.` | `422` |
-| Transición inválida | `La transición de estado no está permitida.` | `422` |
-| Mantenimiento inexistente | `Mantenimiento no encontrado.` | `404` |
-| Bien inválido | `Bien inválido` | `400` |
-| CSRF inválido | `Token CSRF inválido o expirado...` | `419` |
-| Método incorrecto | `Método no permitido` | `405` |
-| Rol sin permiso | HTML “Acceso denegado” | `403` |
-| Acceso directo denegado | `Acceso no permitido` | `403` |
-| Error interno | Mensaje genérico; detalle en log | `500` |
+| `csrf_token` | Sí | Token de sesión |
+| `register` | Sí | Marca de envío |
+| `property_id` | Sí | Entero y bien existente |
+| `ticket_id` | No | Entero positivo; el ticket debe existir, no estar eliminado y pertenecer al mismo bien |
+| `type` | Sí | Catálogo de cuatro tipos |
+| `technician` | Sí | Catálogo vigente de técnicos |
+| `date` | Sí | Fecha/hora interpretable por `strtotime()` |
+| `failure_reason` | Sí | No vacío |
+| `description` | Sí | No vacío |
+| `notes` | No | Texto |
+| `next_maintenance_date` | No | Fecha válida si se envía |
+| `return_to=dashboard` | No | Vuelve al dashboard en lugar de mantenimientos |
+| `return_*` | No | Filtros de dashboard cuando `return_to=dashboard` |
 
-**Pendiente:** catálogo estable de errores de dominio cuando se agregue una capa de servicio (F3).
+- Inserta con `status = 'iniciado'` y calcula `code` a partir del bien.
+- No crea un evento de historial de mantenimiento.
+- Respuesta: `302` a mantenimientos o al dashboard. Los errores desde el dashboard se conservan en sesión y regresan con los valores del formulario.
+
+### `POST /maintenances/update.php`
+
+- Admite los mismos campos, más `id`, `update` y `status`.
+- `status` debe estar en catálogo y respetar `maintenance_transition_allowed()`.
+- `ticket_id` vacío desvincula; si el campo no se envía, conserva el vínculo existente.
+- Recalcula `code`, actualiza el registro y redirige a `maintenances.php?id={id}`.
+- Errores: `404` mantenimiento inexistente, `422` validación/transición, `500` fallo de escritura.
+
+### `POST /maintenances/actions/status.php`
+
+- Campos: `csrf_token`, `id`, `status` y `return_query` opcional.
+- Transiciones: `iniciado→revision`, `iniciado→finalizado`, `revision→finalizado`, `finalizado→revision`; el mismo estado está permitido por el helper.
+- Al finalizar calcula `time_taken` en horas desde `date`. Repetir la finalización puede recalcular ese valor, por lo que no es estrictamente idempotente.
+- `return_query` solo conserva: `category`, `adscription`, `responsible`, `assigned`, `search`, `estado`, `tipo`, `tecnico`, `desde`, `hasta`, `proximo`, `vencido`.
+
+### `POST /maintenances/actions/bulk-status.php`
+
+- Campos: `csrf_token`, `ids[]`, `status` (`revision` o `finalizado`) y `return_query`.
+- Toma como máximo los primeros 500 IDs recibidos, descarta inválidos y elimina duplicados.
+- Recorre cada registro y aplica la misma guardia de transición que la acción individual; calcula horas al finalizar.
+- **No es atómico:** cada actualización se confirma por separado. Los registros omitidos o fallidos se cuentan como `skipped`; no se revierten los ya actualizados.
+- Redirige a mantenimientos con un aviso; la página también acepta `bulk_updated` y `bulk_skipped` para mostrarlo.
+
+### `GET /maintenances/actions/property-tickets.php`
+
+- Parámetro: `property_id` entero positivo.
+- Devuelve `{ "tickets": [...] }` con tickets activos del bien, estado, datos del bien y `property_category`.
+- Errores JSON: `401`, `403`, `405`, `422`, `500`.
+
+### `GET /maintenances/print.php`
+
+Prepara una o varias páginas HTML para imprimir, agrupando los historiales por bien. Parámetros:
+
+`category`, `search`, `status`, `type`, `technician`, `adscription`, `responsible`, `assigned`, `desde`, `hasta`, `proximo=30`, `vencido=1`.
+
+A diferencia de la URL del listado, esta ruta usa `status`, `type` y `technician`. No genera PDF en el servidor.
+
+### `POST /maintenances/actions/improve-narrative.php`
+
+- Campos: `csrf_token`, `id` opcional y los textos `description`, `failure_reason`, `notes`.
+- Debe haber al menos un texto no vacío; si se envía `id`, el mantenimiento debe existir.
+- Devuelve los tres textos propuestos; no guarda nada.
+- `502` indica fallo de NVIDIA o de salida del proveedor. No usa fallback local en esta acción.
 
 ---
 
-## 5. Validaciones implementadas
+## 7. Informes de Rendición
 
-| Regla | Dónde | Cubre |
+Los informes se guardan en `rendition_reports` con ciclo `borrador → aprobado`. Un informe aprobado es inmutable. La unicidad se calcula por período y filtros normalizados (`scope_hash`).
+
+### `POST /maintenances/actions/generate-rendition-report.php`
+
+| Campo | Obligatorio | Uso |
 |---|---|---|
-| `property_id` entero y existente | Acciones + `validations/*` | Alta/edición/estado |
-| `type` en catálogo | `validations/*` | Alta/edición |
-| `technician` en catálogo | `validations/*` | Alta/edición |
-| `date` con `strtotime()` válido | Acciones | Alta/edición |
-| `next_maintenance_date` válida si se envía | Acciones | Alta/edición |
-| `failure_reason` y `description` no vacíos | `validations/*` | Alta/edición |
-| `id` entero y existente | Acciones | Edición/estado |
-| `status` en catálogo | Acciones | Edición/estado |
-| Transición permitida | `maintenance_transition_allowed()` | Edición/estado |
-| Longitudes máximas | No implementado | — |
-| Rate limiting | No implementado | — |
+| `csrf_token` | Sí | Token de sesión |
+| `date_from`, `date_to` | Sí | `YYYY-MM-DD`, con `date_from <= date_to` |
+| `use_active_filters` | No | Por defecto `1` |
+| `category`, `adscription`, `adscription_label` | No | Filtros de alcance |
+| `status`, `type`, `technician` | No | Filtros de mantenimiento |
+| `title`, `issuing_unit`, `recipient_name`, `prepared_by` | No | Encabezado; hay valores por defecto |
+| `include_tickets` | No | Por defecto `1` |
+| `custom_notes` | No | Notas del informe |
+| `force_regenerate` | No | `1` regenera aunque exista un borrador |
+
+- Recopila mantenimientos del período y tickets asociados; si no hay mantenimientos devuelve `422`.
+- Si existe un informe aprobado para el alcance, devuelve `200` con `already_approved=true` y su contenido.
+- Si existe un borrador y no se fuerza regeneración, devuelve `200` con `loaded_existing_draft=true`.
+- La generación **no persiste** el informe. Devuelve `content_markdown`, `report_code`, `scope_hash`, estadísticas, IDs y `fallback`.
+- `fallback=true` indica que se usó la síntesis local por falta de clave/conexión o respuesta inválida de NVIDIA.
+
+### `POST /maintenances/actions/save-rendition-report.php`
+
+- Admite los campos anteriores y además `report_id`, `content_markdown`, `ai_generated`, `status` y `confirm_approval`.
+- `status=aprobado` exige `confirm_approval=1`; cualquier otro valor guarda como `borrador`.
+- Vuelve a calcular período, alcance, estadísticas e IDs desde la base antes de guardar.
+- Máximo de Markdown: 150000 caracteres.
+- Respuesta `200`: `{ "message": "...", "report": {...}, "total_reports": N }`.
+- `409`: ya existe un informe aprobado para el alcance, el informe ya fue aprobado o el borrador indicado no existe.
+- `422`: rango, contenido, datos o confirmación inválidos.
+
+> **Inconsistencia actual:** en `save-rendition-report.php`, `status` se usa tanto para el ciclo de vida del informe (`borrador`/`aprobado`) como para el filtro de mantenimiento. Al guardar, ese valor se normaliza como filtro y queda vacío porque no es un estado de mantenimiento. El alcance guardado puede diferir del generado si había filtro por estado; debe corregirse antes de tratar este endpoint como contrato estable.
+
+### `GET /maintenances/actions/rendition-reports.php`
+
+- Sin parámetros devuelve los 50 informes más recientes: `{ "reports": [...], "total": N }`. `total` es la cantidad devuelta, no necesariamente el total global.
+- Con `id` devuelve `{ "report": {...} }`.
+- Acceso para `admin`, `operador`, `tecnico` y `consulta`.
+- Errores: `401`, `403`, `405`, `422`, `404`, `500`.
+
+### `POST /maintenances/actions/delete-rendition-report.php`
+
+- Campos: `csrf_token` y `report_id`.
+- Solo `admin`.
+- Elimina físicamente el informe; no hay borrado lógico ni auditoría general asociada.
+- Respuesta `200` con `deleted`, `deleted_id`, `report_code` y `total_reports`; `404` si no existe.
+
+### `GET /maintenances/rendition-print.php`
+
+- Parámetro `id`; sin informe válido muestra una página HTML “Informe de Rendición no encontrado” con `200`.
+- Con `download=md` devuelve `text/markdown; charset=utf-8` como adjunto.
+- Sin `download`, renderiza el Markdown a HTML seguro para vista e impresión. No genera PDF.
+- Acceso para cualquier sesión no personal.
 
 ---
 
-## 6. Idempotencia y efectos secundarios
+## 8. Tickets de soporte
 
-| Acción | Idempotente | Nota |
+### `GET /tickets.php`
+
+- Acceso: `admin`, `operador`, `tecnico` y `consulta`.
+- `personal` se redirige a su bandeja; si recibe `id`, a su detalle personal.
+- Carga **todos** los tickets activos con JOIN a bien, creador, estado, historial y mantenimientos; no pagina en SQL.
+- El paginador cliente muestra 10 filas por página.
+- Filtros: `search`, `status` (`abiertos` o código de estado), `assigned` y `adscription`. Los filtros y la búsqueda se reflejan en la URL.
+- La exportación CSV contiene todos los tickets filtrados, no solo la página visible.
+- `admin` y `operador` pueden solicitar borrado lógico; los tres roles operativos pueden crear, seguir y cambiar estado.
+
+> **Inconsistencia de permisos:** `consulta` sí puede abrir `tickets.php`, buscar/filtrar y ver el detalle resumido del offcanvas, cuyos datos incluyen historial y mantenimientos. Sin embargo, `/tickets/detail.php` y todas las acciones de ticket rechazan a `consulta` con `403`. El listado no equivale al detalle completo autorizado.
+
+### `GET /tickets/register.php` y `POST /tickets/actions/register.php`
+
+- El formulario independiente de soporte es efectivo para roles operativos. Aunque `require_role()` incluye `personal`, `include/layout.php` lo redirige a su bandeja antes de mostrar el formulario; el alta personal usa `/personal/register.php`.
+- Campos del POST: `csrf_token`, `property_id`, `title`, `description`, `observation`.
+- Roles operativos: crea ticket `iniciado`, registra el evento `created` y redirige al detalle. Las dos inserciones no tienen una transacción explícita en esta ruta.
+- `personal`: se redirige a `/personal/register.php`; para crear debe usar `/personal/actions/register.php`.
+- No se acepta `created_by` ni `assigned_to` desde el formulario.
+
+### `GET /tickets/actions/properties.php` y `/personal/actions/properties.php`
+
+Comparten `include/property_picker_api.php`. Respuesta normal:
+
+```json
+{
+  "properties": [],
+  "directions": {},
+  "assigned_users": {},
+  "adscriptions": {},
+  "stale": false,
+  "cached_at": "2026-11-26T..."
+}
+```
+
+- `properties` incluye `id`, `code`, `description`, `status`, `category`, `direction_key`, `direction_label`, `assigned_key` y `assigned_label`.
+- `assigned_users` es el catálogo de usuarios asignados al bien procedente de SQLite/caché legacy.
+- `mode=adscriptions` devuelve solo `adscriptions` y metadatos; las otras colecciones quedan vacías.
+- `503` si no se puede cargar inventario/direcciones.
+
+### `GET /tickets/detail.php?id={id}`
+
+- Solo roles operativos; tickets activos.
+- Muestra datos del bien, ticket, historial, seguimiento y cambio de estado.
+- `404` para ID inválido, ticket inexistente o eliminado; `403` para `consulta`.
+
+### `POST /tickets/actions/history.php`
+
+- Campos: `csrf_token`, `ticket_id`, `description`; opcionales `return_to=tickets` y `return_query`.
+- Inserta `comment` y actualiza `updated_at` en una transacción.
+- La ruta de soporte exige ticket activo, pero no comprueba si su estado es `finalizado`.
+- Redirige al detalle o a `tickets_return_url()`. Este helper solo conserva `status` y `search`; no conserva `assigned` ni `adscription`.
+
+### `POST /tickets/actions/status.php`
+
+- Campos: `csrf_token`, `ticket_id`, `status_id` y `return_query` opcional.
+- Actualiza estado, `updated_at`, `closed_at` e inserta `status_change` en una transacción.
+- Si el estado ya es el solicitado, no escribe ni genera evento: es idempotente respecto al estado.
+- `finalizado` fija `closed_at`; cualquier otro estado lo deja en `NULL`.
+- Redirige con `tickets_return_url()`.
+
+### `POST /tickets/actions/delete.php`
+
+- Campos: `csrf_token`, `ticket_id` y `return_query`.
+- Solo `admin`/`operador`.
+- Marca `deleted_at` y añade un evento `deleted` en una transacción; conserva el historial previo.
+- Un segundo intento sobre el ticket eliminado devuelve `404`.
+
+---
+
+## 9. Portal personal
+
+### `GET /personal/index.php`
+
+- Filtros: `q`, `status`, `category`, `date_from`, `date_to`, `adscription`.
+- Orden: `sort=id|property|status|updated_at` y `dir=asc|desc`.
+- Paginación **en servidor, 25 tickets por página**, mediante `page`; la página se limita al último número válido.
+- Solo devuelve tickets activos creados por la sesión.
+- La exportación CSV descarga **los tickets de la página actual**, no todos los resultados filtrados.
+- Si el filtro de adscripción no se puede verificar, falla cerrado y no muestra resultados parciales.
+
+### `POST /personal/actions/register.php`
+
+- Campos: `csrf_token`, `property_id`, `title`, `description`, `observation`.
+- Límites: título 255; descripción y observación 5000 caracteres.
+- Crea ticket y evento inicial en una transacción.
+- Tanto el éxito como un error de formulario redirigen con `303` a `/personal/index.php`; en error conserva los valores y abre el wizard.
+
+### Detalle y seguimiento personal
+
+- `GET /personal/detail.php?id={id}` y `GET /personal/actions/details.php?ticket_id={id}` validan propietario y ticket activo.
+- `POST /personal/actions/history.php` registra seguimiento y vuelve a la bandeja.
+- Un ticket finalizado devuelve `409` al intentar añadir seguimiento.
+- Las acciones NVIDIA personales exigen rol, CSRF y, para notas, propiedad del ticket.
+
+---
+
+## 10. Usuarios y perfiles
+
+### `GET /users.php`
+
+- Solo `admin`.
+- Consulta `users` con `LEFT JOIN profile` para mostrar cuentas aunque no tengan perfil.
+- Campos de perfil: `first_name`, `last_name`, `avatar_url`.
+- Calcula conteos de tickets creados y registros de historial por usuario, además de total/activos/técnicos/inactivos y bloqueos temporales.
+- La tabla se pagina en cliente a 10 y permite exportar el directorio filtrado a CSV.
+
+### `POST /users/actions/save.php`
+
+Todas las variantes requieren `admin`, POST y CSRF. La respuesta habitual es `302` a `users.php` con feedback en sesión, incluso cuando la validación de dominio falla.
+
+| `action` | Campos | Efecto |
 |---|---|---|
-| Ver dashboard/historial/reportes | Sí | Solo lectura |
-| Login/logout | No | Cambia la sesión |
-| Cambiar estado de bien | No | Cada POST avanza el ciclo |
-| Cambiar estado de mantenimiento | No | Cada POST cambia estado y puede recalcular horas |
-| Registrar mantenimiento | No | Cada POST crea una fila |
-| Editar mantenimiento | Sí en el resultado | Última escritura gana; sin auditoría |
-| Importar mantenimientos | No | Cada POST inserta filas de nuevo |
-| Actualizar inventario | Parcial | Inserta nuevos; en existentes solo cambia `status` |
+| `save` o ausente | `user_id` opcional, `username`, `role`, `active`, `password`, `first_name`, `last_name`, `avatar_url` | Crea o actualiza cuenta y perfil |
+| `toggle_active` | `user_id` | Alterna `active`; no permite desactivar la cuenta propia |
+| `unlock` | `user_id` | Borra el throttle de intentos fallidos del usuario |
+| `delete` | `user_id`, `confirm_username`, `confirm_risk=1` | Eliminación permanente con doble confirmación |
+
+Validaciones y transacciones:
+
+- Usuario nuevo: 3–64 caracteres `[a-zA-Z0-9._-]`; duplicados comprobados sin distinguir mayúsculas/minúsculas. En actualización el nombre de usuario no se cambia.
+- Rol dentro de `admin`, `operador`, `tecnico`, `consulta`, `personal`.
+- Contraseña inicial: el backend web acepta 4 caracteres, aunque la UI exige 6. Actualización: 6 si se envía una contraseña no vacía.
+- Nombre y apellidos deben enviarse juntos, con máximo 120 cada uno. Si ambos están vacíos no se crea/actualiza el perfil; no se borra uno existente.
+- Avatar: URL `http`/`https` válida, máximo 2048; exige nombre y apellidos. Vacío deja `avatar_url=NULL` al actualizar un perfil.
+- Alta y edición de cuenta/perfil usan `BEGIN IMMEDIATE` y `COMMIT`; un fallo revierte ambas escrituras.
+- No se puede desactivar, degradar ni eliminar la cuenta propia. Tampoco se puede eliminar el último administrador activo.
+- Los técnicos activos alimentan el catálogo de mantenimientos; un técnico inactivo se retira del catálogo.
+- `unlock` no modifica la base; `delete` hace un `DELETE` único con cascada de perfil, no una transacción explícita de múltiples pasos.
 
 ---
 
-## 7. Propuesta de API futura (no implementada)
+## 11. Importación y sincronización
 
-Si el sistema se moderniza, el contrato mínimo recomendado sería:
+### `GET /imports.php` / `POST /imports.php`
 
-| Método | Ruta | Propósito |
-|---|---|---|
-| GET | `/api/properties` | Listar/buscar bienes |
-| GET | `/api/properties/{id}` | Detalle de bien |
-| PATCH | `/api/properties/{id}/status` | Cambiar estado con validación y auditoría |
-| GET | `/api/properties/{id}/maintenances` | Historial |
-| POST | `/api/maintenances` | Crear mantenimiento |
-| PATCH | `/api/maintenances/{id}` | Editar |
-| POST | `/api/maintenances/{id}/transitions` | Transición válida |
-| GET | `/api/reports/damaged` | Reporte de dañados |
-| POST | `/api/imports/properties` | Importación con reporte de errores |
-| POST | `/api/imports/maintenances` | Importación con reporte de errores |
+- Acceso: `admin` u `operador`; POST requiere CSRF y `confirm_import=1`.
+- Orígenes: `import_source=server` usa `storage/maintenances.csv`; `import_source=upload` acepta `maintenances_csv` con extensión `.csv`.
+- Límites: 5 MB y 5000 filas no vacías.
+- Formato por posiciones, delimitado por comas:
+  `código, tipo, descripción, técnico, reservado, razón, fecha, notas, estado`.
+- El código se vincula por sus últimos cuatro dígitos con `properties.ident`.
+- Las filas válidas se insertan como `finalizado`, con `time_taken=NULL`; no se vincula ticket ni se importa fecha siguiente. El campo `estado` de origen no se utiliza.
+- El procesamiento va en una transacción. Las filas inválidas se reportan y omiten; un fallo no capturado revierte todo el lote.
+- El reporte HTML muestra insertados, omitidos y errores.
 
-Requisitos: autenticación, autorización, CSRF o token, validación de esquema, errores estables, idempotencia y auditoría. Ver `SECURITY.md` y `TODO.md`.
+### `GET /updates.php` / `POST /updates.php`
+
+- Acceso: `admin` u `operador`; POST requiere CSRF y `confirm_import=1`.
+- Orígenes: `import_source=file` con `properties_csv` (`.csv` o `.xls`) o `import_source=legacy_postgres`.
+- Límite: 5000 bienes; archivos CSV/XLS limitados a 5 MB.
+- CSV: 11 columnas separadas por `;`: `grupo;subgrupo;seccion;ident;description;marca;modelo;serial;material;color;status`.
+- XLS: reporte del sistema de bienes con `CODIGO`, `DENOMINACION DEL BIEN`, `MARCA`, `MODELO`, `SERIAL`, `MATERIAL`, `COLOR`, `ESTADO`.
+- `MUY BUENO` se normaliza a `BUENO`.
+- Si el bien existe, la importación solo actualiza `status`; no reescribe descripción, modelo, serial, material, color ni datos organizativos.
+- **PostgreSQL:** consulta `public.bien015`, `public.bien004`, `public.sia000` y tablas de adscripción/asignación en una transacción `REPEATABLE READ READ ONLY`; exige empresa `38`, selecciona `desincorporado = 'N'` y limita a 5000. En los bienes existentes **preserva el estado de SysTec**; el estado legacy solo se aplica a bienes nuevos.
+- Configuración: `SYSTEC_LEGACY_PG_USER` y `SYSTEC_LEGACY_PG_PASSWORD` obligatorias; opcionales `SYSTEC_LEGACY_PG_HOST` (`localhost`), `SYSTEC_LEGACY_PG_PORT` (`5432`) y `SYSTEC_LEGACY_PG_DATABASE` (`DATOS`). Se leen del entorno o del `.env` local.
+- La importación PostgreSQL actualiza adscripciones/asignaciones locales y la caché después de insertar/actualizar el inventario; un fallo de caché se registra sin deshacer el inventario ya importado.
+
+### `GET /sync-assignments.php` / `POST /sync-assignments.php`
+
+- Acceso: `admin` u `operador`; POST requiere CSRF y `confirm_sync=1`.
+- GET muestra cobertura de responsables/asignados y estado/antigüedad de la caché.
+- POST consulta PostgreSQL legacy en solo lectura para los identificadores locales y actualiza:
+  `responsible_name`, `responsible_status`, `assigned_name`, `assigned_status`.
+- La actualización SQLite usa una transacción; después se escribe la caché local de adscripciones/asignaciones.
+- No sincroniza cédulas, cuentas SysTec, roles ni contraseñas.
+- Éxito: `303` con cantidades devueltas por legacy y registros cambiados. Fallo: HTML con error y datos locales conservados.
 
 ---
 
-Ver también: `README.md`, `ARCHITECTURE.md`, `DOMAIN.md`, `DATABASE.md`, `SECURITY.md`, `CONVENTIONS.md`, `TODO.md`.
+## 12. Historiales y reportes
+
+### `GET /historials.php`
+
+- Parámetro `property_id`.
+- Incluye mantenimientos ordenados por fecha y tickets activos del bien con estado, creador, asignado e historial.
+- `embed=1` devuelve solo el fragmento HTML membrete + historial, para embebido en un modal; no incluye el layout.
+- Si el bien no existe, muestra “No se encontró el bien solicitado”.
+- La impresión la realiza el navegador; no hay PDF de servidor.
+
+### `GET /report.php`
+
+- Reporte HTML de bienes en `MALO`/`MUY MALO` con al menos una nota de mantenimiento que contiene `desincorporación`.
+- Incluye búsqueda/filtrado cliente, exportación CSV e impresión selectiva.
+- Usa `DISTINCT` para no duplicar bienes por varias notas coincidentes.
+
+### `GET /batch.php`
+
+- Parámetros `property_id` y `property_id2`.
+- Ruta legacy de impresión de dos historiales en columnas. El detalle actual de mantenimientos se precarga directamente; no equivale al historial enriquecido con tickets de `historials.php`.
+
+---
+
+## 13. Idempotencia y efectos secundarios
+
+| Acción | Comportamiento |
+|---|---|
+| Lecturas HTML/JSON | Idempotentes; no mutan datos |
+| Login/logout | No idempotentes; cambian la sesión |
+| Estado de bien | Idempotente si se envía el mismo `status`; no avanza ciclos automáticamente |
+| Alta de mantenimiento/ticket | No idempotente; cada POST crea un registro |
+| Edición de mantenimiento | Última escritura gana; sin historial de mantenimiento |
+| Estado individual de mantenimiento | Mismo estado permitido, pero finalizar recalcula `time_taken` |
+| Estado de ticket | Mismo `status_id` no escribe ni genera evento |
+| Lote de mantenimientos | No atómico; la repetición puede recalcular horas o volver a aplicar transiciones permitidas |
+| Seguimiento de ticket | No idempotente; cada POST añade un evento |
+| Importación de mantenimientos | No idempotente; puede duplicar filas |
+| Importación de inventario | Inserta nuevos; en existentes solo cambia estado, salvo PostgreSQL que lo preserva |
+| Informe de Rendición | Generar no persiste; guardar actualiza/crea por alcance; aprobado es inmutable |
+| `toggle_active` | No idempotente: alterna el estado en cada POST |
+| `unlock` / `delete` | Efecto deseado único; repetidos pueden terminar en feedback de no encontrado/bloqueo ya limpio |
+
+---
+
+Ver también: `README.md`, `ARCHITECTURE.md`, `DOMAIN.md`, `DATABASE.md`, `SECURITY.md`, `BACKUP.md` y `CONVENTIONS.md`.

@@ -1,9 +1,8 @@
 # DOMAIN.md — SysTec GMB
 
-> **Estado:** v1.5 (tickets, filtros compartidos y asistencia narrativa) · **Actualizado:** 2026-11-23.
-> Este es el **idioma ubicuo** del sistema: los términos y reglas que deben usarse igual en código, UI, reportes y documentación. Si un término no está aquí, no existe para efectos de diseño.
->
-> **Fuente de verdad:** el código actual, los datos de `db.db` y las decisiones aprobadas por el dueño. Las normalizaciones aplicadas se registran en ADR y migraciones.
+> **Estado:** v1.6 (inventario, mantenimientos, tickets, usuarios/perfiles e informes de rendición) · **Actualizado:** 2026-11-26.
+> Este es el **idioma ubicuo** del sistema. Los términos y reglas deben usarse igual en código, UI, reportes y documentación.
+> **Fuente de verdad:** código actual, `storage/db.db`, migraciones y decisiones registradas.
 
 ---
 
@@ -13,79 +12,77 @@
 
 | Término | Definición | Sinónimos a evitar |
 |---|---|---|
-| **Bien** | Objeto físico inventariable de la institución (equipo, mobiliario, instalación). Es la unidad central del sistema. | "artículo", "activo", "propiedad" (en UI), "item" |
-| **Inventario** | Conjunto de bienes registrados en `properties`. | "lista", "catálogo" (ambiguo con catálogos de estados) |
-| **Código de bien** | Identificador visible compuesto: `grupo-subgrupo-seccion-ident`, con relleno de ceros. | "código interno", "ID" (el `id` es la PK técnica) |
-| **Grupo** | Primera parte del código; agrupa por familia o categoría mayor. | "categoría" (genérico) |
-| **Subgrupo** | Segunda parte del código; subdivisión del grupo. | "subcategoría" |
-| **Sección** | Tercera parte del código; ubicación o clasificación interna. | "área", "dependencia" |
-| **Ident** | Cuarta parte del código; número identificador dentro de la sección. Es la clave de búsqueda en la importación. | "identificador", "número" |
-| **Descripción** | Texto libre que describe el bien. | "nombre" (puede no ser un nombre) |
-| **Modelo** | Marca/modelo del bien; en la importación se compone como `marca - modelo`. | "tipo" (el tipo es del mantenimiento) |
-| **Serial** | Número de serie del bien. | "serie" (ambigua con series documentales, que aquí no existen) |
-| **Color** | Color del bien. | — |
-| **Adscripción** | Unidad operativa a la que está asignado el bien. Se obtiene de la dependencia, dirección y departamento registrados en SIA; no es la dirección física del bien. | "ubicación física" |
-| **Estado del bien** | Condición física declarada del bien: `BUENO`, `REGULAR`, `MALO`, `MUY MALO`. | "condición" (válido como sinónimo conceptual, pero el campo es `status`) |
-| **Bien dañado** | Bien en estado `MALO` o `MUY MALO` con al menos un mantenimiento cuya nota contiene `desincorporación`. | "bien averiado", "bien desincorporado" (la desincorporación es el trámite, no el estado) |
-| **Desincorporación** | Proceso administrativo por el cual un bien se retira del inventario. En el sistema se detecta por una nota de texto, no por un estado formal. | "baja", "descarte" |
+| **Bien** | Objeto físico inventariable de la institución. Unidad central del sistema. | "artículo", "activo", "propiedad" en UI |
+| **Inventario** | Conjunto de bienes registrados en `properties`. | "lista" |
+| **Código de bien** | `grupo-subgrupo-seccion-ident`, con relleno de ceros. | "ID" |
+| **Grupo / Subgrupo / Sección / Ident** | Partes jerárquicas del código; `ident` identifica el bien dentro de la sección. | "categoría" cuando se refiere al código |
+| **Descripción / Modelo / Serial / Color** | Datos descriptivos del bien. | "nombre" para descripción |
+| **Adscripción** | Unidad operativa institucional. Se importa/sincroniza a SQLite y también puede resolverse desde la caché legacy. | "ubicación física" |
+| **Responsable del bien** | Nombre y estado sincronizados desde la fuente legacy. No es una cuenta de usuario. | "dueño" |
+| **Usuario asignado al bien** | Nombre y estado de la persona asignada al bien en la fuente legacy. No equivale a `tickets.assigned_to`. | "técnico del ticket" |
+| **Estado del bien** | Condición física: `BUENO`, `REGULAR`, `MALO`, `MUY MALO`. | "condición" como nombre de campo |
+| **Bien dañado** | Bien `MALO` o `MUY MALO` con al menos una nota que contiene `desincorporación`. | "baja" |
+| **Desincorporación** | Trámite administrativo detectado por texto en `notes`; no es un estado formal. | "borrado" |
 
 ### 1.2 Mantenimientos
 
 | Término | Definición | Sinónimos a evitar |
 |---|---|---|
-| **Mantenimiento** | Evento de intervención técnica sobre un bien, con fecha, tipo, técnico, razón, descripción y resultado. | "servicio", "reparación" (solo si es correctivo) |
-| **Tipo de mantenimiento** | Categoría de la intervención: `preventivo`, `correctivo`, `predictivo`, `evaluativo`. | "clase", "categoría" |
-| **Preventivo** | Mantenimiento planificado para evitar fallas. | "previsivo" (typo) |
-| **Correctivo** | Mantenimiento para corregir una falla existente. | "reparación" (válido coloquialmente) |
-| **Predictivo** | Mantenimiento basado en condición o pronóstico. | "predictivo" (correcto) |
-| **Evaluativo** | Tipo de mantenimiento aprobado por el dueño e incorporado al catálogo de la aplicación. | — |
-| **Técnico** | Persona que realizó el mantenimiento. Se guarda como texto libre. | "usuario", "operador" |
-| **Fecha de mantenimiento** | Fecha en que se realizó la intervención (`date`). | "fecha de registro" (no existe campo separado) |
-| **Razón del mantenimiento** | Motivo o causa de la intervención (`failure_reason`). | "falla" (si es correctivo), "motivo" |
-| **Descripción** | Detalle del trabajo realizado (`description`). | "detalle", "observación" (las observaciones son `notes`) |
-| **Notas** | Información adicional; incluye la constancia de desincorporación (`notes`). | "observaciones" (válido en UI) |
-| **Próximo mantenimiento** | Fecha sugerida para la siguiente intervención (`next_maintenance_date`). | "próxima fecha", "vencimiento" (el vencimiento es la condición, no la fecha) |
-| **Vencido** | Mantenimiento no finalizado cuya fecha de próximo mantenimiento ya pasó. | "atrasado", "pendiente" (pendiente no implica vencido) |
-| **Historial** | Secuencia cronológica ascendente de mantenimientos de un bien. | "bitácora" (implica auditoría, que no existe) |
-| **Horas** | Campo `time_taken`; pretendía medir duración en horas. | "tiempo", "duración" (en UI se muestra "Horas") |
+| **Mantenimiento** | Intervención técnica sobre un bien, con fecha, tipo, técnico, razón, descripción, notas, horas y estado. | "servicio" |
+| **Tipo** | `preventivo`, `correctivo`, `predictivo`, `evaluativo`. | "clase" |
+| **Técnico** | Persona que realizó el mantenimiento. El campo almacenado es texto libre. | "usuario" |
+| **Catálogo de técnicos** | Lista híbrida: históricos base más usuarios activos con rol `tecnico`. | "tabla relacional de técnicos" |
+| **Fecha de mantenimiento** | Fecha de la intervención (`date`). | "fecha de registro" |
+| **Razón** | Motivo o causa (`failure_reason`). | "descripción" |
+| **Descripción** | Detalle del trabajo (`description`). | "notas" |
+| **Notas** | Información adicional (`notes`); incluye la constancia de desincorporación. | "observaciones" |
+| **Próximo mantenimiento** | Fecha sugerida (`next_maintenance_date`). | "vencimiento" |
+| **Vencido** | Mantenimiento no finalizado cuya fecha próxima ya pasó. | "pendiente" |
+| **Historial** | Secuencia cronológica de mantenimientos y tickets de un bien. | "auditoría" |
+| **Horas** | `time_taken`, calculado al finalizar como horas totales redondeadas. | "minutos" |
 
-### 1.3 Estados
+### 1.3 Usuarios, roles y perfiles
 
 | Término | Definición | Sinónimos a evitar |
 |---|---|---|
-| **Estado del mantenimiento** | Etapa del flujo: `iniciado`, `revision`, `finalizado`. | "situación", "fase" |
-| **Iniciado** | Mantenimiento registrado, aún no revisado. Estado inicial del alta manual. | "abierto", "pendiente" |
-| **Revisión** | Mantenimiento en verificación o control de calidad. | "revisado" (revisado sería el resultado, no el estado) |
-| **Finalizado** | Mantenimiento concluido. Estado terminal operativo. | "cerrado", "completado" |
-| **Cambio de estado** | Acción que modifica `status` y recalcula `time_taken`. | "transición" (válido técnico) |
-| **Estado del bien** | Condición física declarada; se cambia con el botón **Estado**. | "condición" |
+| **Usuario** | Cuenta de acceso en `users`, identificada por `username`. | "login" |
+| **Username** | Identificador de inicio de sesión; único, 3–64 caracteres en el alta. | "email" |
+| **Email** | Correo institucional opcional. Se muestra/exporta, pero no se edita en el drawer ni se usa para login/recuperación. | "usuario" |
+| **Rol** | Perfil de autorización: `admin`, `operador`, `tecnico`, `consulta`, `personal`. | "perfil de usuario" |
+| **Perfil de usuario** | Datos de presentación en `profile`: nombre, apellidos y URL de avatar. | "rol" |
+| **Nombre** | Primer nombre (`first_name`). | "username" |
+| **Apellidos** | Apellidos (`last_name`); en el seed se toman los dos últimos tokens del nombre completo. | "segundo nombre" |
+| **Avatar** | Imagen referenciada por URL `http/https`; no es una carga de archivo. | "foto adjunta" |
+| **Cuenta activa** | `active=1`; puede iniciar sesión. | "sesión vigente" |
+| **Sesión** | Estado autenticado que conserva `id`, `username` y `role` al entrar. | "cuenta activa" |
+| **Desbloqueo** | Limpieza del contador de intentos fallidos del usuario. No necesariamente limpia el contador por IP. | "reactivación" |
 
-### 1.4 Reportes e importación
+### 1.4 Estados
 
-| Término | Definición | Sinónimos a evitar |
-|---|---|---|
-| **Dashboard** | Pantalla de inventario con búsqueda, filtros por estado/categoría/adscripción y resumen de mantenimientos y tickets permitidos por rol. | "panel", "home" |
-| **Historial imprimible** | Vista por bien con membrete, tabla de mantenimientos y observaciones, pensada para imprimir. | "reporte de bien" (válido) |
-| **Reporte de bienes dañados** | Vista que lista bienes en mal estado con notas de desincorporación. | "reporte de bajas" (la baja no es un estado formal) |
-| **Lote** | Impresión conjunta de dos historiales en una sola página (`batch.php`). | "batch" (técnico) |
-| **Membrete** | Encabezado institucional con oficina, fecha y datos del bien. | "cabecera" (válido UI) |
-| **Importación** | Carga masiva desde archivo del usuario, con validación y transacción. | "carga", "migración" (la migración es de esquema) |
-| **CSV de inventario** | Archivo delimitado por `;` que se carga desde `/updates.php`. | "archivo de bienes" |
-| **Reporte de inventario XLS** | Exportación `.xls` del sistema de bienes, leída como HTML si incluye el formato esperado. | "Excel" (si se desconoce el formato) |
-| **CSV de mantenimientos** | `storage/maintenances.csv`, delimitado por `,`. | "archivo de mantenimientos" |
-| **Fila omitida** | Fila de importación que no se inserta porque el bien no existe; se reporta en el conteo. | "fila ignorada" |
-| **Backup** | Copia manual de `storage/db.db` y CSV en `storage/backups/`. | "respaldo" (válido) |
-| **Rol** | Perfil de autorización (`admin`, `operador`, `tecnico`, `consulta`). | "perfil" |
-| **CSRF** | Token de sesión exigido en toda mutación por POST. | "token" (válido) |
+| Término | Definición |
+|---|---|
+| **Estado del mantenimiento** | `iniciado`, `revision`, `finalizado`. |
+| **Estado del bien** | `BUENO`, `REGULAR`, `MALO`, `MUY MALO`; se selecciona explícitamente. |
+| **Estado del ticket** | `iniciado`, `en_progreso`, `con_retraso`, `en_espera`, `finalizado`. No forman una secuencia obligatoria. |
+| **Estado del informe** | `borrador` o `aprobado`; un informe aprobado es inmutable. |
 
-### 1.5 Tickets
+### 1.5 Tickets, reportes e importación
 
 | Término | Definición | Sinónimos a evitar |
 |---|---|---|
-| **Ticket** | Registro de una incidencia asociada a un bien, con estado e historial de seguimiento. | "mantenimiento" (son entidades distintas) |
-| **Seguimiento** | Nota añadida al historial de un ticket por un usuario autorizado. | "auditoría" (el historial de tickets no es una auditoría general) |
-| **Baja lógica** | Marca `deleted_at` que oculta el ticket sin borrar su fila ni su historial. | "borrado permanente" |
-| **Wizard de ticket** | Formulario en tres pasos: bien, detalles y revisión del resumen antes de guardar. | — |
+| **Ticket** | Incidencia asociada a un bien, con estado e historial. | "mantenimiento" |
+| **Seguimiento** | Nota añadida al historial por un usuario autorizado. | "auditoría general" |
+| **Baja lógica** | `deleted_at`; oculta el ticket sin borrar la fila ni su historial. | "borrado permanente" |
+| **Wizard de ticket** | Drawer de tres pasos: bien, detalles y resumen. | "modal" |
+| **Portal Personal** | Área donde el rol `personal` crea y consulta únicamente sus tickets. | "bandeja global" |
+| **Historial imprimible** | HTML por bien o conjunto filtrado, con mantenimientos y tickets. | "snapshot" |
+| **Reporte de bienes dañados** | Bienes `MALO`/`MUY MALO` con nota de desincorporación. | "reporte de bajas" |
+| **Informe de Rendición** | Reporte persistente por período y alcance, con Markdown, borrador/aprobado y aprobación. | "reporte legacy" |
+| **Alcance del informe** | Conjunto de filtros, fechas y parámetros que identifica el informe mediante `scope_hash`. | "versión" |
+| **Lote** | Acción masiva sobre mantenimientos; omite los registros que no admiten la transición. | "transacción de lote" |
+| **Importación** | Carga masiva validada y transaccional desde CSV/XLS/PostgreSQL. | "migración de esquema" |
+| **Migración** | Evolución SQL versionada registrada en `schema_migrations`. | "importación" |
+| **Backup** | Snapshot consistente de SQLite y fuentes auxiliares. | "copia en caliente del archivo" |
 
 ---
 
@@ -93,185 +90,190 @@
 
 ### 2.1 Bien (`properties`)
 
-- **Descripción:** objeto inventariable de la institución.
-- **Atributos clave:** `id`, `grupo`, `subgrupo`, `seccion`, `ident`, `adscription`, `description`, `model`, `color`, `serial`, `status`.
-- **Reglas de negocio:**
-  - El código visible se compone de `grupo-subgrupo-seccion-ident` con relleno de ceros.
-  - `ident` es la clave de búsqueda de la importación; no hay restricción de unicidad en BD, pero los datos actuales no tienen duplicados.
-  - `adscription` sigue vacío en SQLite; el dashboard resuelve en tiempo de consulta la unidad operativa desde `BIEN015` y los catálogos `BIEN001`, `BIEN005` y `BIEN006`.
-  - La unidad operativa mostrada es el departamento; si falta su denominación, se usa la dirección y luego la dependencia. Los CSV/XLS actuales no contienen este dato.
-  - `status` no se deriva de los mantenimientos; se cambia manualmente.
-  - Un bien puede no tener mantenimientos (450 de 617 en el snapshot).
+- **Atributos:** `id`, `grupo`, `subgrupo`, `seccion`, `ident`, `adscription`, `description`, `model`, `color`, `serial`, `status`, `responsible_name`, `responsible_status`, `assigned_name`, `assigned_status`.
+- **Reglas:**
+  - El código visible se compone con relleno de ceros.
+  - `ident` es la clave de importación; no hay restricción `UNIQUE` en BD.
+  - `status` no se deriva de mantenimientos; se selecciona en un modal y se envía por POST con CSRF.
+  - Las asignaciones se sincronizan desde PostgreSQL y se guardan en SQLite/caché.
   - No se elimina un bien desde la aplicación.
-- **Relaciones:** 1:N lógica con `maintenances` por `id`/`property_id`; sin FK física.
+- **Relaciones:** 1:N lógica con mantenimientos y tickets.
 
 ### 2.2 Mantenimiento (`maintenances`)
 
-- **Descripción:** intervención técnica sobre un bien.
-- **Atributos clave:** `id`, `property_id`, `code`, `type`, `description`, `date`, `time_taken`, `technician`, `next_maintenance_date`, `failure_reason`, `notes`, `status`.
-- **Reglas de negocio:**
-  - Pertenece a un bien por `property_id`.
-  - `code` es un snapshot del código del bien al registrar/editar/importar; puede quedar obsoleto si cambia el bien.
+- **Atributos:** `id`, `property_id`, `ticket_id`, `code`, `type`, `description`, `date`, `time_taken`, `technician`, `next_maintenance_date`, `failure_reason`, `notes`, `status`.
+- **Reglas:**
+  - `ticket_id` es opcional; si existe, debe ser un ticket activo del mismo bien.
   - El alta manual nace en `iniciado`; la importación nace en `finalizado`.
-  - `time_taken` se calcula al pasar a `finalizado` como diferencia total en horas; la importación lo deja nulo. Los valores históricos se conservaron porque no hay fechas de inicio/fin para recalcularlos.
-  - `next_maintenance_date` puede ser `NULL`.
-  - `notes` es el único lugar donde se registra la desincorporación.
-  - No se elimina un mantenimiento desde la aplicación.
-- **Relaciones:** N:1 lógica con `properties`; sin FK física.
+  - `time_taken` se calcula al finalizar; la importación lo deja nulo.
+  - Las transiciones se validan en servidor y con triggers.
+  - Las acciones masivas omiten transiciones inválidas y no son atómicas como lote.
+- **Relaciones:** N:1 lógica con `properties` y, opcionalmente, `tickets`.
 
-### 2.3 Técnico (implícito)
+### 2.3 Usuario (`users`) y Perfil (`profile`)
 
-- **Descripción:** persona que realiza el mantenimiento. No es una entidad separada; es texto en `maintenances.technician`.
-- **Atributos:** nombre de usuario (`ndominguez`).
+- **Usuario:** `id`, `username`, `email`, `password_hash`, `role`, `active`, `created_at`.
+- **Perfil:** `id`, `user_id`, `first_name`, `last_name`, `avatar_url`.
 - **Reglas:**
-  - El catálogo de técnicos está hardcodeado en `DB::getListMaintenanceTechnician()`.
-  - La migración F2 corrigió `ndomiguez` a `ndominguez`; el campo continúa siendo texto libre.
-  - No hay alta, baja ni asignación de técnicos.
-- **Relaciones:** 1:N lógica con `maintenances`.
+  - Un usuario tiene como máximo un perfil; `profile.user_id` es `UNIQUE` y FK con `ON DELETE CASCADE`.
+  - Nombre y apellidos se guardan juntos; cada uno admite hasta 120 caracteres.
+  - El avatar admite hasta 2048 caracteres y debe ser URL `http/https`.
+  - Si se dejan nombre y apellidos vacíos al editar, se conserva el perfil existente.
+  - El drawer no edita email; las cuentas nuevas web/CLI no lo reciben automáticamente.
+  - La cuenta y el perfil se guardan en una transacción.
+  - El administrador no puede desactivar, eliminar ni degradar su propia cuenta en sesión.
+  - No se puede eliminar el último administrador activo.
+  - Desactivar o eliminar una cuenta no invalida por sí solo una sesión ya abierta.
+- **Gestión:** `/users.php` para administradores; `bin/create-user.php` y `bin/seed-profiles.php` para operación CLI.
 
-### 2.3.1 Usuario (`users`)
+### 2.4 Ticket (`tickets`)
 
-- **Descripción:** cuenta que accede al sistema; introducida en F1.
-- **Atributos:** `id`, `username`, `password_hash`, `role`, `active`, `created_at`.
+- **Atributos:** `id`, `property_id`, `status_id`, `title`, `description`, `observation`, `created_by`, `assigned_to`, `created_at`, `updated_at`, `closed_at`, `deleted_at`.
 - **Reglas:**
-  - `username` es único; la contraseña se guarda con `password_hash`.
-  - Roles: `admin`, `operador`, `tecnico`, `consulta`, `personal`.
-  - `active=0` impide el login; no hay UI de baja.
-  - La gestión es por CLI (`bin/create-user.php`).
-- **Relaciones:** no se relaciona con mantenimientos; el técnico sigue siendo texto.
+  - Se exige un bien existente, título y descripción.
+  - Nace en `iniciado` y escribe un evento `created`.
+  - `assigned_to` queda en `NULL`; el filtro “usuario asignado” se refiere al bien, no al ticket.
+  - No existe edición del contenido después del alta; los cambios se documentan con seguimientos.
+  - `admin`, `operador` y `tecnico` gestionan la bandeja; `consulta` aparece en el listado/drawer, pero el detalle completo y las acciones lo rechazan. Esta inconsistencia está pendiente de decisión.
+  - `personal` solo crea/consulta/amplía sus tickets no finalizados.
+  - La baja lógica se limita a `admin`/`operador`.
+- **Trazabilidad:** `ticket_histories` registra actor, fecha, descripción y estados. El alta de soporte todavía no envuelve ticket + evento inicial en una transacción explícita; el alta personal y los seguimientos/cambios de estado sí.
 
-### 2.3.2 Ticket (`tickets`)
+### 2.5 Informe de Rendición (`rendition_reports`)
 
-- **Atributos clave:** `id`, `property_id`, `status_id`, `title`, `description`, `observation`, `created_by`, `assigned_to`, `created_at`, `updated_at`, `closed_at`, `deleted_at`.
-- **Relaciones lógicas:** cada ticket corresponde a un bien y a un usuario creador; puede tener un usuario asignado, estado y múltiples eventos en `ticket_histories`. Las tablas no declaran claves foráneas físicas.
-- **Registro:** se exige un bien existente, título y descripción no vacíos; la observación es opcional. Se inicia con estado `iniciado` y se escribe un evento `created`.
-- **Wizard compartido:** tanto `/tickets.php` como `/personal/index.php` muestran el modal reutilizable de tres pasos. El selector consulta bienes y direcciones, permite filtrar por categoría/dirección y buscar por código/descripción.
-- **Filtros del selector:** además de categoría y dirección, el selector puede limitar bienes por usuario asignado.
-- **Asistencia narrativa:** el usuario puede procesar un relato libre o mejorar título, descripción y observación. También puede mejorar una nota de seguimiento desde personal o soporte. La propuesta no se persiste hasta enviarla explícitamente en el formulario.
-- **Acceso:** `admin`, `operador` y `tecnico` acceden a la bandeja de soporte; `personal` registra y consulta únicamente tickets propios dentro de `/personal/`.
-- **Baja lógica:** solo `admin` y `operador` pueden dar de baja desde soporte. `deleted_at` oculta el ticket y bloquea su seguimiento; la fila y el historial se conservan.
-- **Trazabilidad:** el alta, los seguimientos, cambios de estado y baja agregan eventos en `ticket_histories`; no es una auditoría general de cambios de la aplicación.
-- **Estados:** `iniciado`, `en_progreso`, `con_retraso`, `en_espera` y `finalizado`; este último está marcado como terminal en `ticket_status`.
-- **Restauración:** no existe una acción de restauración desde la interfaz.
-
-### 2.4 Reporte (derivado)
-
-- **Descripción:** salida HTML imprimible; no se persiste.
-- **Tipos:** historial por bien, reporte de bienes dañados, lote de dos historiales.
+- **Atributos:** período, título, `scope_hash`, filtros/parámetros/estadísticas JSON, IDs de mantenimientos/tickets, Markdown, `ai_generated`, estado, creador/aprobador y timestamps.
 - **Reglas:**
-  - Se genera en el momento a partir de los datos vivos.
-  - No hay snapshot, hash, versión ni auditoría de lo impreso.
-  - La impresión usa el diálogo del navegador; no hay PDF generado por el servidor.
+  - Administrador, Operador y Técnico pueden generar y guardar borradores/aprobados.
+  - Consulta puede consultar la impresión por URL, pero no generar/guardar desde la UI.
+  - Solo Administrador elimina informes.
+  - El par período + `scope_hash` es único.
+  - Un informe `aprobado` es inmutable.
+  - Se puede imprimir o descargar como `.md`.
 
 ---
 
 ## 3. Reglas de negocio globales
 
-1. **El bien es la raíz.** Todo mantenimiento debe referenciar un bien; si el bien no existe, la fila de importación se omite.
-2. **El código visible es compuesto y con ceros.** `getCodeId()` es la fuente de verdad para mostrarlo.
-3. **El estado del bien es manual.** No se deriva de mantenimientos ni de vencimientos.
-4. **El estado del mantenimiento tiene guardia en servidor y SQLite.** Solo se permiten `iniciado→revision`, `iniciado→finalizado`, `revision→finalizado` y `finalizado→revision`; triggers rechazan estados y transiciones inválidos.
-5. **El vencimiento es una condición calculada, no un campo.** Se evalúa al renderizar la tabla.
-6. **La desincorporación es una nota, no un estado.** El reporte de dañados depende de un `LIKE '%desincorporación%'`.
-7. **La importación de inventario es un upsert parcial.** Si el bien existe, solo se actualiza `status`.
-8. **Las importaciones son transaccionales y limitadas.** Requieren POST + confirmación, reportan cada fila y aceptan hasta 5000 filas/5 MB. La importación de inventario actualiza solo estado en bienes existentes.
-9. **`time_taken` mide horas totales al finalizar.** La importación lo deja nulo; los 15 nulos históricos se conservan.
-10. **Hay identidad y autorización, pero no auditoría.** Toda mutación exige sesión, rol y CSRF; no queda bitácora de cambios.
-11. **La fecha de negocio se interpreta en `America/Caracas`.** El cálculo de horas usa timestamps absolutos.
-12. **Los reportes se generan desde datos vivos.** No hay reproducibilidad histórica.
-13. **Los tickets están vinculados a un bien.** La selección visual no reemplaza la validación del bien en el servidor.
-14. **El historial del ticket conserva eventos funcionales.** No sustituye una auditoría global de cambios.
+1. El bien es la raíz de mantenimientos y tickets.
+2. El estado del bien es manual y se selecciona explícitamente; no es un ciclo automático.
+3. Las transiciones de mantenimiento están limitadas por servidor y SQLite.
+4. El vencimiento se calcula en la vista: no finalizado + fecha próxima pasada.
+5. La desincorporación es una nota, no un estado.
+6. Las importaciones son transaccionales y limitadas a 5000 filas/5 MB; los bienes existentes normalmente solo actualizan su estado.
+7. `time_taken` mide horas totales redondeadas al finalizar; los históricos no se reconstruyen sin fuente.
+8. Toda mutación exige sesión, rol y CSRF; no existe auditoría general `audit_events`.
+9. La fecha de negocio se interpreta en `America/Caracas`.
+10. Los reportes legacy se generan desde datos vivos; los Informes de Rendición sí se persisten.
+11. El personal solo accede a tickets donde `created_by` coincide con su usuario.
+12. Un perfil pertenece a un único usuario y se elimina en cascada con la cuenta.
+13. El avatar es una URL remota validada; su carga puede generar solicitudes a terceros.
+14. El núcleo funciona sin internet; IA y avatares remotos son opcionales.
 
 ---
 
 ## 4. Estados y transiciones
 
-### 4.1 Estado del mantenimiento
+### 4.1 Mantenimiento
 
 ```mermaid
 stateDiagram-v2
     [*] --> iniciado: alta manual
     [*] --> finalizado: importación legacy
-    iniciado --> revision: acción Revisión
-    iniciado --> finalizado: acción Finalizar
-    revision --> finalizado: acción Finalizar
-    finalizado --> revision: acción Revisión (UI)
-    finalizado --> finalizado: edición manual
-    revision --> revision: edición manual
-    iniciado --> iniciado: edición manual
-
-    note right of finalizado
-      F1 valida transiciones en servidor.
-      Las mutaciones llegan por POST + CSRF.
-    end note
+    iniciado --> revision
+    iniciado --> finalizado
+    revision --> finalizado
+    finalizado --> revision
 ```
 
-**Regla:** `finalizado` es el estado terminal operativo, pero la UI permite volver a `revision`. Los datos se normalizaron a minúsculas; SQLite aplica las transiciones válidas.
-
-### 4.2 Estado del bien
+### 4.2 Bien
 
 ```mermaid
 stateDiagram-v2
-    [*] --> BUENO: alta/importación
-    BUENO --> MALO: botón Estado
-    MALO --> REGULAR: botón Estado
-    REGULAR --> BUENO: botón Estado
-    MUY_MALO --> BUENO: botón Estado (default)
+    [*] --> BUENO
+    BUENO --> REGULAR
+    BUENO --> MALO
+    BUENO --> MUY_MALO
+    REGULAR --> BUENO
+    REGULAR --> MALO
+    REGULAR --> MUY_MALO
+    MALO --> BUENO
+    MALO --> REGULAR
+    MALO --> MUY_MALO
+    MUY_MALO --> BUENO
+    MUY_MALO --> REGULAR
+    MUY_MALO --> MALO
 ```
 
-**Regla:** el ciclo no es una escala lineal. `MUY MALO` y `MUY BUENO` no tienen transición propia y caen a `BUENO`.
+El servidor valida el estado destino y lo aplica de forma idempotente. No hay ciclo ni transición automática.
 
-### 4.3 Vencimiento
+### 4.3 Ticket
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Vigente: fecha próxima futura o vacía
-    [*] --> Vencido: no finalizado + fecha pasada
-    Vigente --> Vencido: pasa la fecha
-    Vencido --> Vigente: se finaliza o se reprograma
+    [*] --> iniciado
+    iniciado --> en_progreso
+    iniciado --> con_retraso
+    iniciado --> en_espera
+    iniciado --> finalizado
+    en_progreso --> con_retraso
+    en_progreso --> en_espera
+    en_progreso --> finalizado
+    con_retraso --> en_progreso
+    con_retraso --> en_espera
+    con_retraso --> finalizado
+    en_espera --> en_progreso
+    en_espera --> con_retraso
+    en_espera --> finalizado
 ```
 
-**Regla:** el vencimiento se calcula en la vista; no se persiste.
+El servidor acepta estados del catálogo; no impone la secuencia del diagrama. `finalizado` está marcado como terminal y bloquea seguimientos personales.
+
+### 4.4 Informe de Rendición
+
+```mermaid
+stateDiagram-v2
+    [*] --> borrador
+    borrador --> aprobado
+    aprobado --> aprobado: inmutable
+```
 
 ---
 
 ## 5. Casos límite conocidos
 
-| Caso | Tratamiento actual | Riesgo |
+| Caso | Tratamiento actual | Riesgo / pendiente |
 |---|---|---|
-| Bien sin mantenimientos | Aparece con conteo 0 | Correcto |
-| Mantenimiento con bien inexistente | No ocurre en datos actuales; la importación lo omite | Pérdida silenciosa |
-| Estado `FINALIZADO` previo | Normalizado a `finalizado` | Resuelto por F2 |
-| Tipo `evaluativo` | Aprobado e incluido en catálogo/UI/BD | Resuelto por F2 |
-| Estado `MUY BUENO` previo | Dos registros mapeados a `BUENO` por decisión aprobada | Resuelto por F2 |
-| Técnico `ndomiguez` previo | Normalizado a `ndominguez` | Resuelto por F2 |
-| Fecha con formato `T` | Convertida a `YYYY-MM-DD HH:MM:SS` | Resuelto por F2 |
-| Mantenimiento de más de 24 h | `time_taken` acumula horas totales al finalizar | Correcto desde F1 |
-| Cambio de estado a `revision` | No recalcula `time_taken`; solo se calcula al finalizar | Correcto desde F1 |
-| Bien `MALO` sin nota de desincorporación | No aparece en el reporte de dañados | Reporte incompleto |
-| Bien con varias notas de desincorporación | Reporte usa `SELECT DISTINCT` | Resuelto por F2 |
-| Importación de un CSV con fila inválida | Se reporta por fila; transacción confirma los registros válidos | Sin escritura parcial de una fila inválida |
-| Dos usuarios editan el mismo mantenimiento | El último gana | Pérdida de cambios |
-| Acceso directo a `storage/db.db` | Denegado por `router.php`/`.htaccess` (403) | Correcto desde F1 |
-| Borrado accidental de `storage/db.db` | Restore manual desde `storage/backups/2025-04-09/` | Pérdida de datos posteriores a abril 2025 |
+| Bien sin mantenimientos | Conteo 0 | Correcto |
+| Ticket eliminado | Se excluye de bandeja activa; puede aparecer en historial del bien | Conservación de trazabilidad |
+| Consulta abre ticket global | Listado/drawer disponibles; detalle completo y acciones devuelven 403 | Política inconsistente |
+| Sesión abierta tras desactivar cuenta | La sesión conserva rol y puede continuar | Revocación centralizada pendiente |
+| Perfil sin nombre/apellidos | No se crea; si se vacían al editar, se conserva el existente | No hay borrado manual de perfil |
+| Avatar remoto caído | Navegador muestra error; no hay proxy ni caché de imagen | Dependencia de terceros |
+| Seeder con username canónico ausente | Revierte toda la operación | La DB actual tiene `abrizuela` en vez de `abrizzuela` |
+| Informe aprobado | No se puede modificar ni eliminar salvo decisión de administrador sobre borrador | Inmutabilidad implementada |
+| Cambio masivo de mantenimiento | Omite registros inválidos | Lote no atómico |
+| Importación con caché legacy fallida | Los datos pueden quedar guardados y se muestra advertencia | Refresco no garantizado |
+| Restore de backup previo a 009 | Puede fallar con el código actual | Restaurar aislado y aplicar migraciones 001–011 |
 
 ---
 
-## 6. Anexo: invariantes → pruebas recomendadas
+## 6. Invariantes → pruebas existentes
 
-| Invariante | Prueba recomendada | Estado |
+| Invariante | Evidencia de prueba | Estado |
 |---|---|---|
-| Todo mantenimiento referencia un bien existente | Test de integridad + FK | No existe |
-| El código visible siempre tiene el mismo formato | Test unitario de `getCodeId` | No existe |
-| `status` de mantenimiento pertenece al catálogo | Test de validación + CHECK | No existe |
-| `type` pertenece al catálogo | Test de validación + CHECK | No existe |
-| `status` de bien pertenece al catálogo | Test de validación + CHECK | No existe |
-| Vencido = no finalizado + fecha pasada | Test de cálculo puro | No existe |
-| Importación reporta filas omitidas | Test de importación con bien inexistente | No existe |
-| Reporte de dañados no duplica bienes | Test de consulta con múltiples mantenimientos | No existe |
-| `time_taken` refleja duración total | Test de diferencia de fechas > 24 h | No existe |
-| El último cambio de estado queda auditado | Test de auditoría (requiere modelo nuevo) | No existe |
+| Transiciones de mantenimiento válidas | `SecurityAndTransitionsTest` | Cubierto |
+| Catálogos de estados/tipos | `SecurityAndTransitionsTest`, `HelpersTest` | Cubierto |
+| `time_taken` usa horas totales | `HelpersTest`, pruebas de repositorio | Cubierto |
+| Importación reporta omitidas y conserva transacción | `InventoryImportTest` | Cubierto |
+| Tickets personales quedan limitados al creador | `PersonalTicketQueryTest` | Cubierto |
+| Perfil único y cascada | `ProfileMigrationTest` | Cubierto |
+| Usuario/perfil se guardan juntos y revierten ante fallo | `UserProfileManagementTest` | Cubierto |
+| Seeder idempotente y conserva avatar | `ProfileSeederCommandTest` | Cubierto |
+| Username canónico coincide con datos productivos | No hay prueba de cadena completa | Pendiente; `abrizuela`/`abrizzuela` |
+| FK de mantenimientos/tickets | No declarada | Pendiente |
+| Auditoría general | No existe `audit_events` | Pendiente |
+| Flujos HTTP E2E | Suite principalmente unitaria/in-memory | Pendiente |
 
 ---
 
-> Idioma ubicuo vinculante: si un término no está aquí, no existe para diseño. Ver también: `README.md`, `PROJECT.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `TODO.md`, `grafo/logica-negocio.md`.
+Ver también: `PROJECT.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `SECURITY.md`, `TODO.md`, `grafo/logica-negocio.md`.
